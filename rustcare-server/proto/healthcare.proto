@@ -1,0 +1,369 @@
+syntax = "proto3";
+
+package rustcare.healthcare.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// Healthcare gRPC service for HIPAA-compliant operations
+service HealthcareService {
+  // Patient management
+  rpc CreatePatient(CreatePatientRequest) returns (PatientResponse);
+  rpc GetPatient(GetPatientRequest) returns (PatientResponse);
+  rpc UpdatePatient(UpdatePatientRequest) returns (PatientResponse);
+  rpc ListPatients(ListPatientsRequest) returns (ListPatientsResponse);
+  
+  // Medical records
+  rpc CreateMedicalRecord(CreateMedicalRecordRequest) returns (MedicalRecordResponse);
+  rpc GetMedicalRecord(GetMedicalRecordRequest) returns (MedicalRecordResponse);
+  rpc ListMedicalRecords(ListMedicalRecordsRequest) returns (ListMedicalRecordsResponse);
+  
+  // Healthcare provider management
+  rpc CreateProvider(CreateProviderRequest) returns (ProviderResponse);
+  rpc GetProvider(GetProviderRequest) returns (ProviderResponse);
+  rpc ListProviders(ListProvidersRequest) returns (ListProvidersResponse);
+  
+  // Appointments and scheduling
+  rpc CreateAppointment(CreateAppointmentRequest) returns (AppointmentResponse);
+  rpc GetAppointment(GetAppointmentRequest) returns (AppointmentResponse);
+  rpc ListAppointments(ListAppointmentsRequest) returns (ListAppointmentsResponse);
+  rpc UpdateAppointmentStatus(UpdateAppointmentStatusRequest) returns (AppointmentResponse);
+  
+  // Health monitoring
+  rpc SubmitVitalSigns(SubmitVitalSignsRequest) returns (VitalSignsResponse);
+  rpc GetVitalSigns(GetVitalSignsRequest) returns (ListVitalSignsResponse);
+}
+
+// Patient data structures
+message Patient {
+  string patient_id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  google.protobuf.Timestamp date_of_birth = 4;
+  Gender gender = 5;
+  ContactInfo contact_info = 6;
+  Address address = 7;
+  string insurance_number = 8;
+  repeated string allergies = 9;
+  repeated string medications = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+  // PII fields are encrypted at rest
+  bool pii_encrypted = 13;
+}
+
+enum Gender {
+  GENDER_UNSPECIFIED = 0;
+  MALE = 1;
+  FEMALE = 2;
+  OTHER = 3;
+  PREFER_NOT_TO_SAY = 4;
+}
+
+message ContactInfo {
+  string primary_phone = 1;
+  string secondary_phone = 2;
+  string email = 3;
+  string emergency_contact_name = 4;
+  string emergency_contact_phone = 5;
+  string emergency_contact_relationship = 6;
+}
+
+message Address {
+  string street_address = 1;
+  string city = 2;
+  string state = 3;
+  string postal_code = 4;
+  string country = 5;
+}
+
+// Medical record structures
+message MedicalRecord {
+  string record_id = 1;
+  string patient_id = 2;
+  string provider_id = 3;
+  RecordType record_type = 4;
+  string title = 5;
+  string description = 6;
+  repeated Diagnosis diagnoses = 7;
+  repeated Treatment treatments = 8;
+  repeated Prescription prescriptions = 9;
+  google.protobuf.Timestamp visit_date = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+  // HIPAA compliance fields
+  string access_log_id = 13;
+  bool phi_present = 14;
+}
+
+enum RecordType {
+  RECORD_TYPE_UNSPECIFIED = 0;
+  CONSULTATION = 1;
+  DIAGNOSTIC_TEST = 2;
+  SURGERY = 3;
+  EMERGENCY = 4;
+  FOLLOW_UP = 5;
+  ANNUAL_CHECKUP = 6;
+}
+
+message Diagnosis {
+  string diagnosis_id = 1;
+  string icd_10_code = 2;
+  string description = 3;
+  Severity severity = 4;
+  google.protobuf.Timestamp diagnosed_date = 5;
+}
+
+enum Severity {
+  SEVERITY_UNSPECIFIED = 0;
+  MILD = 1;
+  MODERATE = 2;
+  SEVERE = 3;
+  CRITICAL = 4;
+}
+
+message Treatment {
+  string treatment_id = 1;
+  string treatment_type = 2;
+  string description = 3;
+  google.protobuf.Timestamp start_date = 4;
+  google.protobuf.Timestamp end_date = 5;
+  TreatmentStatus status = 6;
+}
+
+enum TreatmentStatus {
+  TREATMENT_STATUS_UNSPECIFIED = 0;
+  PLANNED = 1;
+  IN_PROGRESS = 2;
+  COMPLETED = 3;
+  CANCELLED = 4;
+  ON_HOLD = 5;
+}
+
+message Prescription {
+  string prescription_id = 1;
+  string medication_name = 2;
+  string dosage = 3;
+  string frequency = 4;
+  string duration = 5;
+  string prescribing_provider_id = 6;
+  google.protobuf.Timestamp prescribed_date = 7;
+  google.protobuf.Timestamp expiry_date = 8;
+}
+
+// Healthcare provider structures
+message Provider {
+  string provider_id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string title = 4;
+  string specialty = 5;
+  string license_number = 6;
+  ContactInfo contact_info = 7;
+  repeated string certifications = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+// Appointment structures
+message Appointment {
+  string appointment_id = 1;
+  string patient_id = 2;
+  string provider_id = 3;
+  google.protobuf.Timestamp scheduled_time = 4;
+  int32 duration_minutes = 5;
+  AppointmentType appointment_type = 6;
+  AppointmentStatus status = 7;
+  string notes = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+enum AppointmentType {
+  APPOINTMENT_TYPE_UNSPECIFIED = 0;
+  CONSULTATION = 1;
+  FOLLOW_UP = 2;
+  EMERGENCY = 3;
+  ANNUAL_PHYSICAL = 4;
+  SPECIALIST_REFERRAL = 5;
+  TELEMEDICINE = 6;
+}
+
+enum AppointmentStatus {
+  APPOINTMENT_STATUS_UNSPECIFIED = 0;
+  SCHEDULED = 1;
+  CONFIRMED = 2;
+  IN_PROGRESS = 3;
+  COMPLETED = 4;
+  CANCELLED = 5;
+  NO_SHOW = 6;
+  RESCHEDULED = 7;
+}
+
+// Vital signs structures
+message VitalSigns {
+  string vital_signs_id = 1;
+  string patient_id = 2;
+  string provider_id = 3;
+  google.protobuf.Timestamp recorded_at = 4;
+  // Vital measurements
+  double systolic_bp = 5;  // mmHg
+  double diastolic_bp = 6; // mmHg
+  double heart_rate = 7;   // bpm
+  double temperature = 8;  // Celsius
+  double weight = 9;       // kg
+  double height = 10;      // cm
+  double oxygen_saturation = 11; // percentage
+  double respiratory_rate = 12;  // breaths per minute
+  string notes = 13;
+}
+
+// Request/Response messages
+message CreatePatientRequest {
+  Patient patient = 1;
+  // HIPAA consent verification
+  string consent_signature = 2;
+  google.protobuf.Timestamp consent_date = 3;
+}
+
+message GetPatientRequest {
+  string patient_id = 1;
+  // Access justification for audit
+  string access_reason = 2;
+  string requesting_provider_id = 3;
+}
+
+message UpdatePatientRequest {
+  Patient patient = 1;
+  string update_reason = 2;
+  string updating_provider_id = 3;
+}
+
+message ListPatientsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  // Filtering options
+  string provider_id = 3;
+  string name_filter = 4;
+}
+
+message PatientResponse {
+  Patient patient = 1;
+  string audit_log_id = 2;
+}
+
+message ListPatientsResponse {
+  repeated Patient patients = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message CreateMedicalRecordRequest {
+  MedicalRecord record = 1;
+  string creating_provider_id = 2;
+}
+
+message GetMedicalRecordRequest {
+  string record_id = 1;
+  string requesting_provider_id = 2;
+  string access_reason = 3;
+}
+
+message ListMedicalRecordsRequest {
+  string patient_id = 1;
+  string requesting_provider_id = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+  google.protobuf.Timestamp date_from = 5;
+  google.protobuf.Timestamp date_to = 6;
+}
+
+message MedicalRecordResponse {
+  MedicalRecord record = 1;
+  string audit_log_id = 2;
+}
+
+message ListMedicalRecordsResponse {
+  repeated MedicalRecord records = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message CreateProviderRequest {
+  Provider provider = 1;
+}
+
+message GetProviderRequest {
+  string provider_id = 1;
+}
+
+message ListProvidersRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  string specialty_filter = 3;
+}
+
+message ProviderResponse {
+  Provider provider = 1;
+}
+
+message ListProvidersResponse {
+  repeated Provider providers = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message CreateAppointmentRequest {
+  Appointment appointment = 1;
+}
+
+message GetAppointmentRequest {
+  string appointment_id = 1;
+}
+
+message ListAppointmentsRequest {
+  string patient_id = 1;
+  string provider_id = 2;
+  google.protobuf.Timestamp date_from = 3;
+  google.protobuf.Timestamp date_to = 4;
+  int32 page_size = 5;
+  string page_token = 6;
+}
+
+message UpdateAppointmentStatusRequest {
+  string appointment_id = 1;
+  AppointmentStatus status = 2;
+  string status_reason = 3;
+  string updating_provider_id = 4;
+}
+
+message AppointmentResponse {
+  Appointment appointment = 1;
+}
+
+message ListAppointmentsResponse {
+  repeated Appointment appointments = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message SubmitVitalSignsRequest {
+  VitalSigns vital_signs = 1;
+}
+
+message GetVitalSignsRequest {
+  string patient_id = 1;
+  string requesting_provider_id = 2;
+  google.protobuf.Timestamp date_from = 3;
+  google.protobuf.Timestamp date_to = 4;
+}
+
+message VitalSignsResponse {
+  VitalSigns vital_signs = 1;
+  string audit_log_id = 2;
+}
+
+message ListVitalSignsResponse {
+  repeated VitalSigns vital_signs = 1;
+  string audit_log_id = 2;
+}

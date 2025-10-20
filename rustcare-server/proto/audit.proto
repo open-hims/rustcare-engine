@@ -1,0 +1,405 @@
+syntax = "proto3";
+
+package rustcare.audit.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// Audit gRPC service for HIPAA compliance and audit logging
+service AuditService {
+  // Audit log management
+  rpc CreateAuditLog(CreateAuditLogRequest) returns (AuditLogResponse);
+  rpc GetAuditLog(GetAuditLogRequest) returns (AuditLogResponse);
+  rpc ListAuditLogs(ListAuditLogsRequest) returns (ListAuditLogsResponse);
+  rpc SearchAuditLogs(SearchAuditLogsRequest) returns (SearchAuditLogsResponse);
+  
+  // Compliance reporting
+  rpc GenerateComplianceReport(GenerateComplianceReportRequest) returns (ComplianceReportResponse);
+  rpc GetComplianceReport(GetComplianceReportRequest) returns (ComplianceReportResponse);
+  rpc ListComplianceReports(ListComplianceReportsRequest) returns (ListComplianceReportsResponse);
+  
+  // Audit trail verification
+  rpc VerifyAuditTrail(VerifyAuditTrailRequest) returns (VerifyAuditTrailResponse);
+  rpc GetAuditTrailIntegrity(GetAuditTrailIntegrityRequest) returns (AuditTrailIntegrityResponse);
+  
+  // Real-time audit streaming
+  rpc StreamAuditEvents(StreamAuditEventsRequest) returns (stream AuditEvent);
+  
+  // Data access tracking
+  rpc RecordDataAccess(RecordDataAccessRequest) returns (DataAccessResponse);
+  rpc GetDataAccessHistory(GetDataAccessHistoryRequest) returns (DataAccessHistoryResponse);
+}
+
+// Audit log structures
+message AuditLog {
+  string log_id = 1;
+  AuditEventType event_type = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  string user_id = 4;
+  string session_id = 5;
+  string ip_address = 6;
+  string user_agent = 7;
+  string resource_type = 8;
+  string resource_id = 9;
+  string action = 10;
+  AuditOutcome outcome = 11;
+  string description = 12;
+  map<string, string> metadata = 13;
+  // Healthcare-specific fields
+  string patient_id = 14;
+  string provider_id = 15;
+  string organization_id = 16;
+  bool phi_accessed = 17;
+  string access_justification = 18;
+  string regulatory_context = 19;
+  // Integrity fields
+  string hash = 20;
+  string previous_hash = 21;
+  string digital_signature = 22;
+}
+
+enum AuditEventType {
+  AUDIT_EVENT_TYPE_UNSPECIFIED = 0;
+  // Authentication events
+  USER_LOGIN = 1;
+  USER_LOGOUT = 2;
+  LOGIN_FAILURE = 3;
+  PASSWORD_CHANGE = 4;
+  MFA_CHALLENGE = 5;
+  
+  // Authorization events
+  PERMISSION_GRANTED = 10;
+  PERMISSION_DENIED = 11;
+  ROLE_CHANGE = 12;
+  
+  // Data access events
+  DATA_READ = 20;
+  DATA_CREATE = 21;
+  DATA_UPDATE = 22;
+  DATA_DELETE = 23;
+  DATA_EXPORT = 24;
+  DATA_IMPORT = 25;
+  
+  // Healthcare-specific events
+  PATIENT_RECORD_ACCESS = 30;
+  MEDICAL_RECORD_CREATE = 31;
+  MEDICAL_RECORD_UPDATE = 32;
+  PRESCRIPTION_CREATE = 33;
+  PRESCRIPTION_UPDATE = 34;
+  APPOINTMENT_SCHEDULE = 35;
+  APPOINTMENT_CANCEL = 36;
+  
+  // System events
+  SYSTEM_START = 40;
+  SYSTEM_STOP = 41;
+  CONFIGURATION_CHANGE = 42;
+  BACKUP_CREATE = 43;
+  BACKUP_RESTORE = 44;
+  
+  // Compliance events
+  COMPLIANCE_VIOLATION = 50;
+  AUDIT_LOG_TAMPER = 51;
+  EMERGENCY_ACCESS = 52;
+}
+
+enum AuditOutcome {
+  AUDIT_OUTCOME_UNSPECIFIED = 0;
+  SUCCESS = 1;
+  FAILURE = 2;
+  WARNING = 3;
+  ERROR = 4;
+}
+
+// Compliance structures
+message ComplianceReport {
+  string report_id = 1;
+  ComplianceStandard standard = 2;
+  google.protobuf.Timestamp generated_at = 3;
+  google.protobuf.Timestamp period_start = 4;
+  google.protobuf.Timestamp period_end = 5;
+  string organization_id = 6;
+  ComplianceStatus status = 7;
+  repeated ComplianceViolation violations = 8;
+  ComplianceMetrics metrics = 9;
+  repeated ComplianceRecommendation recommendations = 10;
+  string generated_by = 11;
+}
+
+enum ComplianceStandard {
+  COMPLIANCE_STANDARD_UNSPECIFIED = 0;
+  HIPAA = 1;
+  GDPR = 2;
+  SOX = 3;
+  PCI_DSS = 4;
+  HITECH = 5;
+  ISO_27001 = 6;
+}
+
+enum ComplianceStatus {
+  COMPLIANCE_STATUS_UNSPECIFIED = 0;
+  COMPLIANT = 1;
+  NON_COMPLIANT = 2;
+  PARTIALLY_COMPLIANT = 3;
+  UNDER_REVIEW = 4;
+}
+
+message ComplianceViolation {
+  string violation_id = 1;
+  ViolationType type = 2;
+  ViolationSeverity severity = 3;
+  string description = 4;
+  google.protobuf.Timestamp detected_at = 5;
+  string rule_violated = 6;
+  repeated string affected_resources = 7;
+  ViolationStatus status = 8;
+  string remediation_action = 9;
+}
+
+enum ViolationType {
+  VIOLATION_TYPE_UNSPECIFIED = 0;
+  UNAUTHORIZED_ACCESS = 1;
+  DATA_BREACH = 2;
+  POLICY_VIOLATION = 3;
+  PROCEDURE_VIOLATION = 4;
+  TECHNICAL_SAFEGUARD = 5;
+  ADMINISTRATIVE_SAFEGUARD = 6;
+  PHYSICAL_SAFEGUARD = 7;
+}
+
+enum ViolationSeverity {
+  VIOLATION_SEVERITY_UNSPECIFIED = 0;
+  LOW = 1;
+  MEDIUM = 2;
+  HIGH = 3;
+  CRITICAL = 4;
+}
+
+enum ViolationStatus {
+  VIOLATION_STATUS_UNSPECIFIED = 0;
+  OPEN = 1;
+  IN_PROGRESS = 2;
+  RESOLVED = 3;
+  CLOSED = 4;
+  FALSE_POSITIVE = 5;
+}
+
+message ComplianceMetrics {
+  int64 total_audit_events = 1;
+  int64 failed_login_attempts = 2;
+  int64 unauthorized_access_attempts = 3;
+  int64 data_access_events = 4;
+  int64 phi_access_events = 5;
+  int64 policy_violations = 6;
+  double compliance_score = 7;
+  map<string, int64> event_counts_by_type = 8;
+}
+
+message ComplianceRecommendation {
+  string recommendation_id = 1;
+  RecommendationType type = 2;
+  RecommendationPriority priority = 3;
+  string title = 4;
+  string description = 5;
+  repeated string implementation_steps = 6;
+  string compliance_reference = 7;
+}
+
+enum RecommendationType {
+  RECOMMENDATION_TYPE_UNSPECIFIED = 0;
+  POLICY_UPDATE = 1;
+  TECHNICAL_CONTROL = 2;
+  TRAINING = 3;
+  PROCESS_IMPROVEMENT = 4;
+  SYSTEM_UPGRADE = 5;
+}
+
+enum RecommendationPriority {
+  RECOMMENDATION_PRIORITY_UNSPECIFIED = 0;
+  LOW = 1;
+  MEDIUM = 2;
+  HIGH = 3;
+  URGENT = 4;
+}
+
+// Data access tracking
+message DataAccess {
+  string access_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string user_id = 3;
+  string resource_type = 4;
+  string resource_id = 5;
+  AccessType access_type = 6;
+  string access_justification = 7;
+  string patient_id = 8;
+  bool phi_accessed = 9;
+  string ip_address = 10;
+  string user_agent = 11;
+  AccessOutcome outcome = 12;
+  int32 duration_seconds = 13;
+}
+
+enum AccessType {
+  ACCESS_TYPE_UNSPECIFIED = 0;
+  READ = 1;
+  WRITE = 2;
+  DELETE = 3;
+  PRINT = 4;
+  EXPORT = 5;
+  COPY = 6;
+}
+
+enum AccessOutcome {
+  ACCESS_OUTCOME_UNSPECIFIED = 0;
+  GRANTED = 1;
+  DENIED = 2;
+  PARTIAL = 3;
+}
+
+// Audit integrity
+message AuditTrailIntegrity {
+  string integrity_id = 1;
+  google.protobuf.Timestamp verified_at = 2;
+  IntegrityStatus status = 3;
+  string merkle_root_hash = 4;
+  int64 total_logs_verified = 5;
+  int64 tampered_logs_detected = 6;
+  repeated string tampered_log_ids = 7;
+  string verification_method = 8;
+  string digital_signature = 9;
+}
+
+enum IntegrityStatus {
+  INTEGRITY_STATUS_UNSPECIFIED = 0;
+  VERIFIED = 1;
+  COMPROMISED = 2;
+  PARTIAL_COMPROMISE = 3;
+  VERIFICATION_FAILED = 4;
+}
+
+// Audit events for streaming
+message AuditEvent {
+  AuditLog audit_log = 1;
+  google.protobuf.Timestamp stream_timestamp = 2;
+}
+
+// Request/Response messages
+message CreateAuditLogRequest {
+  AuditLog audit_log = 1;
+}
+
+message GetAuditLogRequest {
+  string log_id = 1;
+}
+
+message ListAuditLogsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  google.protobuf.Timestamp start_time = 3;
+  google.protobuf.Timestamp end_time = 4;
+  AuditEventType event_type = 5;
+  string user_id = 6;
+  string patient_id = 7;
+  AuditOutcome outcome = 8;
+}
+
+message SearchAuditLogsRequest {
+  string query = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+  repeated AuditEventType event_types = 4;
+  google.protobuf.Timestamp start_time = 5;
+  google.protobuf.Timestamp end_time = 6;
+}
+
+message AuditLogResponse {
+  AuditLog audit_log = 1;
+}
+
+message ListAuditLogsResponse {
+  repeated AuditLog audit_logs = 1;
+  string next_page_token = 2;
+  int64 total_count = 3;
+}
+
+message SearchAuditLogsResponse {
+  repeated AuditLog audit_logs = 1;
+  string next_page_token = 2;
+  int64 total_count = 3;
+  map<string, int64> facets = 4;
+}
+
+message GenerateComplianceReportRequest {
+  ComplianceStandard standard = 1;
+  google.protobuf.Timestamp period_start = 2;
+  google.protobuf.Timestamp period_end = 3;
+  string organization_id = 4;
+  repeated string include_sections = 5;
+}
+
+message GetComplianceReportRequest {
+  string report_id = 1;
+}
+
+message ListComplianceReportsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  ComplianceStandard standard = 3;
+  ComplianceStatus status = 4;
+}
+
+message ComplianceReportResponse {
+  ComplianceReport report = 1;
+}
+
+message ListComplianceReportsResponse {
+  repeated ComplianceReport reports = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message VerifyAuditTrailRequest {
+  google.protobuf.Timestamp start_time = 1;
+  google.protobuf.Timestamp end_time = 2;
+  repeated string log_ids = 3;
+}
+
+message VerifyAuditTrailResponse {
+  AuditTrailIntegrity integrity = 1;
+}
+
+message GetAuditTrailIntegrityRequest {
+  string integrity_id = 1;
+}
+
+message AuditTrailIntegrityResponse {
+  AuditTrailIntegrity integrity = 1;
+}
+
+message StreamAuditEventsRequest {
+  repeated AuditEventType event_types = 1;
+  repeated string user_ids = 2;
+  repeated string patient_ids = 3;
+}
+
+message RecordDataAccessRequest {
+  DataAccess data_access = 1;
+}
+
+message GetDataAccessHistoryRequest {
+  string patient_id = 1;
+  string user_id = 2;
+  google.protobuf.Timestamp start_time = 3;
+  google.protobuf.Timestamp end_time = 4;
+  int32 page_size = 5;
+  string page_token = 6;
+}
+
+message DataAccessResponse {
+  DataAccess data_access = 1;
+}
+
+message DataAccessHistoryResponse {
+  repeated DataAccess data_accesses = 1;
+  string next_page_token = 2;
+  int64 total_count = 3;
+}

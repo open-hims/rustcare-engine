@@ -15,11 +15,8 @@ impl ErrorReporter {
     pub async fn report_error(&self, error: &RustCareError) -> Result<(), Box<dyn std::error::Error>> {
         // TODO: Implement error reporting to external systems
         tracing::error!(
-            error_id = %error.error_id,
-            error_type = %error.error_type,
-            error_code = error.code.code,
-            "Error reported: {}",
-            error.message
+            error = %error,
+            "Error reported"
         );
         Ok(())
     }

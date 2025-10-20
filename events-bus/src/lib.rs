@@ -54,9 +54,11 @@ pub mod brokers;
 pub mod subscriber;
 pub mod publisher;
 pub mod error;
+pub mod nats;
 
 pub use bus::*;
 pub use event::*;
 pub use subscriber::*;
 pub use publisher::*;
 pub use error::*;
+pub use nats::*;

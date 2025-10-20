@@ -1,0 +1,370 @@
+syntax = "proto3";
+
+package rustcare.workflow.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// Workflow gRPC service for healthcare process orchestration
+service WorkflowService {
+  // Workflow definition management
+  rpc CreateWorkflowDefinition(CreateWorkflowDefinitionRequest) returns (WorkflowDefinitionResponse);
+  rpc GetWorkflowDefinition(GetWorkflowDefinitionRequest) returns (WorkflowDefinitionResponse);
+  rpc UpdateWorkflowDefinition(UpdateWorkflowDefinitionRequest) returns (WorkflowDefinitionResponse);
+  rpc ListWorkflowDefinitions(ListWorkflowDefinitionsRequest) returns (ListWorkflowDefinitionsResponse);
+  rpc DeleteWorkflowDefinition(DeleteWorkflowDefinitionRequest) returns (google.protobuf.Empty);
+  
+  // Workflow execution
+  rpc StartWorkflowExecution(StartWorkflowExecutionRequest) returns (WorkflowExecutionResponse);
+  rpc GetWorkflowExecution(GetWorkflowExecutionRequest) returns (WorkflowExecutionResponse);
+  rpc ListWorkflowExecutions(ListWorkflowExecutionsRequest) returns (ListWorkflowExecutionsResponse);
+  rpc CancelWorkflowExecution(CancelWorkflowExecutionRequest) returns (google.protobuf.Empty);
+  rpc PauseWorkflowExecution(PauseWorkflowExecutionRequest) returns (google.protobuf.Empty);
+  rpc ResumeWorkflowExecution(ResumeWorkflowExecutionRequest) returns (google.protobuf.Empty);
+  
+  // Task management
+  rpc CompleteTask(CompleteTaskRequest) returns (TaskResponse);
+  rpc AssignTask(AssignTaskRequest) returns (TaskResponse);
+  rpc GetTask(GetTaskRequest) returns (TaskResponse);
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  
+  // Workflow monitoring
+  rpc GetWorkflowMetrics(GetWorkflowMetricsRequest) returns (WorkflowMetricsResponse);
+  rpc StreamWorkflowEvents(StreamWorkflowEventsRequest) returns (stream WorkflowEvent);
+}
+
+// Workflow definition structures
+message WorkflowDefinition {
+  string definition_id = 1;
+  string name = 2;
+  string description = 3;
+  string version = 4;
+  WorkflowCategory category = 5;
+  repeated WorkflowStep steps = 6;
+  repeated WorkflowTrigger triggers = 7;
+  WorkflowStatus status = 8;
+  map<string, string> metadata = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+  string created_by = 12;
+  // Healthcare compliance
+  bool hipaa_compliant = 13;
+  repeated string required_permissions = 14;
+}
+
+enum WorkflowCategory {
+  WORKFLOW_CATEGORY_UNSPECIFIED = 0;
+  PATIENT_CARE = 1;
+  ADMINISTRATIVE = 2;
+  BILLING = 3;
+  COMPLIANCE = 4;
+  EMERGENCY = 5;
+  CLINICAL_RESEARCH = 6;
+}
+
+enum WorkflowStatus {
+  WORKFLOW_STATUS_UNSPECIFIED = 0;
+  DRAFT = 1;
+  ACTIVE = 2;
+  INACTIVE = 3;
+  DEPRECATED = 4;
+}
+
+message WorkflowStep {
+  string step_id = 1;
+  string name = 2;
+  string description = 3;
+  StepType type = 4;
+  map<string, string> configuration = 5;
+  repeated string next_steps = 6;
+  repeated WorkflowCondition conditions = 7;
+  int32 timeout_seconds = 8;
+  RetryPolicy retry_policy = 9;
+  // Healthcare-specific
+  bool requires_provider_approval = 10;
+  string assigned_role = 11;
+}
+
+enum StepType {
+  STEP_TYPE_UNSPECIFIED = 0;
+  MANUAL_TASK = 1;
+  AUTOMATED_TASK = 2;
+  DECISION = 3;
+  PARALLEL = 4;
+  SEQUENTIAL = 5;
+  TIMER = 6;
+  HUMAN_APPROVAL = 7;
+  SYSTEM_INTEGRATION = 8;
+}
+
+message WorkflowCondition {
+  string condition_id = 1;
+  string expression = 2;
+  ConditionType type = 3;
+}
+
+enum ConditionType {
+  CONDITION_TYPE_UNSPECIFIED = 0;
+  EQUALS = 1;
+  NOT_EQUALS = 2;
+  GREATER_THAN = 3;
+  LESS_THAN = 4;
+  CONTAINS = 5;
+  REGEX = 6;
+}
+
+message WorkflowTrigger {
+  string trigger_id = 1;
+  string name = 2;
+  TriggerType type = 3;
+  map<string, string> configuration = 4;
+  bool enabled = 5;
+}
+
+enum TriggerType {
+  TRIGGER_TYPE_UNSPECIFIED = 0;
+  EVENT_BASED = 1;
+  SCHEDULE_BASED = 2;
+  MANUAL = 3;
+  API_CALL = 4;
+}
+
+message RetryPolicy {
+  int32 max_attempts = 1;
+  int32 initial_delay_seconds = 2;
+  int32 max_delay_seconds = 3;
+  double backoff_multiplier = 4;
+}
+
+// Workflow execution structures
+message WorkflowExecution {
+  string execution_id = 1;
+  string definition_id = 2;
+  string name = 3;
+  ExecutionStatus status = 4;
+  google.protobuf.Timestamp started_at = 5;
+  google.protobuf.Timestamp completed_at = 6;
+  string started_by = 7;
+  map<string, string> input_data = 8;
+  map<string, string> output_data = 9;
+  string current_step_id = 10;
+  repeated TaskExecution task_executions = 11;
+  ExecutionPriority priority = 12;
+  // Healthcare context
+  string patient_id = 13;
+  string provider_id = 14;
+  string encounter_id = 15;
+}
+
+enum ExecutionStatus {
+  EXECUTION_STATUS_UNSPECIFIED = 0;
+  PENDING = 1;
+  RUNNING = 2;
+  PAUSED = 3;
+  COMPLETED = 4;
+  FAILED = 5;
+  CANCELLED = 6;
+  TIMEOUT = 7;
+}
+
+enum ExecutionPriority {
+  EXECUTION_PRIORITY_UNSPECIFIED = 0;
+  LOW = 1;
+  NORMAL = 2;
+  HIGH = 3;
+  URGENT = 4;
+  CRITICAL = 5;
+}
+
+message TaskExecution {
+  string task_id = 1;
+  string step_id = 2;
+  string name = 3;
+  TaskStatus status = 4;
+  google.protobuf.Timestamp started_at = 5;
+  google.protobuf.Timestamp completed_at = 6;
+  string assigned_to = 7;
+  map<string, string> input_data = 8;
+  map<string, string> output_data = 9;
+  string error_message = 10;
+  int32 attempt_count = 11;
+}
+
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  PENDING = 1;
+  ASSIGNED = 2;
+  IN_PROGRESS = 3;
+  COMPLETED = 4;
+  FAILED = 5;
+  SKIPPED = 6;
+  CANCELLED = 7;
+}
+
+// Workflow events
+message WorkflowEvent {
+  string event_id = 1;
+  string execution_id = 2;
+  WorkflowEventType event_type = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  map<string, string> event_data = 5;
+  string user_id = 6;
+}
+
+enum WorkflowEventType {
+  WORKFLOW_EVENT_TYPE_UNSPECIFIED = 0;
+  EXECUTION_STARTED = 1;
+  EXECUTION_COMPLETED = 2;
+  EXECUTION_FAILED = 3;
+  EXECUTION_CANCELLED = 4;
+  STEP_STARTED = 5;
+  STEP_COMPLETED = 6;
+  STEP_FAILED = 7;
+  TASK_ASSIGNED = 8;
+  TASK_COMPLETED = 9;
+  USER_INPUT_REQUIRED = 10;
+}
+
+// Request/Response messages
+message CreateWorkflowDefinitionRequest {
+  WorkflowDefinition definition = 1;
+}
+
+message GetWorkflowDefinitionRequest {
+  string definition_id = 1;
+}
+
+message UpdateWorkflowDefinitionRequest {
+  WorkflowDefinition definition = 1;
+}
+
+message ListWorkflowDefinitionsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  WorkflowCategory category = 3;
+  WorkflowStatus status = 4;
+}
+
+message DeleteWorkflowDefinitionRequest {
+  string definition_id = 1;
+}
+
+message WorkflowDefinitionResponse {
+  WorkflowDefinition definition = 1;
+}
+
+message ListWorkflowDefinitionsResponse {
+  repeated WorkflowDefinition definitions = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message StartWorkflowExecutionRequest {
+  string definition_id = 1;
+  map<string, string> input_data = 2;
+  ExecutionPriority priority = 3;
+  string started_by = 4;
+  // Healthcare context
+  string patient_id = 5;
+  string provider_id = 6;
+  string encounter_id = 7;
+}
+
+message GetWorkflowExecutionRequest {
+  string execution_id = 1;
+}
+
+message ListWorkflowExecutionsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  ExecutionStatus status = 3;
+  string definition_id = 4;
+  string patient_id = 5;
+  string provider_id = 6;
+}
+
+message CancelWorkflowExecutionRequest {
+  string execution_id = 1;
+  string reason = 2;
+  string cancelled_by = 3;
+}
+
+message PauseWorkflowExecutionRequest {
+  string execution_id = 1;
+  string reason = 2;
+  string paused_by = 3;
+}
+
+message ResumeWorkflowExecutionRequest {
+  string execution_id = 1;
+  string resumed_by = 2;
+}
+
+message WorkflowExecutionResponse {
+  WorkflowExecution execution = 1;
+}
+
+message ListWorkflowExecutionsResponse {
+  repeated WorkflowExecution executions = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message CompleteTaskRequest {
+  string task_id = 1;
+  map<string, string> output_data = 2;
+  string completed_by = 3;
+}
+
+message AssignTaskRequest {
+  string task_id = 1;
+  string assigned_to = 2;
+  string assigned_by = 3;
+}
+
+message GetTaskRequest {
+  string task_id = 1;
+}
+
+message ListTasksRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  TaskStatus status = 3;
+  string assigned_to = 4;
+  string execution_id = 5;
+}
+
+message TaskResponse {
+  TaskExecution task = 1;
+}
+
+message ListTasksResponse {
+  repeated TaskExecution tasks = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message GetWorkflowMetricsRequest {
+  string definition_id = 1;
+  google.protobuf.Timestamp start_time = 2;
+  google.protobuf.Timestamp end_time = 3;
+}
+
+message WorkflowMetricsResponse {
+  WorkflowMetrics metrics = 1;
+}
+
+message WorkflowMetrics {
+  int64 total_executions = 1;
+  int64 successful_executions = 2;
+  int64 failed_executions = 3;
+  double success_rate = 4;
+  double average_duration_seconds = 5;
+  int64 active_executions = 6;
+  map<string, int64> step_metrics = 7;
+}
+
+message StreamWorkflowEventsRequest {
+  repeated string execution_ids = 1;
+  repeated WorkflowEventType event_types = 2;
+}

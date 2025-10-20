@@ -1,0 +1,313 @@
+syntax = "proto3";
+
+package rustcare.auth.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// Authentication gRPC service
+service AuthService {
+  // Authentication operations
+  rpc Authenticate(AuthenticateRequest) returns (AuthenticateResponse);
+  rpc RefreshToken(RefreshTokenRequest) returns (AuthenticateResponse);
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+  rpc RevokeToken(RevokeTokenRequest) returns (google.protobuf.Empty);
+  
+  // OAuth operations
+  rpc InitiateOAuth(InitiateOAuthRequest) returns (InitiateOAuthResponse);
+  rpc CompleteOAuth(CompleteOAuthRequest) returns (AuthenticateResponse);
+  
+  // Multi-factor authentication
+  rpc InitiateMFA(InitiateMFARequest) returns (InitiateMFAResponse);
+  rpc CompleteMFA(CompleteMFARequest) returns (AuthenticateResponse);
+  
+  // Session management
+  rpc GetSession(GetSessionRequest) returns (SessionResponse);
+  rpc InvalidateSession(InvalidateSessionRequest) returns (google.protobuf.Empty);
+  rpc ListActiveSessions(ListActiveSessionsRequest) returns (ListActiveSessionsResponse);
+}
+
+// Authorization gRPC service (Zanzibar-style)
+service AuthorizationService {
+  // Permission checks
+  rpc CheckPermission(CheckPermissionRequest) returns (CheckPermissionResponse);
+  rpc BatchCheckPermissions(BatchCheckPermissionsRequest) returns (BatchCheckPermissionsResponse);
+  
+  // Relationship management
+  rpc WriteRelationship(WriteRelationshipRequest) returns (google.protobuf.Empty);
+  rpc DeleteRelationship(DeleteRelationshipRequest) returns (google.protobuf.Empty);
+  rpc ReadRelationships(ReadRelationshipsRequest) returns (ReadRelationshipsResponse);
+  
+  // Expand operations
+  rpc Expand(ExpandRequest) returns (ExpandResponse);
+  
+  // Watch for changes
+  rpc Watch(WatchRequest) returns (stream WatchResponse);
+}
+
+// Authentication structures
+message User {
+  string user_id = 1;
+  string username = 2;
+  string email = 3;
+  string first_name = 4;
+  string last_name = 5;
+  UserRole role = 6;
+  repeated string permissions = 7;
+  UserStatus status = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+  google.protobuf.Timestamp last_login = 11;
+  bool mfa_enabled = 12;
+  repeated string mfa_methods = 13;
+  // Healthcare-specific fields
+  string healthcare_license_number = 14;
+  string healthcare_specialty = 15;
+  string healthcare_organization_id = 16;
+}
+
+enum UserRole {
+  USER_ROLE_UNSPECIFIED = 0;
+  PATIENT = 1;
+  HEALTHCARE_PROVIDER = 2;
+  NURSE = 3;
+  ADMINISTRATOR = 4;
+  BILLING_SPECIALIST = 5;
+  PHARMACIST = 6;
+  TECHNICIAN = 7;
+  SYSTEM_ADMIN = 8;
+}
+
+enum UserStatus {
+  USER_STATUS_UNSPECIFIED = 0;
+  ACTIVE = 1;
+  INACTIVE = 2;
+  SUSPENDED = 3;
+  PENDING_VERIFICATION = 4;
+  LOCKED = 5;
+}
+
+message Session {
+  string session_id = 1;
+  string user_id = 2;
+  google.protobuf.Timestamp created_at = 3;
+  google.protobuf.Timestamp expires_at = 4;
+  string ip_address = 5;
+  string user_agent = 6;
+  SessionStatus status = 7;
+  // Healthcare compliance
+  string access_scope = 8;
+  string audit_trail_id = 9;
+}
+
+enum SessionStatus {
+  SESSION_STATUS_UNSPECIFIED = 0;
+  ACTIVE = 1;
+  EXPIRED = 2;
+  REVOKED = 3;
+  INVALIDATED = 4;
+}
+
+// Authorization structures (Zanzibar-style)
+message Relationship {
+  ObjectReference object = 1;
+  string relation = 2;
+  Subject subject = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+message ObjectReference {
+  string object_type = 1;
+  string object_id = 2;
+}
+
+message Subject {
+  oneof subject_type {
+    ObjectReference object = 1;
+    SubjectSet subject_set = 2;
+  }
+}
+
+message SubjectSet {
+  ObjectReference object = 1;
+  string relation = 2;
+}
+
+// Request/Response messages for Authentication
+message AuthenticateRequest {
+  oneof credential {
+    UsernamePasswordCredential username_password = 1;
+    TokenCredential token = 2;
+    CertificateCredential certificate = 3;
+  }
+  string client_id = 4;
+  string ip_address = 5;
+  string user_agent = 6;
+}
+
+message UsernamePasswordCredential {
+  string username = 1;
+  string password = 2;
+}
+
+message TokenCredential {
+  string token = 1;
+  string token_type = 2; // "bearer", "api_key", etc.
+}
+
+message CertificateCredential {
+  string certificate_pem = 1;
+  string signature = 2;
+}
+
+message AuthenticateResponse {
+  bool success = 1;
+  string access_token = 2;
+  string refresh_token = 3;
+  int64 expires_in = 4;
+  User user = 5;
+  string session_id = 6;
+  bool mfa_required = 7;
+  string mfa_token = 8;
+  string error_message = 9;
+}
+
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message ValidateTokenRequest {
+  string access_token = 1;
+  repeated string required_permissions = 2;
+}
+
+message ValidateTokenResponse {
+  bool valid = 1;
+  User user = 2;
+  google.protobuf.Timestamp expires_at = 3;
+  repeated string permissions = 4;
+  string error_message = 5;
+}
+
+message RevokeTokenRequest {
+  string token = 1;
+}
+
+// OAuth messages
+message InitiateOAuthRequest {
+  string provider = 1;
+  string redirect_uri = 2;
+  repeated string scopes = 3;
+  string state = 4;
+}
+
+message InitiateOAuthResponse {
+  string authorization_url = 1;
+  string state = 2;
+}
+
+message CompleteOAuthRequest {
+  string provider = 1;
+  string authorization_code = 2;
+  string state = 3;
+}
+
+// MFA messages
+message InitiateMFARequest {
+  string user_id = 1;
+  string method = 2; // "totp", "sms", "email"
+}
+
+message InitiateMFAResponse {
+  string mfa_token = 1;
+  string challenge = 2; // QR code for TOTP, phone number for SMS, etc.
+}
+
+message CompleteMFARequest {
+  string mfa_token = 1;
+  string response = 2;
+}
+
+// Session messages
+message GetSessionRequest {
+  string session_id = 1;
+}
+
+message SessionResponse {
+  Session session = 1;
+}
+
+message InvalidateSessionRequest {
+  string session_id = 1;
+}
+
+message ListActiveSessionsRequest {
+  string user_id = 1;
+}
+
+message ListActiveSessionsResponse {
+  repeated Session sessions = 1;
+}
+
+// Authorization messages
+message CheckPermissionRequest {
+  ObjectReference object = 1;
+  string relation = 2;
+  Subject subject = 3;
+  string consistency_token = 4;
+}
+
+message CheckPermissionResponse {
+  bool allowed = 1;
+  string consistency_token = 2;
+}
+
+message BatchCheckPermissionsRequest {
+  repeated CheckPermissionRequest requests = 1;
+}
+
+message BatchCheckPermissionsResponse {
+  repeated CheckPermissionResponse responses = 1;
+}
+
+message WriteRelationshipRequest {
+  Relationship relationship = 1;
+}
+
+message DeleteRelationshipRequest {
+  Relationship relationship = 1;
+}
+
+message ReadRelationshipsRequest {
+  ObjectReference object = 1;
+  string relation = 2;
+  Subject subject = 3;
+}
+
+message ReadRelationshipsResponse {
+  repeated Relationship relationships = 1;
+}
+
+message ExpandRequest {
+  ObjectReference object = 1;
+  string relation = 2;
+  int32 max_depth = 3;
+}
+
+message ExpandResponse {
+  SubjectTree tree = 1;
+}
+
+message SubjectTree {
+  Subject subject = 1;
+  repeated SubjectTree children = 2;
+}
+
+message WatchRequest {
+  repeated ObjectReference objects = 1;
+}
+
+message WatchResponse {
+  repeated Relationship changes = 1;
+  string consistency_token = 2;
+}
