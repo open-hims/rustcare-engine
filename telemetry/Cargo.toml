@@ -1,0 +1,35 @@
+[package]
+name = "telemetry"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Observability and telemetry platform for RustCare Engine"
+
+[dependencies]
+# Workspace dependencies
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry-jaeger = { workspace = true }
+
+# Telemetry specific dependencies
+metrics = "0.21"
+metrics-exporter-prometheus = "0.13"
+opentelemetry-otlp = "0.14"
+opentelemetry-semantic-conventions = "0.13"
+sysinfo = "0.29"
+tokio-metrics = "0.3"

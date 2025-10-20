@@ -1,0 +1,39 @@
+[package]
+name = "plugins-registry-api"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Plugin registry and marketplace API for RustCare Engine (Phase 1.5)"
+
+[dependencies]
+# Workspace dependencies
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+
+# Internal dependencies
+auth-identity = { path = "../auth-identity" }
+auth-zanzibar = { path = "../auth-zanzibar" }
+plugin-runtime-core = { path = "../plugin-runtime-core" }
+audit-engine = { path = "../audit-engine" }
+
+# Registry specific dependencies
+semver = "1.0"
+tar = "0.4"
+flate2 = "1.0"
+sha2 = "0.10"

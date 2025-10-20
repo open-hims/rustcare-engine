@@ -1,0 +1,99 @@
+[workspace]
+resolver = "2"
+members = [
+    "error-common",
+    "logger-redacted",
+    "database-layer",
+    "email-service",
+    "auth-identity",
+    "auth-oauth", 
+    "auth-zanzibar",
+    "auth-gateway",
+    "events-bus",
+    "config-engine",
+    "workflow-engine", 
+    "audit-engine",
+    "crypto",
+    "object-governance",
+    "telemetry",
+    "ops-cli",
+    "plugin-runtime-core",
+    "plugins-registry-api",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["RustCare Team <team@rustcare.dev>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/open-hims/rustcare-engine"
+homepage = "https://rustcare.dev"
+documentation = "https://docs.rustcare.dev"
+keywords = ["healthcare", "engine", "rust", "microservices"]
+categories = ["web-programming", "authentication", "development-tools"]
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+async-trait = "0.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# HTTP and networking
+reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
+axum = { version = "0.7", features = ["macros"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+# Database
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono"] }
+sea-orm = { version = "0.12", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros"] }
+
+# Cryptography and security
+ring = "0.17"
+jwt = "0.16"
+bcrypt = "0.15"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Logging and observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+opentelemetry = "0.21"
+opentelemetry-jaeger = "0.20"
+
+# Configuration
+config = "0.13"
+clap = { version = "4.0", features = ["derive"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+eyre = { version = "0.6", features = ["stable-eyre"] } # Enhanced error handling with better diagnostics
+
+# Performance and parallelism
+rayon = "1.8" # Data parallelism for CPU-intensive tasks
+itertools = "0.12" # Extended iterator combinators for efficient data processing
+
+# Date and time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Security and validation
+validator = { version = "0.18", features = ["derive"] } # Input validation with derive macros
+secrecy = "0.8" # Protection for sensitive data in memory
+zeroize = "1.7" # Secure memory clearing
+
+# Performance utilities
+dashmap = "5.5" # High-performance concurrent HashMap
+parking_lot = "0.12" # Faster mutex/rwlock implementations
+smallvec = { version = "1.11", features = ["serde"] } # Stack-allocated vectors for small collections
+
+# Development and debugging
+color-eyre = "0.6" # Beautiful error reports
+tracing-error = "0.2" # Enhanced error context with tracing
+
+# Testing
+mockall = "0.11"
+proptest = "1.4" # Property-based testing for robust validation

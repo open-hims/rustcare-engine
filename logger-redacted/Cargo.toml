@@ -1,0 +1,34 @@
+[package]
+name = "logger-redacted"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "HIPAA-compliant logger with automatic PII redaction for RustCare Engine"
+
+[dependencies]
+# Workspace dependencies
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Internal dependencies
+error-common = { path = "../error-common" }
+
+# Logging specific dependencies
+regex = "1.10"
+lazy_static = "1.4"
+sha2 = "0.10"
+base64 = "0.21"
+tracing-appender = "0.2"
+tracing-bunyan-formatter = "0.3"

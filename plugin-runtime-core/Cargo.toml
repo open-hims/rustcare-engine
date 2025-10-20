@@ -1,0 +1,36 @@
+[package]
+name = "plugin-runtime-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Plugin runtime and extension system for RustCare Engine (Phase 1.5)"
+
+[dependencies]
+# Workspace dependencies
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+
+# Internal dependencies
+auth-zanzibar = { path = "../auth-zanzibar" }
+events-bus = { path = "../events-bus" }
+config-engine = { path = "../config-engine" }
+audit-engine = { path = "../audit-engine" }
+
+# Plugin runtime specific dependencies
+wasmtime = "14.0"
+wit-bindgen = "0.13"
+libloading = "0.8"
+abi_stable = "0.11"

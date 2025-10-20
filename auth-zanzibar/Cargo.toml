@@ -1,0 +1,32 @@
+[package]
+name = "auth-zanzibar"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Zanzibar-style authorization engine for RustCare Engine"
+
+[dependencies]
+# Workspace dependencies
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+
+# Internal dependencies
+auth-identity = { path = "../auth-identity" }
+
+# Zanzibar specific dependencies
+petgraph = "0.6"
+dashmap = "5.5"
+ahash = "0.8"

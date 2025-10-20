@@ -1,0 +1,46 @@
+[package]
+name = "ops-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Operations CLI tool for RustCare Engine management"
+
+[[bin]]
+name = "rustcare"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace dependencies
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+
+# Internal dependencies
+auth-identity = { path = "../auth-identity" }
+auth-oauth = { path = "../auth-oauth" }
+auth-zanzibar = { path = "../auth-zanzibar" }
+config-engine = { path = "../config-engine" }
+workflow-engine = { path = "../workflow-engine" }
+audit-engine = { path = "../audit-engine" }
+telemetry = { path = "../telemetry" }
+
+# CLI specific dependencies
+clap_complete = "4.4"
+dialoguer = "0.11"
+indicatif = "0.17"
+console = "0.15"
+colored = "2.0"
+tui = "0.19"
+crossterm = "0.27"
