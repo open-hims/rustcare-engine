@@ -19,6 +19,7 @@ members = [
     "ops-cli",
     "plugin-runtime-core",
     "plugins-registry-api",
+    "rustcare-server",
 ]
 
 [workspace.package]

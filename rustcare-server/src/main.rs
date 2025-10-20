@@ -7,7 +7,6 @@ use std::net::SocketAddr;
 use tower::ServiceBuilder;
 use tower_http::{
     trace::TraceLayer,
-    compression::CompressionLayer,
 };
 use tracing::{info, Level};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -127,7 +126,6 @@ async fn create_app(server: RustCareServer) -> Result<Router> {
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
-                .layer(CompressionLayer::new())
                 .layer(app_middleware::create_cors_layer())
                 .layer(middleware::from_fn(app_middleware::request_timing_middleware))
                 .layer(middleware::from_fn(app_middleware::audit_logging_middleware))
