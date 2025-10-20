@@ -80,11 +80,11 @@ enum UserRole {
 
 enum UserStatus {
   USER_STATUS_UNSPECIFIED = 0;
-  ACTIVE = 1;
-  INACTIVE = 2;
-  SUSPENDED = 3;
-  PENDING_VERIFICATION = 4;
-  LOCKED = 5;
+  USER_ACTIVE = 1;
+  USER_INACTIVE = 2;
+  USER_SUSPENDED = 3;
+  USER_PENDING_VERIFICATION = 4;
+  USER_LOCKED = 5;
 }
 
 message Session {
@@ -102,10 +102,10 @@ message Session {
 
 enum SessionStatus {
   SESSION_STATUS_UNSPECIFIED = 0;
-  ACTIVE = 1;
-  EXPIRED = 2;
-  REVOKED = 3;
-  INVALIDATED = 4;
+  SESSION_ACTIVE = 1;
+  SESSION_EXPIRED = 2;
+  SESSION_REVOKED = 3;
+  SESSION_INVALIDATED = 4;
 }
 
 // Authorization structures (Zanzibar-style)

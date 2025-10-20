@@ -3,7 +3,7 @@ use axum::{
     Router,
 };
 use crate::{
-    handlers::{health, auth, workflow, websocket},
+    handlers::{health, auth, workflow}, // websocket temporarily disabled
     server::RustCareServer,
 };
 
@@ -47,11 +47,12 @@ pub fn api_v1_routes() -> Router<RustCareServer> {
         // .nest("/analytics", analytics_routes())
 }
 
-/// Create WebSocket routes
+/// Create WebSocket routes (temporarily disabled)
 pub fn websocket_routes() -> Router<RustCareServer> {
     Router::new()
-        .route("/ws", get(websocket::websocket_handler))
-        .route("/ws/health", get(websocket::websocket_handler))
+        // TODO: Re-enable WebSocket routes after fixing compilation issues
+        // .route("/ws", get(websocket::websocket_handler))
+        // .route("/ws/health", get(websocket::websocket_handler))
 }
 
 /// Create all application routes

@@ -168,10 +168,10 @@ enum ViolationType {
 
 enum ViolationSeverity {
   VIOLATION_SEVERITY_UNSPECIFIED = 0;
-  LOW = 1;
-  MEDIUM = 2;
-  HIGH = 3;
-  CRITICAL = 4;
+  VIOLATION_LOW = 1;
+  VIOLATION_MEDIUM = 2;
+  VIOLATION_HIGH = 3;
+  VIOLATION_CRITICAL = 4;
 }
 
 enum ViolationStatus {
@@ -215,10 +215,10 @@ enum RecommendationType {
 
 enum RecommendationPriority {
   RECOMMENDATION_PRIORITY_UNSPECIFIED = 0;
-  LOW = 1;
-  MEDIUM = 2;
-  HIGH = 3;
-  URGENT = 4;
+  PRIORITY_LOW = 1;
+  PRIORITY_MEDIUM = 2;
+  PRIORITY_HIGH = 3;
+  PRIORITY_URGENT = 4;
 }
 
 // Data access tracking
