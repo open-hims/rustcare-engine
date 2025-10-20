@@ -5,6 +5,7 @@ use axum::{
 use crate::{
     handlers::{health, auth, workflow}, // websocket temporarily disabled
     server::RustCareServer,
+    openapi,
 };
 
 /// Create health check routes
@@ -55,13 +56,20 @@ pub fn websocket_routes() -> Router<RustCareServer> {
         // .route("/ws/health", get(websocket::websocket_handler))
 }
 
+/// Postman collection handler
+pub async fn postman_collection() -> axum::response::Json<serde_json::Value> {
+    axum::response::Json(openapi::generate_postman_collection())
+}
+
 /// Create all application routes
 pub fn create_routes() -> Router<RustCareServer> {
     Router::new()
         // Health check routes (no authentication required)
         .merge(health_routes())
-        // WebSocket routes
-        .merge(websocket_routes())
+        // API documentation routes
+        .merge(openapi::create_docs_routes())
+        // Postman collection endpoint
+        .route("/postman-collection.json", get(postman_collection))
         // API v1 routes (authentication required)
         .nest("/api/v1", api_v1_routes())
         // TODO: Add API versioning:

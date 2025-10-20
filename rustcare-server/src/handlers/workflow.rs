@@ -8,15 +8,25 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use crate::server::RustCareServer;
 use anyhow::Result;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 /// Workflow definition
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct WorkflowDefinition {
+    /// Workflow unique identifier
+    #[schema(example = "patient-admission")]
     pub id: String,
+    /// Workflow display name
+    #[schema(example = "Patient Admission Workflow")]
     pub name: String,
+    /// Workflow description
+    #[schema(example = "Complete patient admission process")]
     pub description: String,
+    /// Workflow version
+    #[schema(example = "1.0.0")]
     pub version: String,
+    /// Workflow steps
     pub steps: Vec<WorkflowStep>,
     pub triggers: Vec<WorkflowTrigger>,
     pub metadata: HashMap<String, String>,
@@ -56,12 +66,68 @@ pub struct RetryConfig {
 }
 
 /// Workflow execution request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct WorkflowExecutionRequest {
+    /// ID of the workflow to execute
+    #[schema(example = "patient-admission")]
     pub workflow_id: String,
+    /// Input data for the workflow
     pub input_data: HashMap<String, serde_json::Value>,
+    /// Execution context
     pub execution_context: Option<HashMap<String, String>>,
+    /// Execution priority
+    #[schema(example = "high")]
     pub priority: Option<String>,
+}
+
+// Additional response schemas for OpenAPI
+/// Workflow list response
+#[derive(Debug, Serialize, ToSchema)]
+pub struct WorkflowListResponse {
+    /// Available workflows
+    pub workflows: Vec<WorkflowSummary>,
+    /// Total count
+    pub total: usize,
+}
+
+/// Workflow summary
+#[derive(Debug, Serialize, ToSchema)]
+pub struct WorkflowSummary {
+    /// Workflow ID
+    #[schema(example = "patient-admission")]
+    pub id: String,
+    /// Workflow name
+    #[schema(example = "Patient Admission")]
+    pub name: String,
+    /// Brief description
+    pub description: String,
+    /// Current version
+    pub version: String,
+    /// Whether active
+    pub active: bool,
+}
+
+/// Workflow response
+pub type WorkflowResponse = WorkflowDefinition;
+
+/// Execution status response
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ExecutionStatusResponse {
+    /// Execution ID
+    #[schema(example = "exec_123456")]
+    pub execution_id: String,
+    /// Current status
+    #[schema(example = "running")]
+    pub status: String,
+    /// Progress percentage
+    #[schema(example = 75)]
+    pub progress: u8,
+    /// Current step
+    pub current_step: Option<String>,
+    /// Result if completed
+    pub result: Option<serde_json::Value>,
+    /// Error if failed
+    pub error: Option<String>,
 }
 
 /// Workflow execution response

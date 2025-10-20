@@ -15,6 +15,7 @@ mod handlers;
 mod middleware;
 mod routes;
 mod server;
+mod openapi;
 // mod grpc; // Disabled temporarily
 
 use middleware as app_middleware;

@@ -58,6 +58,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 clap = { version = "4.4", features = ["derive", "env"] }
 config = "0.14"
 
+# OpenAPI documentation
+utoipa = { version = "4.2", features = ["axum_extras", "chrono", "uuid"] }
+utoipa-swagger-ui = { version = "6.0", features = ["axum"] }
+
 # gRPC support
 tonic = { version = "0.10", features = ["tls", "tls-roots"] }
 prost = "0.12"

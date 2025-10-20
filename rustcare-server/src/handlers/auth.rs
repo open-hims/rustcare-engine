@@ -7,66 +7,124 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use crate::server::RustCareServer;
+use utoipa::ToSchema;
 use anyhow::Result;
 
 /// Authentication request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct AuthRequest {
+    /// Username or email address
+    #[schema(example = "doctor@rustcare.dev")]
     pub username: String,
+    /// User password
+    #[schema(example = "secure_password123")]
     pub password: String,
+    /// Authentication provider (optional)
+    #[schema(example = "local")]
     pub provider: Option<String>,
 }
 
+/// Login request (alias for AuthRequest for OpenAPI)
+pub type LoginRequest = AuthRequest;
+
 /// Authentication response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct AuthResponse {
+    /// Authentication success status
     pub success: bool,
+    /// JWT access token if successful
+    #[schema(example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")]
     pub token: Option<String>,
+    /// Token expiration time in seconds
+    #[schema(example = 3600)]
     pub expires_in: Option<u64>,
+    /// Refresh token for token renewal
     pub refresh_token: Option<String>,
+    /// Authenticated user ID
+    #[schema(example = "user_123456")]
     pub user_id: Option<String>,
+    /// User permissions
     pub permissions: Vec<String>,
+    /// Error message if authentication failed
     pub error: Option<String>,
 }
 
+/// Login response (alias for AuthResponse for OpenAPI)
+pub type LoginResponse = AuthResponse;
+
 /// OAuth authorization request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct OAuthRequest {
+    /// OAuth provider name
+    #[schema(example = "google")]
     pub provider: String,
+    /// Redirect URI for OAuth callback
+    #[schema(example = "https://rustcare.dev/auth/callback")]
     pub redirect_uri: String,
+    /// Requested OAuth scopes
     pub scope: Vec<String>,
+    /// State parameter for CSRF protection
     pub state: Option<String>,
 }
 
 /// OAuth authorization response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct OAuthResponse {
+    /// Authorization URL to redirect user to
+    #[schema(example = "https://accounts.google.com/oauth/authorize?...")]
     pub authorization_url: String,
+    /// State parameter for CSRF protection
     pub state: String,
+    /// URL expiration time in seconds
+    #[schema(example = 3600)]
     pub expires_in: u64,
 }
 
 /// Token validation request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct TokenValidationRequest {
+    /// JWT token to validate
+    #[schema(example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")]
     pub token: String,
+    /// Resource being accessed (optional)
+    #[schema(example = "patient_records")]
     pub resource: Option<String>,
+    /// Action being performed (optional)
+    #[schema(example = "read")]
     pub action: Option<String>,
 }
 
 /// Token validation response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct TokenValidationResponse {
+    /// Whether the token is valid
     pub valid: bool,
+    /// User ID if token is valid
+    #[schema(example = "user_123456")]
     pub user_id: Option<String>,
+    /// User permissions
     pub permissions: Vec<String>,
+    /// Token expiration timestamp
+    #[schema(example = "2024-01-15T14:30:00Z")]
     pub expires_at: Option<String>,
+    /// Error message if validation failed
     pub error: Option<String>,
 }
 
 /// User login handler
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/login",
+    tag = "authentication",
+    request_body = AuthRequest,
+    responses(
+        (status = 200, description = "Authentication successful", body = AuthResponse),
+        (status = 401, description = "Authentication failed", body = AuthResponse),
+        (status = 429, description = "Too many login attempts")
+    )
+)]
 pub async fn login(
-    State(server): State<RustCareServer>,
+    State(_server): State<RustCareServer>,
     Json(auth_request): Json<AuthRequest>
 ) -> Result<ResponseJson<AuthResponse>, StatusCode> {
     // TODO: Integrate with auth-identity and auth-oauth modules

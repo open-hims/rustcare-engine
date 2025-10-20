@@ -8,52 +8,100 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use crate::server::RustCareServer;
 use anyhow::Result;
+use utoipa::ToSchema;
 
 /// Health check response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct HealthResponse {
+    /// Overall system health status
+    #[schema(example = "healthy")]
     pub status: String,
+    /// Current timestamp in RFC3339 format
+    #[schema(example = "2024-01-15T10:30:00Z")]
     pub timestamp: String,
+    /// API version
+    #[schema(example = "1.0.0")]
     pub version: String,
+    /// System uptime in seconds
+    #[schema(example = 3600)]
     pub uptime: u64,
+    /// Individual service health checks
     pub checks: HashMap<String, String>,
 }
 
 /// Version information response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct VersionResponse {
+    /// Application name
+    #[schema(example = "RustCare Engine")]
     pub name: String,
+    /// Application version
+    #[schema(example = "1.0.0")]
     pub version: String,
+    /// Build date
+    #[schema(example = "2024-01-15")]
     pub build_date: String,
+    /// Git commit hash
+    #[schema(example = "abc123def")]
     pub git_commit: String,
+    /// Rust version used to build
+    #[schema(example = "1.75.0")]
     pub rust_version: String,
+    /// Enabled features
     pub features: Vec<String>,
 }
 
 /// System status response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct StatusResponse {
+    /// Server name
+    #[schema(example = "RustCare Engine")]
     pub server_name: String,
+    /// Uptime in seconds
+    #[schema(example = 3600)]
     pub uptime_seconds: u64,
+    /// Memory usage in MB
+    #[schema(example = 256.5)]
     pub memory_usage_mb: f64,
+    /// Number of active connections
+    #[schema(example = 42)]
     pub active_connections: usize,
+    /// HIPAA compliance status
     pub hipaa_compliance: bool,
+    /// Audit logging enabled
     pub audit_logging: bool,
+    /// Individual service statuses
     pub services: HashMap<String, ServiceStatus>,
 }
 
 /// Service status information
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ServiceStatus {
+    /// Service name
+    #[schema(example = "Database Layer")]
     pub name: String,
+    /// Current status
+    #[schema(example = "running")]
     pub status: String,
+    /// Last health check timestamp
+    #[schema(example = "2024-01-15T10:30:00Z")]
     pub last_check: String,
+    /// Error message if any
     pub error: Option<String>,
 }
 
 /// Health check handler
+#[utoipa::path(
+    get,
+    path = "/health",
+    tag = "health",
+    responses(
+        (status = 200, description = "System is healthy", body = HealthResponse),
+        (status = 503, description = "System is unhealthy", body = HealthResponse)
+    )
+)]
 pub async fn health_check(
-    State(server): State<RustCareServer>
+    State(_server): State<RustCareServer>
 ) -> Result<ResponseJson<HealthResponse>, StatusCode> {
     let mut checks = HashMap::new();
     
@@ -81,6 +129,14 @@ pub async fn health_check(
 }
 
 /// Version information handler
+#[utoipa::path(
+    get,
+    path = "/version",
+    tag = "health",
+    responses(
+        (status = 200, description = "Version information retrieved successfully", body = VersionResponse)
+    )
+)]
 pub async fn version_info() -> Result<ResponseJson<VersionResponse>, StatusCode> {
     let features = vec![
         "hipaa-compliance".to_string(),
@@ -104,6 +160,14 @@ pub async fn version_info() -> Result<ResponseJson<VersionResponse>, StatusCode>
 }
 
 /// System status handler
+#[utoipa::path(
+    get,
+    path = "/status",
+    tag = "health",
+    responses(
+        (status = 200, description = "System status retrieved successfully", body = StatusResponse)
+    )
+)]
 pub async fn system_status(
     State(server): State<RustCareServer>
 ) -> Result<ResponseJson<StatusResponse>, StatusCode> {
