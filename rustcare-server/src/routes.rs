@@ -3,7 +3,7 @@ use axum::{
     Router,
 };
 use crate::{
-    handlers::{health, auth, workflow}, // websocket temporarily disabled
+    handlers::{health, auth, workflow, sync}, // websocket temporarily disabled
     server::RustCareServer,
     openapi,
 };
@@ -35,11 +35,19 @@ pub fn workflow_routes() -> Router<RustCareServer> {
         .route("/executions/:id/cancel", delete(workflow::cancel_execution))
 }
 
+/// Create sync routes for offline-first synchronization
+pub fn sync_routes() -> Router<RustCareServer> {
+    Router::new()
+        .route("/sync/pull", post(sync::pull))
+        .route("/sync/push", post(sync::push))
+}
+
 /// Create API v1 routes
 pub fn api_v1_routes() -> Router<RustCareServer> {
     Router::new()
         .nest("/auth", auth_routes())
         .nest("/workflow", workflow_routes())
+        .merge(sync_routes())
         // TODO: Add more API routes here:
         // .nest("/plugins", plugin_routes())
         // .nest("/audit", audit_routes())

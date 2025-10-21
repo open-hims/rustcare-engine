@@ -9,8 +9,7 @@
 use crate::error::{SyncError, SyncResult};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{sqlite::SqlitePool, Row, SqliteConnection};
-use std::path::Path;
+use sqlx::{sqlite::SqlitePool, Row};
 use uuid::Uuid;
 
 /// Local database configuration
