@@ -13,6 +13,7 @@ pub mod hlc;
 pub mod causality;
 pub mod crdt;
 pub mod sync_protocol;
+pub mod p2p;
 
 pub use error::{SyncError, SyncResult};
 pub use local_db::{LocalDatabase, LocalDbConfig, OperationType, SyncQueueEntry};
@@ -20,6 +21,7 @@ pub use hlc::{HybridLogicalClock, HybridTimestamp};
 pub use causality::{VectorClock, Conflict, ConflictDetector};
 pub use crdt::{Crdt, LwwRegister, GCounter, PnCounter, OrSet, Rga};
 pub use sync_protocol::{SyncProtocol, SyncConfig, SyncStats};
+pub use p2p::{P2PSync, P2PConfig, PeerInfo, PeerStatus};
 
 /// Sync engine for offline-first operations
 pub struct SyncEngine {
