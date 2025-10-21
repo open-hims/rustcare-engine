@@ -298,6 +298,7 @@ mod tests {
             node_id: Uuid::new_v4(),
             max_connections: 5,
             enable_wal: true,
+            enable_secure_delete: true,
         };
         
         Arc::new(LocalDatabase::new(config).await.unwrap())

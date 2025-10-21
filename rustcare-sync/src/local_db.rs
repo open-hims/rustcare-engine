@@ -12,20 +12,20 @@ use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqlitePool, Row};
 use uuid::Uuid;
 
-/// Local database configuration
-#[derive(Debug, Clone)]
+/// Configuration for local database
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocalDbConfig {
-    /// Path to SQLite database file
+    /// Path to the database file
     pub db_path: String,
-    
-    /// Node ID (unique identifier for this device/clinic)
+    /// Node ID for this instance
     pub node_id: Uuid,
-    
-    /// Maximum number of connections
+    /// Maximum number of connections in the pool
     pub max_connections: u32,
-    
-    /// Enable WAL mode for better concurrency
+    /// Whether to enable WAL mode
     pub enable_wal: bool,
+    /// Whether to enable secure deletion (overwrites freed pages)
+    /// This is required for HIPAA compliance
+    pub enable_secure_delete: bool,
 }
 
 impl Default for LocalDbConfig {
@@ -35,6 +35,7 @@ impl Default for LocalDbConfig {
             node_id: Uuid::new_v4(),
             max_connections: 5,
             enable_wal: true,
+            enable_secure_delete: true, // Default to enabled for HIPAA compliance
         }
     }
 }
@@ -119,6 +120,13 @@ impl LocalDatabase {
         // Enable WAL mode for better concurrency
         if config.enable_wal {
             sqlx::query("PRAGMA journal_mode = WAL")
+                .execute(&pool)
+                .await?;
+        }
+        
+        // Enable secure deletion to overwrite freed pages (HIPAA requirement)
+        if config.enable_secure_delete {
+            sqlx::query("PRAGMA secure_delete = ON")
                 .execute(&pool)
                 .await?;
         }
@@ -415,6 +423,16 @@ impl LocalDatabase {
         &self.pool
     }
     
+    /// Vacuum the database to reclaim space and securely delete freed pages
+    /// This should be called periodically, especially after bulk deletions
+    /// Required for HIPAA compliance to ensure deleted PHI is truly removed
+    pub async fn vacuum(&self) -> SyncResult<()> {
+        sqlx::query("VACUUM")
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+    
     /// Close database connection
     pub async fn close(self) -> SyncResult<()> {
         self.pool.close().await;
@@ -436,6 +454,7 @@ mod tests {
             node_id: Uuid::new_v4(),
             max_connections: 5,
             enable_wal: true,
+            enable_secure_delete: true,
         };
         
         LocalDatabase::new(config).await
@@ -522,5 +541,71 @@ mod tests {
         assert_eq!(pending.len(), 1);
         assert_eq!(pending[0].retry_count, 1);
         assert_eq!(pending[0].last_error, Some("Network error".to_string()));
+    }
+    
+    #[tokio::test]
+    async fn test_secure_delete_enabled() {
+        // Test that secure_delete pragma is properly set
+        let db = create_test_db().await.unwrap();
+        
+        // Query the secure_delete pragma
+        let row = sqlx::query("PRAGMA secure_delete")
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+        
+        let secure_delete: i64 = row.try_get(0).unwrap();
+        assert_eq!(secure_delete, 1, "secure_delete should be enabled");
+    }
+    
+    #[tokio::test]
+    async fn test_vacuum_operation() {
+        let db = create_test_db().await.unwrap();
+        
+        // Add some operations
+        for i in 0..10 {
+            db.queue_operation(
+                "patient",
+                Uuid::new_v4(),
+                OperationType::Create,
+                serde_json::json!({"test": i}),
+                &format!("node1:{}", i),
+            ).await.unwrap();
+        }
+        
+        // Mark them all as synced (simulating deletion scenario)
+        let pending = db.get_pending_operations(10).await.unwrap();
+        for op in pending {
+            db.mark_synced(op.id).await.unwrap();
+        }
+        
+        // Vacuum should complete without error
+        db.vacuum().await.unwrap();
+    }
+    
+    #[tokio::test]
+    async fn test_secure_delete_disabled() {
+        // Test that we can disable secure_delete if needed
+        let temp_file = NamedTempFile::new().unwrap();
+        let db_path = temp_file.path().to_str().unwrap().to_string();
+        
+        let config = LocalDbConfig {
+            db_path,
+            node_id: Uuid::new_v4(),
+            max_connections: 5,
+            enable_wal: true,
+            enable_secure_delete: false, // Explicitly disabled
+        };
+        
+        let db = LocalDatabase::new(config).await.unwrap();
+        
+        // Query the secure_delete pragma
+        let row = sqlx::query("PRAGMA secure_delete")
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+        
+        let secure_delete: i64 = row.try_get(0).unwrap();
+        assert_eq!(secure_delete, 0, "secure_delete should be disabled");
     }
 }
