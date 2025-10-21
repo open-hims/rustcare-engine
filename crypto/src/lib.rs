@@ -1,8 +1,14 @@
 pub mod error;
 pub mod encryption;
+pub mod aes_gcm;
+pub mod kdf;
+pub mod envelope;
 
 pub use error::*;
 pub use encryption::*;
+pub use aes_gcm::*;
+pub use kdf::*;
+pub use envelope::*;
 
 /// Comprehensive cryptographic toolkit for RustCare Engine
 /// 

@@ -37,3 +37,8 @@ zeroize = { version = "1.7", features = ["zeroize_derive"] }
 constant_time_eq = "0.3"
 base64 = "0.21"
 hex = "0.4"
+
+# Key derivation
+pbkdf2 = { version = "0.12", features = ["simple"] }
+argon2 = "0.5"
+hkdf = "0.12"

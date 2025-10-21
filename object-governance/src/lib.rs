@@ -3,6 +3,7 @@ pub mod error;
 pub mod classification;
 pub mod lifecycle;
 pub mod storage;
+pub mod backends;
 pub mod policies;
 pub mod governance;
 
@@ -11,6 +12,7 @@ pub use error::{GovernanceError, GovernanceResult};
 pub use classification::{ClassificationMetadata, DataClassification};
 pub use lifecycle::{LifecycleAction, LifecycleRule, RetentionPolicy, StorageTier};
 pub use storage::{AccessLog, ObjectMetadata, ObjectVersion, StorageBackend, InMemoryStorageBackend};
+pub use backends::FileSystemBackend;
 pub use policies::{AutoClassifier, PolicyAction, PolicyEngine};
 pub use governance::GovernanceEngine;
 

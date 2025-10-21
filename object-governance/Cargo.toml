@@ -32,3 +32,6 @@ events-bus = { path = "../events-bus" }
 # Governance specific dependencies
 regex = "1.10"
 glob = "0.3"
+
+[dev-dependencies]
+tempfile = "3.8"
