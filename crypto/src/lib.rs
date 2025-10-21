@@ -3,6 +3,7 @@ pub mod encryption;
 pub mod aes_gcm;
 pub mod kdf;
 pub mod envelope;
+pub mod kms;
 
 pub use error::*;
 pub use encryption::*;
@@ -36,11 +37,9 @@ pub use envelope::*;
 /// ```rust
 /// use crypto::CryptoEngine;
 /// 
-/// #[tokio::main]
-/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-///     let crypto = CryptoEngine::new();
-///     println!("Crypto engine initialized");
-///     Ok(())
+/// let crypto = CryptoEngine::new();
+/// println!("Crypto engine initialized");
+/// ```
 pub struct CryptoEngine;
 
 impl CryptoEngine {
