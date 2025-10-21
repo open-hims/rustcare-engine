@@ -17,6 +17,9 @@ pub enum ZanzibarError {
     #[error("Schema validation failed: {0}")]
     SchemaValidationFailed(String),
     
+    #[error("Invalid schema: {0}")]
+    InvalidSchema(String),
+    
     #[error("Relation not found: {0}")]
     RelationNotFound(String),
     

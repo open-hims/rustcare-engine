@@ -9,6 +9,7 @@ pub mod transaction;
 pub mod audit;
 pub mod backup;
 pub mod error;
+pub mod authorization;
 
 pub use connection::*;
 pub use models::*;
@@ -17,6 +18,7 @@ pub use encryption::*;
 pub use query::*;
 pub use error::*;
 pub use audit::*;
+pub use authorization::*;
 
 /// Enterprise database layer with Row Level Security and encryption
 /// 

@@ -333,12 +333,14 @@ mod tests {
             .expect("Test requires database connection or mock");
         
         let db_pool = DbPool::new(pool);
-        let cert_repo = CertificateRepository::new(db_pool);
+        let cert_repo = CertificateRepository::new(db_pool.clone());
+        let user_repo = Arc::new(UserRepository::new(db_pool));
         let provider = CertificateProvider::new(
             "/etc/rustcare/ca-certificates/roots".to_string(),
             true,
             true,
             cert_repo,
+            user_repo,
         );
         assert_eq!(provider.name(), "certificate");
     }
