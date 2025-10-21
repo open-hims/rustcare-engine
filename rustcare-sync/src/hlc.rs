@@ -19,7 +19,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// 
 /// Combines physical time (milliseconds since epoch) with a logical counter
 /// to provide total ordering of events across distributed systems.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct HybridTimestamp {
     /// Physical time component (milliseconds since UNIX epoch)
     pub physical: u64,

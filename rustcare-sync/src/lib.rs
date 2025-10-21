@@ -11,11 +11,13 @@ pub mod error;
 pub mod local_db;
 pub mod hlc;
 pub mod causality;
+pub mod crdt;
 
 pub use error::{SyncError, SyncResult};
 pub use local_db::{LocalDatabase, LocalDbConfig, OperationType, SyncQueueEntry};
 pub use hlc::{HybridLogicalClock, HybridTimestamp};
 pub use causality::{VectorClock, Conflict, ConflictDetector};
+pub use crdt::{Crdt, LwwRegister, GCounter, PnCounter, OrSet, Rga};
 
 /// Sync engine for offline-first operations
 pub struct SyncEngine {
