@@ -491,11 +491,16 @@ impl AuditLogger {
 mod tests {
     use super::*;
     use serde_json::json;
-    use tempfile::NamedTempFile;
+    use tempfile::TempDir;
+    use std::path::PathBuf;
+    
+    fn get_test_audit_path() -> PathBuf {
+        let temp_dir = std::env::temp_dir();
+        temp_dir.join(format!("test_audit_{}.db", uuid::Uuid::new_v4()))
+    }
     
     async fn create_test_logger() -> SyncResult<AuditLogger> {
-        let temp_file = NamedTempFile::new().unwrap();
-        let audit_db_path = temp_file.path().to_str().unwrap().to_string();
+        let audit_db_path = get_test_audit_path().to_str().unwrap().to_string();
         
         let config = AuditConfig {
             audit_db_path,
@@ -618,8 +623,7 @@ mod tests {
     
     #[tokio::test]
     async fn test_disabled_logging() {
-        let temp_file = NamedTempFile::new().unwrap();
-        let audit_db_path = temp_file.path().to_str().unwrap().to_string();
+        let audit_db_path = get_test_audit_path().to_str().unwrap().to_string();
         
         let config = AuditConfig {
             audit_db_path,
