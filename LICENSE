@@ -1,31 +1,578 @@
-GNU AFFERO GENERAL PUBLIC LICENSE
-Version 3, 19 November 2007
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
 
-Copyright (C) 2024-2025 RustCare Team <team@rustcare.dev>
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published
-by the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+   1. Definitions.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
 
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
 
-Additional permissions under GNU AGPL version 3 section 7:
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
 
-If you modify this Program, or any covered work, by linking or combining
-it with other code, such other code is not for that reason alone subject
-to any of the requirements of the GNU Affero General Public License.
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
 
----
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
 
-The full license text is available at: https://www.gnu.org/licenses/agpl-3.0.txt
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
 
-NOTICE: This software is intended for healthcare applications and must comply
-with all applicable healthcare regulations including but not limited to HIPAA,
-GDPR, and other regional healthcare data protection laws.
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+
+   ============================================================================
+   ADDITIONAL TERMS FOR OPENHIMS - HEALTHCARE LIABILITY AND USAGE RESTRICTIONS
+   ============================================================================
+
+   The following additional terms apply to OpenHIMS and supplement the Apache
+   License Version 2.0 above:
+
+   10. Healthcare Liability Disclaimer.
+
+       IN ADDITION TO THE DISCLAIMERS IN SECTIONS 7 AND 8 ABOVE:
+
+       (a) HEALTHCARE USE DISCLAIMER. This software is provided for healthcare
+           interoperability purposes. The Licensor and Contributors make no
+           representations or warranties regarding the software's suitability,
+           accuracy, or reliability for clinical decision-making, patient care,
+           diagnosis, treatment, or any other healthcare purpose.
+
+       (b) PATIENT SAFETY. You acknowledge that the software may be used in
+           connection with Protected Health Information (PHI) and patient care
+           systems. You are solely responsible for:
+           - Ensuring patient safety in your deployment
+           - Validating all data and outputs before clinical use
+           - Maintaining appropriate safeguards for PHI
+           - Compliance with all applicable healthcare regulations
+
+       (c) NO MEDICAL ADVICE. This software does not provide medical advice,
+           diagnosis, or treatment. It is an integration and interoperability
+           tool only.
+
+       (d) REGULATORY COMPLIANCE. You are solely responsible for ensuring
+           your use of the Work complies with all applicable laws and
+           regulations, including but not limited to HIPAA, GDPR, FDA
+           regulations, and local healthcare privacy laws.
+
+       (e) MAXIMUM LIABILITY LIMITATION. To the maximum extent permitted by
+           applicable law, in no event shall any Contributor be liable for
+           any damages whatsoever, including but not limited to medical
+           malpractice, patient harm, data breaches, PHI disclosure, or any
+           other healthcare-related damages arising from use of this software.
+
+   11. Healthcare and Anti-Commercialization Provisions.
+
+       (a) HEALTHCARE PROVIDER EXEMPTION (FREE USE).
+           Healthcare providers may use the Work freely without restriction,
+           regardless of organization size, revenue, or number of employees.
+           
+           "Healthcare Providers" include:
+           - Hospitals and health systems (any size)
+           - Medical clinics and physician practices
+           - Community health centers
+           - Public health departments and agencies
+           - Academic medical centers and teaching hospitals
+           - Long-term care facilities and nursing homes
+           - Mental health and behavioral health facilities
+           - Rehabilitation and specialty care centers
+           - Non-profit healthcare organizations
+           - Health research institutions
+           
+           Healthcare Providers may:
+           ✅ Use in production environments freely
+           ✅ Deploy at any scale without restriction
+           ✅ Modify and customize for their needs
+           ✅ Share modifications with other healthcare providers
+           ✅ Contribute improvements back to the project
+
+       (b) GENERAL OPEN-SOURCE USE.
+           All individuals, small businesses, non-profits, educational
+           institutions, and government agencies may use the Work freely
+           under standard Apache 2.0 terms without restriction.
+
+       (c) PROHIBITED COMMERCIALIZATION.
+           You may NOT use the Work to:
+           
+           (i)    Sell, resell, or license the Work as a standalone product
+           (ii)   Offer the Work as a commercial SaaS platform to third parties
+           (iii)  Create proprietary derivative products for commercial sale
+           (iv)   Package and distribute the Work for profit without
+                  substantial additional value
+           (v)    Market competing commercial products based primarily on
+                  this Work
+           (vi)   Remove attribution and rebrand as your own product for sale
+
+       (d) PERMITTED COMMERCIAL ACTIVITIES.
+           You MAY:
+           
+           (i)    Provide professional services (consulting, implementation,
+                  training, support) using the Work
+           (ii)   Deploy the Work as part of your internal business operations
+           (iii)  Use the Work as a component in a larger value-added solution
+           (iv)   Offer managed hosting services with substantial value-add
+           (v)    Develop and sell plugins/extensions that add new functionality
+           (vi)   Provide integration services connecting the Work to other systems
+
+       (e) SUBSTANTIAL VALUE-ADD REQUIREMENT.
+           If You incorporate the Work into a commercial offering, You must
+           provide SUBSTANTIAL additional value beyond the Work itself, such as:
+           
+           (i)    Significant custom features or functionality
+           (ii)   Professional services and expertise
+           (iii)  Integration with proprietary systems
+           (iv)   Managed operations and support services
+           (v)    Domain-specific customizations
+           
+           Simply repackaging or hosting the Work without substantial
+           additional value is prohibited.
+
+       (f) ATTRIBUTION AND TRANSPARENCY.
+           If You offer commercial services based on the Work:
+           
+           (i)    Clearly disclose that the core platform is OpenHIMS open-source
+           (ii)   Provide attribution to the OpenHIMS project
+           (iii)  Do not claim the Work as your proprietary technology
+           (iv)   Link to the official OpenHIMS project where possible
+           (v)    Distinguish your value-add from the open-source core
+
+       (g) ENFORCEMENT AND VIOLATIONS.
+           Violation of anti-commercialization provisions shall:
+           
+           (i)    Terminate all licenses granted under this License immediately
+           (ii)   Require cessation of prohibited commercial activities
+           (iii)  May result in legal action for breach of license terms
+           (iv)   Require payment of damages and disgorgement of profits
+           (v)    May result in public disclosure of violation
+
+       (h) QUESTIONS AND CLARIFICATIONS.
+           If You are unsure whether your intended use is permitted:
+           
+           - Email: legal@openhims.org for guidance
+           - Generally: If you're helping healthcare, you're fine
+           - Generally: If you're just reselling our work, you're not
+           - When in doubt, ask before proceeding
+
+   12. Optional Proprietary Extensions by Licensor.
+
+       IMPORTANT: The OpenHIMS core platform is and will always remain
+       completely open-source. This section only addresses optional
+       proprietary extensions that the Licensor may develop separately.
+
+       (a) LICENSOR'S RIGHT TO CREATE PROPRIETARY EXTENSIONS.
+           While the OpenHIMS core platform remains fully open-source, the
+           Licensor reserves the right to develop and distribute certain
+           OPTIONAL packages, modules, or features under separate proprietary
+           licenses that are NOT subject to this open-source license.
+           
+           These are completely separate products, not part of the core platform.
+
+       (b) CORE PLATFORM REMAINS FULLY FUNCTIONAL.
+           The open-source core platform provides complete, production-ready
+           healthcare interoperability functionality without any proprietary
+           extensions. Proprietary extensions are OPTIONAL enhancements only.
+           
+           The Licensor commits to:
+           (i)    Never removing features from open-source to create paid versions
+           (ii)   Maintaining the core as fully functional and competitive
+           (iii)  Never requiring proprietary extensions for standard use cases
+           (iv)   Documenting which features are open-source vs. proprietary
+
+       (c) SCOPE OF OPTIONAL PROPRIETARY EXTENSIONS.
+           Optional proprietary extensions may include:
+           
+           (i)    Advanced enterprise management consoles
+           (ii)   Specialized analytics and business intelligence
+           (iii)  AI/ML predictive models and algorithms
+           (iv)   Proprietary optimization algorithms
+           (v)    White-label or OEM-specific versions
+           (vi)   Managed service automation tools
+           
+           These are value-added enhancements, not core functionality.
+
+       (d) COMMUNITY CAN BUILD ALTERNATIVES.
+           The community is explicitly encouraged and permitted to build
+           open-source alternatives to any proprietary extensions. The
+           Licensor will:
+           
+           (i)    Maintain open, documented APIs for all integrations
+           (ii)   Never create intentional incompatibilities
+           (iii)  Support community-built alternatives
+           (iv)   No lock-in mechanisms or proprietary protocols
+           (v)    Ensure core platform works with any compatible extensions
+
+       (e) SEPARATE LICENSING FOR PROPRIETARY EXTENSIONS.
+           Any proprietary extensions are subject to their own separate:
+           
+           (i)   End User License Agreement (EULA)
+           (ii)  Pricing and licensing terms
+           (iii) Support and maintenance agreements
+           (iv)  Distribution restrictions
+           
+           These terms do NOT affect the open-source core platform.
+
+       (f) TRANSPARENCY COMMITMENT.
+           The Licensor commits to:
+           
+           (i)    Clearly label what is open-source vs. proprietary
+           (ii)   Publish a list of proprietary extensions (if any)
+           (iii)  Never mislead users about open-source status
+           (iv)   Respond to community feedback on commercialization
+           (v)    Prioritize open-source development over proprietary extensions
+
+       (g) HEALTHCARE PROVIDERS GET FREE ACCESS.
+           Healthcare providers (as defined in Section 11.a) receive free
+           access to proprietary extensions if available, in support of
+           their mission to improve healthcare delivery.
+
+       (h) NOTE ON CURRENT STATUS.
+           As of the date of this license, no proprietary extensions exist.
+           All OpenHIMS components are fully open-source. This section
+           reserves the right for future optional proprietary extensions
+           should they be developed.
+           
+           Any future proprietary extensions will be announced transparently
+           to the community.
+
+   13. Audit Rights.
+
+       If You are a Commercial Entity or Healthcare Enterprise using the Work,
+       You agree that the Licensor may, upon reasonable notice and during
+       normal business hours, audit Your use of the Work to verify compliance
+       with these license terms. You agree to reasonably cooperate with such
+       audits and provide necessary documentation.
+
+   14. No Confusion or Misrepresentation.
+
+       (a) CLEAR DISTINCTION REQUIRED.
+           You must clearly distinguish between:
+           
+           (i)   Open-source components licensed under this license
+           (ii)  Commercial-only packages with proprietary licenses
+           (iii) Your own modifications and derivative works
+           (iv)  Third-party components and integrations
+
+       (b) ATTRIBUTION AND BRANDING.
+           When using both open-source and commercial-only packages:
+           
+           (i)   Properly attribute the open-source core platform
+           (ii)  Do not claim commercial packages are open-source
+           (iii) Do not remove or modify license notifications
+           (iv)  Follow branding guidelines for OpenHIMS trademarks
+           (v)   See BRANDING-GUIDE.md for detailed requirements
+
+   15. Jurisdiction and Governing Law.
+
+       These additional terms shall be governed by and construed in accordance
+       with the laws of the jurisdiction where the Licensor is established,
+       without regard to conflict of law principles.
+
+   16. Severability.
+
+       If any provision of these additional terms is held to be unenforceable
+       or invalid, such provision shall be changed and interpreted to
+       accomplish the objectives of such provision to the greatest extent
+       possible under applicable law, and the remaining provisions shall
+       continue in full force and effect.
+
+   17. Contact and Questions.
+
+       For questions about this license:
+       - General: legal@openhims.org
+       - Commercial licensing: sales@openhims.org
+       - Commercial packages: commercial@openhims.org
+       - License compliance: compliance@openhims.org
+       - Package catalog: https://openhims.org/commercial/packages
+
+   18. Founder Service Request Program.
+
+       (a) ELIGIBILITY TO REQUEST FREE SERVICES.
+           Any organization or individual using the Work may submit a request
+           to the project founders for complimentary professional services,
+           support, or assistance, regardless of organization size, revenue,
+           or commercial status.
+
+       (b) TYPES OF SERVICES AVAILABLE.
+           Organizations may request:
+           
+           (i)    Implementation and deployment assistance
+           (ii)   Technical support and troubleshooting
+           (iii)  Custom development or integration work
+           (iv)   Training and knowledge transfer
+           (v)    Architecture and design consultation
+           (vi)   Compliance and security guidance
+           (vii)  Migration from legacy systems
+           (viii) Any other professional services related to OpenHIMS
+
+       (c) REQUEST PROCESS.
+           To request free services from founders:
+           
+           (i)   Submit request via email to: founders@openhims.org
+           (ii)  Include organization details and service description
+           (iii) Explain use case and community benefit
+           (iv)  Describe why funding is not available
+           (v)   Specify timeline and scope of assistance needed
+
+       (d) EVALUATION CRITERIA.
+           Founders will evaluate requests based on:
+           
+           (i)   Community and public health benefit
+           (ii)  Organization's mission alignment (non-profit, healthcare
+                 access, underserved populations, research, education)
+           (iii) Technical merit and learning opportunity
+           (iv)  Founder availability and capacity
+           (v)   Potential to advance the OpenHIMS ecosystem
+           (vi)  Financial constraints and genuine need
+
+       (e) RESPONSE AND COMMITMENT.
+           - All requests will receive a response within 14 business days
+           - Approved requests may receive:
+             * Full service delivery at no cost
+             * Partial service delivery with discounted commercial rate
+             * Referral to community resources or partners
+             * Technical documentation and self-service guidance
+           - Founders may negotiate scope, timeline, and deliverables
+           - No guarantee of service approval, but all requests considered
+
+       (f) PRIORITY CATEGORIES.
+           The following receive priority consideration:
+           
+           (i)   Non-profit healthcare organizations
+           (ii)  Public health departments and agencies
+           (iii) Academic medical centers and research institutions
+           (iv)  Community health centers serving underserved populations
+           (v)   Healthcare initiatives in developing countries
+           (vi)  Open-source healthcare projects
+           (vii) Organizations responding to public health emergencies
+           (viii)Small practices with <50 employees serving rural areas
+
+       (g) COMMERCIAL ENTITIES.
+           Commercial Entities and Healthcare Enterprises may also request
+           free services under exceptional circumstances, including:
+           
+           (i)   Pilot programs with significant public health impact
+           (ii)  Pro-bono work for charitable initiatives
+           (iii) Emergency response or disaster relief scenarios
+           (iv)  Collaboration on open-source contributions
+           (v)   Research partnerships with data sharing agreements
+
+       (h) TERMS OF FREE SERVICE DELIVERY.
+           When founders provide free services:
+           
+           (i)   Services provided "as-is" with no warranty
+           (ii)  Timeline and deliverables subject to founder availability
+           (iii) Organization agrees to provide feedback and testimonial
+           (iv)  Organization may be featured as case study (with approval)
+           (v)   Organization encouraged to contribute back to community
+           (vi)  Future paid engagement not required or expected
+
+       (i) TRANSPARENCY AND FAIRNESS.
+           - Aggregate statistics on requests and approvals published annually
+           - Decision criteria and process remain transparent
+           - Appeals can be submitted for denied requests
+           - No discrimination based on geography, size, or sector
+
+       (j) NO OBLIGATION.
+           This provision does NOT create:
+           
+           (i)   Legal obligation for founders to provide services
+           (ii)  Guarantee of approval for any request
+           (iii) Enforceable right to free services
+           (iv)  Liability for declined or delayed requests
+           
+           This is a voluntary program to support the community.
+
+       (k) CONTACT FOR SERVICE REQUESTS.
+           Submit service requests to: founders@openhims.org
+           
+           Include in your request:
+           - Organization name and mission
+           - Description of OpenHIMS use case
+           - Specific services needed
+           - Timeline and urgency
+           - Community benefit explanation
+           - Funding situation and constraints
+           - Any supporting documentation
+
+   ============================================================================
+
+   APPENDIX: How to apply the Apache License to your work.
+
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets "[]"
+      replaced with your own identifying information. (Don't include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same "printed page" as the copyright notice for easier
+      identification within third-party archives.
+
+   Copyright 2025 OpenHIMS Project Contributors
+
+   Licensed under the Apache License, Version 2.0 (the "License")
+   with Healthcare Liability and Corporate Use Restrictions;
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License, including the additional terms for
+   healthcare liability and corporate use restrictions set forth above.
