@@ -13,6 +13,9 @@ pub use classification::{ClassificationMetadata, DataClassification};
 pub use lifecycle::{LifecycleAction, LifecycleRule, RetentionPolicy, StorageTier};
 pub use storage::{AccessLog, ObjectMetadata, ObjectVersion, StorageBackend, InMemoryStorageBackend};
 pub use backends::FileSystemBackend;
+
+#[cfg(feature = "s3-backend")]
+pub use backends::S3Backend;
 pub use policies::{AutoClassifier, PolicyAction, PolicyEngine};
 pub use governance::GovernanceEngine;
 
