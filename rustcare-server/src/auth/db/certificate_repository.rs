@@ -12,6 +12,7 @@ pub struct CertificateRepository {
     pool: DbPool,
     rls_context: Option<RlsContext>,
     audit_logger: Option<Arc<AuditLogger>>,
+    encryption: Option<Arc<database_layer::encryption::DatabaseEncryption>>,
 }
 
 impl CertificateRepository {
@@ -20,6 +21,7 @@ impl CertificateRepository {
             pool,
             rls_context: None,
             audit_logger: None,
+            encryption: None,
         }
     }
 
@@ -30,6 +32,11 @@ impl CertificateRepository {
 
     pub fn with_audit_logger(mut self, logger: Arc<AuditLogger>) -> Self {
         self.audit_logger = Some(logger);
+        self
+    }
+
+    pub fn with_encryption(mut self, enc: Arc<database_layer::encryption::DatabaseEncryption>) -> Self {
+        self.encryption = Some(enc);
         self
     }
 
@@ -50,6 +57,7 @@ impl CertificateRepository {
     pub async fn create(
         &self,
         user_id: Uuid,
+        organization_id: Uuid,
         serial_number: &str,
         fingerprint_sha256: &str,
         subject_dn: &str,
@@ -67,15 +75,15 @@ impl CertificateRepository {
             ClientCertificate,
             r#"
             INSERT INTO client_certificates (
-                user_id, serial_number, fingerprint_sha256,
+                user_id, organization_id, serial_number, fingerprint_sha256,
                 subject_dn, issuer_dn, common_name, email_address,
                 organization, organizational_unit,
                 not_before, not_after, certificate_pem, public_key_pem,
                 status, first_login_at, last_login_at, login_count
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'active', NOW(), NOW(), 0)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'active', NOW(), NOW(), 0)
             RETURNING 
-                id, user_id, serial_number, fingerprint_sha256,
+                id, organization_id, user_id, serial_number, fingerprint_sha256,
                 subject_dn, issuer_dn, common_name, email_address,
                 organization, organizational_unit,
                 not_before, not_after,
@@ -86,6 +94,7 @@ impl CertificateRepository {
                 created_at, updated_at
             "#,
             user_id,
+            organization_id,
             serial_number,
             fingerprint_sha256,
             subject_dn,
@@ -117,7 +126,7 @@ impl CertificateRepository {
             ClientCertificate,
             r#"
             SELECT 
-                id, user_id, serial_number, fingerprint_sha256,
+                id, organization_id, user_id, serial_number, fingerprint_sha256,
                 subject_dn, issuer_dn, common_name, email_address,
                 organization, organizational_unit,
                 not_before, not_after,
@@ -141,7 +150,7 @@ impl CertificateRepository {
             ClientCertificate,
             r#"
             SELECT 
-                id, user_id, serial_number, fingerprint_sha256,
+                id, organization_id, user_id, serial_number, fingerprint_sha256,
                 subject_dn, issuer_dn, common_name, email_address,
                 organization, organizational_unit,
                 not_before, not_after,
@@ -165,7 +174,7 @@ impl CertificateRepository {
             ClientCertificate,
             r#"
             SELECT 
-                id, user_id, serial_number, fingerprint_sha256,
+                id, organization_id, user_id, serial_number, fingerprint_sha256,
                 subject_dn, issuer_dn, common_name, email_address,
                 organization, organizational_unit,
                 not_before, not_after,
@@ -219,7 +228,7 @@ impl CertificateRepository {
                 updated_at = NOW()
             WHERE id = $1
             RETURNING 
-                id, user_id, serial_number, fingerprint_sha256,
+                id, organization_id, user_id, serial_number, fingerprint_sha256,
                 subject_dn, issuer_dn, common_name, email_address,
                 organization, organizational_unit,
                 not_before, not_after,

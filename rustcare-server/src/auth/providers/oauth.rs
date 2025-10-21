@@ -21,6 +21,7 @@ use oauth2::{
     TokenResponse as OAuth2TokenResponse, TokenUrl,
 };
 use reqwest::Client as HttpClient;
+use rsa::rand_core::le;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
@@ -188,7 +189,7 @@ impl OAuthProvider {
     }
     
     /// Find or create user from OAuth account
-    async fn find_or_create_user(&self, userinfo: &OAuthUserInfo) -> Result<User> {
+    async fn find_or_create_user(&self, userinfo: &OAuthUserInfo, organization_id: Uuid) -> Result<User> {
         // Check if OAuth account already exists
         if let Some(oauth_account) = self.oauth_repo
             .find_by_provider_and_subject(&self.provider_name, &userinfo.sub)
@@ -209,11 +210,11 @@ impl OAuthProvider {
                 existing_user
             } else {
                 // Create new user
-                self.create_user_from_oauth(userinfo).await?
+                self.create_user_from_oauth(userinfo, organization_id).await?
             }
         } else {
             // No email provided, create new user
-            self.create_user_from_oauth(userinfo).await?
+            self.create_user_from_oauth(userinfo, organization_id).await?
         };
         
         // Create OAuth account link
@@ -234,18 +235,18 @@ impl OAuthProvider {
     }
     
     /// Create a new user from OAuth userinfo
-    async fn create_user_from_oauth(&self, userinfo: &OAuthUserInfo) -> Result<User> {
+    async fn create_user_from_oauth(&self, userinfo: &OAuthUserInfo, organization_id: Uuid) -> Result<User> {
         let email = userinfo.email.as_ref()
             .ok_or_else(|| anyhow!("Email not provided by OAuth provider"))?;
         
         let full_name = userinfo.name.clone();
         let display_name = userinfo.given_name.clone()
             .or_else(|| userinfo.name.clone());
-        
         let mut user = self.user_repo.create(
             email,
             full_name.as_deref(),
             display_name.as_deref(),
+            organization_id,
         ).await?;
         
         // Mark email as verified if provider says so
@@ -306,7 +307,7 @@ impl OAuthProvider {
 impl Provider for OAuthProvider {
     async fn authenticate(&self, credentials: &Credentials) -> Result<AuthResult> {
         match credentials {
-            Credentials::OAuth { provider, code, state } => {
+            Credentials::OAuth { provider, code, state, organization_id } => {
                 // Validate provider name
                 if provider != &self.provider_name {
                     return Err(anyhow!("Invalid OAuth provider"));
@@ -319,7 +320,7 @@ impl Provider for OAuthProvider {
                 let userinfo = self.fetch_userinfo(&tokens.access_token).await?;
                 
                 // Find or create user
-                let user = self.find_or_create_user(&userinfo).await?;
+                let user = self.find_or_create_user(&userinfo, *organization_id).await?;
                 
                 // Check user status
                 if user.status != UserStatus::Active {
@@ -350,6 +351,7 @@ impl Provider for OAuthProvider {
                     claims,
                     cert_serial: None,
                     oauth_provider: Some(self.provider_name.clone()),
+                    organization_id: user.organization_id,
                 })
             }
             

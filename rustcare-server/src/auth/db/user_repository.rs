@@ -68,14 +68,15 @@ impl UserRepository {
         email: &str,
         full_name: Option<&str>,
         display_name: Option<&str>,
+        organization_id: Uuid,
     ) -> DbResult<User> {
         let user = sqlx::query_as!(
             User,
             r#"
-            INSERT INTO users (email, full_name, display_name, status)
-            VALUES ($1, $2, $3, 'active')
+            INSERT INTO users (email, full_name, display_name, status, organization_id)
+            VALUES ($1, $2, $3, 'active', $4)
             RETURNING 
-                id, email, email_verified, email_verified_at, 
+                id, organization_id, email, email_verified, email_verified_at, 
                 full_name, display_name, avatar_url,
                 status as "status: _",
                 locale, timezone, 
@@ -85,7 +86,8 @@ impl UserRepository {
             "#,
             email,
             full_name,
-            display_name
+            display_name,
+            organization_id
         )
         .fetch_one(self.pool.get())
         .await?;
@@ -110,7 +112,7 @@ impl UserRepository {
             User,
             r#"
             SELECT 
-                id, email, email_verified, email_verified_at, 
+                id, organization_id, email, email_verified, email_verified_at, 
                 full_name, display_name, avatar_url,
                 status as "status: _",
                 locale, timezone, 
@@ -139,13 +141,83 @@ impl UserRepository {
         Ok(user)
     }
     
+    /// Find user by ID with optional field masking
+    /// 
+    /// If `apply_masking` is true, sensitive fields will be masked based on permissions
+    pub async fn find_by_id_masked(
+        &self,
+        user_id: Uuid,
+        apply_masking: bool,
+        permissions: &[String],
+    ) -> DbResult<Option<serde_json::Value>> {
+        use database_layer::encryption::MaskingEngine;
+        
+        let user = self.find_by_id(user_id).await?;
+        
+        if let Some(user) = user {
+            let mut json = serde_json::to_value(&user)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            
+            if apply_masking {
+                let engine = MaskingEngine::default();
+                json = engine.mask_json(json);
+                
+                // Log PHI access if audit logger is configured
+                if let (Some(logger), Some(ctx)) = (&self.audit_logger, &self.rls_context) {
+                    let fields_accessed = vec!["email".to_string(), "full_name".to_string()];
+                    let fields_masked: Vec<String> = fields_accessed.iter()
+                        .filter(|f| !engine.can_view_unmasked(f, permissions))
+                        .cloned()
+                        .collect();
+                    
+                    if !fields_masked.is_empty() {
+                        let _ = logger.log_phi_access(
+                            ctx.user_id,
+                            &ctx.tenant_id,
+                            "user",
+                            &user_id.to_string(),
+                            fields_accessed.clone(),
+                            fields_masked,
+                            database_layer::encryption::SensitivityLevel::Internal,
+                        ).await;
+                    }
+                }
+            }
+            
+            Ok(Some(json))
+        } else {
+            Ok(None)
+        }
+    }
+    
+    /// Mask sensitive user fields based on permissions
+    fn mask_user(&self, mut user: User, permissions: &[String]) -> User {
+        use database_layer::encryption::MaskingEngine;
+        
+        let engine = MaskingEngine::default();
+        
+        // Mask email if user doesn't have internal permission
+        if !engine.can_view_unmasked("email", permissions) {
+            user.email = engine.mask_value("email", &user.email);
+        }
+        
+        // Mask full_name if user doesn't have confidential permission
+        if let Some(ref name) = user.full_name {
+            if !engine.can_view_unmasked("full_name", permissions) {
+                user.full_name = Some(engine.mask_value("full_name", name));
+            }
+        }
+        
+        user
+    }
+    
     /// Find user by email
     pub async fn find_by_email(&self, email: &str) -> DbResult<Option<User>> {
         sqlx::query_as!(
             User,
             r#"
             SELECT 
-                id, email, email_verified, email_verified_at, 
+                id, organization_id, email, email_verified, email_verified_at, 
                 full_name, display_name, avatar_url,
                 status as "status: _",
                 locale, timezone, 
@@ -318,7 +390,7 @@ impl UserRepository {
                 updated_at = NOW()
             WHERE id = $1
             RETURNING 
-                id, email, email_verified, email_verified_at, 
+                id, organization_id, email, email_verified, email_verified_at, 
                 full_name, display_name, avatar_url,
                 status as "status: _",
                 locale, timezone, 
@@ -381,14 +453,15 @@ impl UserRepository {
             User,
             r#"
             SELECT 
-                id, email, email_verified, email_verified_at, 
+                id, organization_id, email, email_verified, email_verified_at, 
                 full_name, display_name, avatar_url,
                 status as "status: _",
                 locale, timezone, 
                 last_login_at, last_login_ip, last_login_method,
                 failed_login_attempts, locked_until,
                 created_at, updated_at, deleted_at
-            FROM active_users
+            FROM users
+            WHERE status = 'active' AND deleted_at IS NULL
             ORDER BY created_at DESC
             LIMIT $1 OFFSET $2
             "#,
@@ -404,7 +477,8 @@ impl UserRepository {
         let result = sqlx::query!(
             r#"
             SELECT COUNT(*) as "count!"
-            FROM active_users
+            FROM users
+            WHERE status = 'active' AND deleted_at IS NULL
             "#
         )
         .fetch_one(self.pool.get())

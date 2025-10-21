@@ -17,6 +17,9 @@ target/doc/
 # Dependencies
 **/Cargo.lock
 
+# Sqlx
+.sqlx/
+
 # IDEs and editors
 .vscode/
 .idea/

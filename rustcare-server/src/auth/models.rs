@@ -311,6 +311,7 @@ pub struct AuthAuditLog {
     pub anomaly_detected: Option<bool>,
     pub risk_score: Option<i32>,
     pub blocked_reason: Option<String>,
+    pub organization_id: Option<Uuid>,
 }
 
 // =============================================================================
@@ -382,8 +383,8 @@ impl RateLimit {
 /// User with authentication methods view
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct UserWithAuthMethods {
-    pub user_id: Uuid,
-    pub email: String,
+    pub user_id: Option<Uuid>,
+    pub email: Option<String>,
     pub has_password: Option<bool>,
     pub oauth_providers: Option<Vec<String>>,
     pub active_certificates: Option<i64>,
@@ -392,16 +393,16 @@ pub struct UserWithAuthMethods {
 /// Active session with user info
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ActiveSessionWithUser {
-    pub id: Uuid,
-    pub user_id: Uuid,
-    pub email: String,
+    pub id: Option<Uuid>,
+    pub user_id: Option<Uuid>,
+    pub email: Option<String>,
     pub full_name: Option<String>,
-    pub user_status: String,
-    pub session_token: String,
+    pub user_status: Option<String>,
+    pub session_token: Option<String>,
     pub device_name: Option<String>,
-    pub last_activity_at: DateTime<Utc>,
-    pub expires_at: DateTime<Utc>,
-    pub auth_method: String,
+    pub last_activity_at: Option<DateTime<Utc>>,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub auth_method: Option<String>,
 }
 
 // =============================================================================

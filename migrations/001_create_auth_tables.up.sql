@@ -293,11 +293,11 @@ CREATE TABLE IF NOT EXISTS jwt_signing_keys (
     
     -- Metadata
     key_size INTEGER, -- RSA key size (2048, 4096, etc.)
-    rotation_reason VARCHAR(255),
-    
-    -- Constraints
-    CONSTRAINT one_primary_key UNIQUE (is_primary) WHERE is_primary = TRUE AND status = 'active'
+    rotation_reason VARCHAR(255)
 );
+
+-- Ensure only one primary key is active
+CREATE UNIQUE INDEX idx_jwt_keys_one_primary ON jwt_signing_keys(is_primary) WHERE is_primary = TRUE AND status = 'active';
 
 CREATE INDEX idx_jwt_keys_kid ON jwt_signing_keys(kid);
 CREATE INDEX idx_jwt_keys_status ON jwt_signing_keys(status);

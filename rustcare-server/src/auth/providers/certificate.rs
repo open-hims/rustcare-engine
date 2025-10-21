@@ -9,7 +9,7 @@
 /// - OCSP with fallback to CRL
 
 use super::{AuthResult, Credentials, Provider};
-use crate::auth::db::certificate_repository::CertificateRepository;
+use crate::auth::db::{CertificateRepository, UserRepository};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
@@ -50,6 +50,8 @@ pub struct CertificateProvider {
     ocsp_cache: Arc<RwLock<HashMap<String, OcspCacheEntry>>>,
     /// Certificate repository for database operations
     cert_repo: CertificateRepository,
+    /// User repository for fetching user details
+    user_repo: Arc<UserRepository>,
     /// CRL cache TTL in seconds (default: 1 hour)
     crl_cache_ttl: i64,
     /// OCSP cache TTL in seconds (default: 5 minutes)
@@ -63,6 +65,7 @@ impl CertificateProvider {
         verify_chain: bool,
         check_revocation: bool,
         cert_repo: CertificateRepository,
+        user_repo: Arc<UserRepository>,
     ) -> Self {
         Self {
             ca_roots_path: PathBuf::from(ca_roots_path),
@@ -71,6 +74,7 @@ impl CertificateProvider {
             crl_cache: Arc::new(RwLock::new(HashMap::new())),
             ocsp_cache: Arc::new(RwLock::new(HashMap::new())),
             cert_repo,
+            user_repo,
             crl_cache_ttl: 3600,      // 1 hour
             ocsp_cache_ttl: 300,       // 5 minutes
         }
@@ -247,6 +251,10 @@ impl Provider for CertificateProvider {
                 // Step 4: Map to user
                 let user_id = self.map_to_user(&identity).await?;
                 
+                // Step 4.5: Fetch user to get organization_id
+                let user = self.user_repo.find_by_id(user_id).await?
+                    .ok_or_else(|| anyhow::anyhow!("User not found after mapping"))?;
+                
                 // Step 5: Return auth result
                 Ok(AuthResult {
                     user_id: user_id.to_string(),
@@ -264,6 +272,7 @@ impl Provider for CertificateProvider {
                     },
                     cert_serial: Some(identity.serial.clone()),
                     oauth_provider: None,
+                    organization_id: user.organization_id,
                 })
             }
             _ => Err(anyhow::anyhow!("Invalid credentials type for certificate provider")),

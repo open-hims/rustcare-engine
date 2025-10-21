@@ -82,6 +82,7 @@ pub struct Organization {
 /// Organization creation data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateOrganization {
+    pub id: Uuid,
     pub name: String,
     pub slug: String,
     pub domain: Option<String>,
@@ -91,6 +92,18 @@ pub struct CreateOrganization {
     pub max_storage_gb: Option<i32>,
     pub contact_email: Option<String>,
     pub settings: Option<serde_json::Value>,
+    pub is_active: Option<bool>,
+    pub contact_phone: Option<String>,
+    pub billing_email: Option<String>,
+    pub address_line1: Option<String>,
+    pub address_line2: Option<String>,
+    pub city: Option<String>,
+    pub state_province: Option<String>,
+    pub postal_code: Option<String>,
+    pub country: Option<String>,
+    pub is_verified: Option<bool>,
+    pub state: Option<String>,
+    pub tax_id: Option<String>,
 }
 
 /// Organization update data
@@ -115,6 +128,9 @@ pub struct UpdateOrganization {
     pub state_province: Option<String>,
     pub postal_code: Option<String>,
     pub country: Option<String>,
+    pub is_verified: Option<bool>,
+    pub state: Option<String>,
+    pub tax_id: Option<String>,
 }
 
 /// Organization settings structure (example)

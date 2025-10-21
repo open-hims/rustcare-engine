@@ -12,6 +12,7 @@ pub struct OAuthRepository {
     pool: DbPool,
     rls_context: Option<RlsContext>,
     audit_logger: Option<Arc<AuditLogger>>,
+    encryption: Option<Arc<database_layer::encryption::DatabaseEncryption>>,
 }
 
 impl OAuthRepository {
@@ -20,6 +21,7 @@ impl OAuthRepository {
             pool,
             rls_context: None,
             audit_logger: None,
+            encryption: None,
         }
     }
 
@@ -30,6 +32,11 @@ impl OAuthRepository {
 
     pub fn with_audit_logger(mut self, logger: Arc<AuditLogger>) -> Self {
         self.audit_logger = Some(logger);
+        self
+    }
+
+    pub fn with_encryption(mut self, enc: Arc<database_layer::encryption::DatabaseEncryption>) -> Self {
+        self.encryption = Some(enc);
         self
     }
 
@@ -79,6 +86,22 @@ impl OAuthRepository {
         provider_data: Option<serde_json::Value>,
         scopes: Option<&[String]>,
     ) -> DbResult<OAuthAccount> {
+        // Prepare tokens (encrypt if configured)
+        let mut enc_access: Option<String> = access_token.map(|s| s.to_string());
+        let mut enc_refresh: Option<String> = refresh_token.map(|s| s.to_string());
+        let mut enc_id: Option<String> = id_token.map(|s| s.to_string());
+        if let Some(enc) = &self.encryption {
+            if let Some(a) = access_token {
+                if let Ok(ct) = enc.encrypt_value(a) { enc_access = Some(ct); }
+            }
+            if let Some(r) = refresh_token {
+                if let Ok(ct) = enc.encrypt_value(r) { enc_refresh = Some(ct); }
+            }
+            if let Some(i) = id_token {
+                if let Ok(ct) = enc.encrypt_value(i) { enc_id = Some(ct); }
+            }
+        }
+
         let account = sqlx::query_as!(
             OAuthAccount,
             r#"
@@ -94,9 +117,9 @@ impl OAuthRepository {
             provider,
             provider_account_id,
             provider_email,
-            access_token,
-            refresh_token,
-            id_token,
+            enc_access,
+            enc_refresh,
+            enc_id,
             token_expires_at,
             provider_data,
             scopes
@@ -127,6 +150,22 @@ impl OAuthRepository {
         provider_data: Option<serde_json::Value>,
         scopes: Option<&[String]>,
     ) -> DbResult<OAuthAccount> {
+        // Encrypt tokens if configured
+        let mut enc_access: Option<String> = access_token.map(|s| s.to_string());
+        let mut enc_refresh: Option<String> = refresh_token.map(|s| s.to_string());
+        let mut enc_id: Option<String> = id_token.map(|s| s.to_string());
+        if let Some(enc) = &self.encryption {
+            if let Some(a) = access_token {
+                if let Ok(ct) = enc.encrypt_value(a) { enc_access = Some(ct); }
+            }
+            if let Some(r) = refresh_token {
+                if let Ok(ct) = enc.encrypt_value(r) { enc_refresh = Some(ct); }
+            }
+            if let Some(i) = id_token {
+                if let Ok(ct) = enc.encrypt_value(i) { enc_id = Some(ct); }
+            }
+        }
+
         sqlx::query_as!(
             OAuthAccount,
             r#"
@@ -152,9 +191,9 @@ impl OAuthRepository {
             provider,
             provider_account_id,
             provider_email,
-            access_token,
-            refresh_token,
-            id_token,
+            enc_access,
+            enc_refresh,
+            enc_id,
             token_expires_at,
             provider_data,
             scopes
@@ -208,6 +247,16 @@ impl OAuthRepository {
         id_token: Option<&str>,
         token_expires_at: Option<DateTime<Utc>>,
     ) -> DbResult<OAuthAccount> {
+        // Encrypt if needed
+        let mut enc_access: Option<String> = access_token.map(|s| s.to_string());
+        let mut enc_refresh: Option<String> = refresh_token.map(|s| s.to_string());
+        let mut enc_id: Option<String> = id_token.map(|s| s.to_string());
+        if let Some(enc) = &self.encryption {
+            if let Some(a) = access_token { if let Ok(ct) = enc.encrypt_value(a) { enc_access = Some(ct); } }
+            if let Some(r) = refresh_token { if let Ok(ct) = enc.encrypt_value(r) { enc_refresh = Some(ct); } }
+            if let Some(i) = id_token { if let Ok(ct) = enc.encrypt_value(i) { enc_id = Some(ct); } }
+        }
+
         sqlx::query_as!(
             OAuthAccount,
             r#"
@@ -222,9 +271,9 @@ impl OAuthRepository {
             RETURNING *
             "#,
             id,
-            access_token,
-            refresh_token,
-            id_token,
+            enc_access,
+            enc_refresh,
+            enc_id,
             token_expires_at
         )
         .fetch_one(self.pool.get())

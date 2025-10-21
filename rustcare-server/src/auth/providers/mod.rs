@@ -14,6 +14,7 @@ pub use certificate::CertificateProvider;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use uuid::Uuid;
 
 /// Authentication result
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,6 +39,9 @@ pub struct AuthResult {
     
     /// OAuth provider (if OAuth auth)
     pub oauth_provider: Option<String>,
+    
+    /// Organization ID (for multi-tenancy)
+    pub organization_id: Uuid,
 }
 
 /// Common trait for all authentication providers
@@ -69,6 +73,7 @@ pub enum Credentials {
         provider: String,
         code: String,
         state: String,
+        organization_id: Uuid,
     },
     Certificate {
         cert_pem: String,

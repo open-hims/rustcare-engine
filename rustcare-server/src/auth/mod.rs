@@ -22,6 +22,7 @@ pub mod middleware;
 pub mod certificate;
 pub mod models;
 pub mod db;
+pub mod response_masking;
 
 pub use config::{AuthConfig, AuthProvider, TokenConfig, SessionConfig};
 pub use providers::{EmailPasswordProvider, OAuthProvider, CertificateProvider};
@@ -30,3 +31,4 @@ pub use session::{SessionManager, SessionData};
 pub use middleware::{AuthService, AuthContext, RequirePermission, RequireRole, RequireAnyPermission, RequireAllPermissions, AuthError};
 pub use models::*;
 pub use db::AuthRepository;
+pub use response_masking::{response_masking_middleware, response_masking_with_audit_middleware, MaskingError};

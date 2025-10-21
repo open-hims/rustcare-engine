@@ -17,6 +17,9 @@ pub enum DatabaseError {
     #[error("Migration error: {0}")]
     MigrationError(String),
     
+    #[error("Database error: {0}")]
+    SqlxError(#[from] sqlx::Error),
+    
     #[error("Internal error: {0}")]
     InternalError(#[from] anyhow::Error),
 }

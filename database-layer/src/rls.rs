@@ -13,6 +13,7 @@ impl Default for RlsContext {
 pub struct RlsContext {
     pub user_id: Uuid,
     pub tenant_id: String,
+    pub organization_id: Option<Uuid>, // NEW: For PostgreSQL RLS policies
     pub roles: Vec<String>,
     pub permissions: Vec<String>,
     pub session_id: Option<String>,
@@ -24,6 +25,7 @@ impl RlsContext {
         Self {
             user_id: Uuid::new_v4(),
             tenant_id: String::new(),
+            organization_id: None,
             roles: Vec::new(),
             permissions: Vec::new(),
             session_id: None,
@@ -38,6 +40,11 @@ impl RlsContext {
     
     pub fn with_tenant_id<S: Into<String>>(mut self, tenant_id: S) -> Self {
         self.tenant_id = tenant_id.into();
+        self
+    }
+    
+    pub fn with_organization_id(mut self, organization_id: Uuid) -> Self {
+        self.organization_id = Some(organization_id);
         self
     }
     
@@ -104,12 +111,23 @@ impl RlsPolicyManager {
     }
     
     pub fn generate_rls_sql(&self, context: &RlsContext) -> String {
-        format!(
-            "SET app.current_user_id = '{}'; SET app.current_tenant_id = '{}'; SET app.user_roles = '{}';",
+        let mut sql = format!(
+            "SET LOCAL app.current_user_id = '{}'; SET LOCAL app.current_tenant_id = '{}';",
             context.user_id,
-            context.tenant_id,
-            context.roles.join(",")
-        )
+            context.tenant_id
+        );
+        
+        // Set organization_id for PostgreSQL RLS policies
+        if let Some(org_id) = context.organization_id {
+            sql.push_str(&format!(" SET LOCAL app.organization_id = '{}';", org_id));
+        }
+        
+        // Set user roles
+        if !context.roles.is_empty() {
+            sql.push_str(&format!(" SET LOCAL app.user_roles = '{}';", context.roles.join(",")));
+        }
+        
+        sql
     }
 }
 

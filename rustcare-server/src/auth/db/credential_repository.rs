@@ -12,6 +12,7 @@ pub struct CredentialRepository {
     pool: DbPool,
     rls_context: Option<RlsContext>,
     audit_logger: Option<Arc<AuditLogger>>,
+    encryption: Option<Arc<database_layer::encryption::DatabaseEncryption>>,
 }
 
 impl CredentialRepository {
@@ -20,6 +21,7 @@ impl CredentialRepository {
             pool,
             rls_context: None,
             audit_logger: None,
+            encryption: None,
         }
     }
 
@@ -30,6 +32,11 @@ impl CredentialRepository {
 
     pub fn with_audit_logger(mut self, logger: Arc<AuditLogger>) -> Self {
         self.audit_logger = Some(logger);
+        self
+    }
+
+    pub fn with_encryption(mut self, enc: Arc<database_layer::encryption::DatabaseEncryption>) -> Self {
+        self.encryption = Some(enc);
         self
     }
 
@@ -138,6 +145,12 @@ impl CredentialRepository {
         mfa_secret: &str,
         backup_codes: &[String],
     ) -> DbResult<UserCredential> {
+        // Encrypt mfa_secret if configured
+        let mut enc_secret = mfa_secret.to_string();
+        if let Some(enc) = &self.encryption {
+            if let Ok(ct) = enc.encrypt_value(mfa_secret) { enc_secret = ct; }
+        }
+
         let credential = sqlx::query_as!(
             UserCredential,
             r#"
@@ -152,7 +165,7 @@ impl CredentialRepository {
             RETURNING *
             "#,
             user_id,
-            mfa_secret,
+            enc_secret,
             backup_codes
         )
         .fetch_one(self.pool.get())

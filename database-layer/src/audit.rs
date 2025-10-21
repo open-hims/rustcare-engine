@@ -1,6 +1,7 @@
 // Audit logging for database operations
 use crate::models::AuditInfo;
 use crate::error::DatabaseResult;
+use crate::encryption::SensitivityLevel;
 use sqlx::PgPool;
 use tracing::{info, error};
 use uuid::Uuid;
@@ -146,11 +147,11 @@ impl AuditLogger {
     /// Search audit logs with RLS enforcement
     pub async fn search(
         &self,
-        user_id: Option<Uuid>,
-        event_type: Option<&str>,
-        start_time: Option<chrono::DateTime<Utc>>,
-        end_time: Option<chrono::DateTime<Utc>>,
-        limit: i64,
+        _user_id: Option<Uuid>,
+        _event_type: Option<&str>,
+        _start_time: Option<chrono::DateTime<Utc>>,
+        _end_time: Option<chrono::DateTime<Utc>>,
+        _limit: i64,
     ) -> DatabaseResult<Vec<AuditInfo>> {
         // This would use the auth_audit_log table
         // For now, return empty as we're using the existing table structure
@@ -177,6 +178,76 @@ impl AuditLogger {
         );
 
         Ok(result.rows_affected())
+    }
+    
+    /// Log PHI (Protected Health Information) access with field masking details
+    pub async fn log_phi_access(
+        &self,
+        user_id: Uuid,
+        tenant_id: &str,
+        resource_type: &str,
+        resource_id: &str,
+        fields_accessed: Vec<String>,
+        fields_masked: Vec<String>,
+        sensitivity_level: SensitivityLevel,
+    ) -> DatabaseResult<()> {
+        if !self.enabled {
+            return Ok(());
+        }
+
+        let metadata = serde_json::json!({
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "fields_accessed": fields_accessed,
+            "fields_masked": fields_masked,
+            "sensitivity_level": sensitivity_level.as_str(),
+            "access_time": Utc::now().to_rfc3339(),
+            "audit_type": "phi_access",
+        });
+
+        self.log_operation(
+            user_id,
+            tenant_id,
+            "PHI_ACCESS",
+            "protected_health_info",
+            Some(resource_id),
+            metadata,
+        ).await
+    }
+    
+    /// Log field-level access attempt with masking status
+    pub async fn log_field_access(
+        &self,
+        user_id: Uuid,
+        tenant_id: &str,
+        table_name: &str,
+        record_id: &str,
+        field_name: &str,
+        was_masked: bool,
+        sensitivity_level: Option<SensitivityLevel>,
+    ) -> DatabaseResult<()> {
+        if !self.enabled {
+            return Ok(());
+        }
+
+        let metadata = serde_json::json!({
+            "table_name": table_name,
+            "record_id": record_id,
+            "field_name": field_name,
+            "was_masked": was_masked,
+            "sensitivity_level": sensitivity_level.map(|l| l.as_str()),
+            "access_time": Utc::now().to_rfc3339(),
+            "audit_type": "field_access",
+        });
+
+        self.log_operation(
+            user_id,
+            tenant_id,
+            "FIELD_ACCESS",
+            table_name,
+            Some(record_id),
+            metadata,
+        ).await
     }
 }
 

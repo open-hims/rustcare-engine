@@ -2,10 +2,10 @@
 use async_trait::async_trait;
 use crate::error::{DatabaseError, DatabaseResult};
 use crate::rls::RlsContext;
-use sqlx::{PgPool, postgres::PgPoolOptions, Row};
+use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{info, warn, error};
+use tracing::{info, warn};
 
 /// Database connection pool wrapper with RLS support
 #[derive(Clone)]
@@ -82,16 +82,31 @@ impl DatabasePool {
             return Ok(());
         }
 
-        let sql = format!(
+        // Build SET LOCAL commands for PostgreSQL RLS
+        let mut sql = format!(
             "SET LOCAL app.current_user_id = '{}'; \
-             SET LOCAL app.current_tenant_id = '{}'; \
-             SET LOCAL app.user_roles = '{}'; \
-             SET LOCAL app.user_permissions = '{}';",
+             SET LOCAL app.current_tenant_id = '{}';",
             context.user_id,
-            context.tenant_id,
-            context.roles.join(","),
-            context.permissions.join(",")
+            context.tenant_id
         );
+
+        // Set organization_id for PostgreSQL RLS policies (CRITICAL for multi-tenant isolation)
+        if let Some(org_id) = context.organization_id {
+            sql.push_str(&format!(" SET LOCAL app.organization_id = '{}';", org_id));
+        }
+
+        // Set user roles
+        if !context.roles.is_empty() {
+            sql.push_str(&format!(" SET LOCAL app.user_roles = '{}';", context.roles.join(",")));
+        }
+
+        // Set user permissions
+        if !context.permissions.is_empty() {
+            sql.push_str(&format!(
+                " SET LOCAL app.user_permissions = '{}';",
+                context.permissions.join(",")
+            ));
+        }
 
         sqlx::query(&sql)
             .execute(self.pool.as_ref())

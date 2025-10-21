@@ -409,8 +409,9 @@ impl JwtService {
         // Create key ID
         let kid = format!("key-{}", Uuid::new_v4());
         
-        // Store in database as primary key
+        // Store in database as primary key (SYSTEM_ORGANIZATION_ID for system-wide keys)
         self.key_repo.create(
+            Some(crate::auth::models::SYSTEM_ORGANIZATION_ID),
             &kid,
             "RS256",
             &private_pem,
@@ -436,8 +437,9 @@ impl JwtService {
         let (private_pem, public_pem) = self.generate_new_key_pair().await?;
         let new_kid = format!("key-{}", Uuid::new_v4());
         
-        // Create new key (not primary yet)
+        // Create new key (not primary yet) - SYSTEM_ORGANIZATION_ID for system-wide
         self.key_repo.create(
+            Some(crate::auth::models::SYSTEM_ORGANIZATION_ID),
             &new_kid,
             "RS256",
             &private_pem,
@@ -573,7 +575,7 @@ impl RefreshTokenService {
             // If token was revoked due to rotation, this might be a reuse attack
             if stored_token.revoked {
                 // Revoke entire token family (all tokens in rotation chain)
-                self.token_repo.revoke_family(
+                self.token_repo.revoke_token_family(
                     stored_token.token_family,
                     "Token reuse detected - possible theft"
                 ).await?;

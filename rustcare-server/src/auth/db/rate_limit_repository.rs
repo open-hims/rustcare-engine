@@ -70,13 +70,14 @@ impl RateLimitRepository {
         &self,
         key_type: &str,
         key_value: &str,
+        endpoint: Option<&str>,
         window_duration_seconds: i64,
     ) -> DbResult<i32> {
         let result = sqlx::query!(
             r#"
-            INSERT INTO rate_limits (key_type, key_value, request_count, window_start, window_end)
-            VALUES ($1, $2, 1, NOW(), NOW() + ($3 || ' seconds')::interval)
-            ON CONFLICT (key_type, key_value, endpoint)
+            INSERT INTO rate_limits (key_type, key_value, endpoint, request_count, window_start, window_end)
+            VALUES ($1, $2, $3, 1, NOW(), NOW() + ($4 || ' seconds')::interval)
+            ON CONFLICT (key_type, key_value, endpoint, window_start)
             DO UPDATE SET
                 request_count = CASE 
                     WHEN rate_limits.window_end < NOW() THEN 1
@@ -87,7 +88,7 @@ impl RateLimitRepository {
                     ELSE rate_limits.window_start
                 END,
                 window_end = CASE 
-                    WHEN rate_limits.window_end < NOW() THEN NOW() + ($3 || ' seconds')::interval
+                    WHEN rate_limits.window_end < NOW() THEN NOW() + ($4 || ' seconds')::interval
                     ELSE rate_limits.window_end
                 END,
                 updated_at = NOW()
@@ -95,6 +96,7 @@ impl RateLimitRepository {
             "#,
             key_type,
             key_value,
+            endpoint,
             window_duration_seconds.to_string()
         )
         .fetch_one(self.pool.get())
@@ -116,7 +118,7 @@ impl RateLimitRepository {
             r#"
             INSERT INTO rate_limits (key_type, key_value, endpoint, request_count, window_start, window_end)
             VALUES ($1, $2, $3, 1, NOW(), NOW() + ($4 || ' seconds')::interval)
-            ON CONFLICT (key_type, key_value, endpoint)
+            ON CONFLICT (key_type, key_value, endpoint, window_start)
             DO UPDATE SET
                 request_count = CASE 
                     WHEN rate_limits.window_end < NOW() THEN 1
@@ -227,13 +229,13 @@ impl RateLimitRepository {
         Ok(rate_limit)
     }
     
-    /// Unlock an entity
-    pub async fn unlock(
+    /// Unlock an entity and reset request count
+    pub async fn unlock_and_reset(
         &self,
         key_type: &str,
         key_value: &str,
     ) -> DbResult<Option<RateLimit>> {
-        sqlx::query_as!(
+        let rate_limit = sqlx::query_as!(
             RateLimit,
             r#"
             UPDATE rate_limits
@@ -248,7 +250,15 @@ impl RateLimitRepository {
             key_value
         )
         .fetch_optional(self.pool.get())
-        .await
+        .await?;
+
+        if let Some(ref rl) = rate_limit {
+            self.log_audit("rate_limit_unlock_reset", Some(key_value), serde_json::json!({
+                "key_type": key_type
+            })).await;
+        }
+
+        Ok(rate_limit)
     }
     
     /// Check if entity is locked

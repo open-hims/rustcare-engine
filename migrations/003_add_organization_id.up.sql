@@ -155,39 +155,39 @@ ALTER TABLE rate_limits
 CREATE INDEX idx_rate_limits_organization_id ON rate_limits(organization_id) WHERE organization_id IS NOT NULL;
 
 -- =============================================================================
--- ADD ORGANIZATION_ID TO AUDIT_LOGS TABLE
+-- ADD ORGANIZATION_ID TO AUTH_AUDIT_LOG TABLE
 -- =============================================================================
--- Rename tenant_id to organization_id for consistency
+-- Rename tenant_id to organization_id for consistency (if exists)
 DO $$ 
 BEGIN
-    -- Check if tenant_id column exists
+    -- Check if tenant_id column exists in auth_audit_log
     IF EXISTS (
         SELECT 1 
         FROM information_schema.columns 
-        WHERE table_name = 'audit_logs' 
+        WHERE table_name = 'auth_audit_log' 
         AND column_name = 'tenant_id'
     ) THEN
         -- Rename tenant_id to organization_id
-        ALTER TABLE audit_logs RENAME COLUMN tenant_id TO organization_id;
+        ALTER TABLE auth_audit_log RENAME COLUMN tenant_id TO organization_id;
         
         -- Add foreign key if not exists
         IF NOT EXISTS (
             SELECT 1 
             FROM information_schema.table_constraints 
-            WHERE constraint_name = 'audit_logs_organization_id_fkey'
+            WHERE constraint_name = 'auth_audit_log_organization_id_fkey'
         ) THEN
-            ALTER TABLE audit_logs 
-                ADD CONSTRAINT audit_logs_organization_id_fkey 
+            ALTER TABLE auth_audit_log 
+                ADD CONSTRAINT auth_audit_log_organization_id_fkey 
                 FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE;
         END IF;
     ELSE
         -- Add organization_id column if doesn't exist
-        ALTER TABLE audit_logs 
+        ALTER TABLE auth_audit_log 
             ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
     END IF;
     
     -- Create index
-    CREATE INDEX IF NOT EXISTS idx_audit_logs_organization_id ON audit_logs(organization_id);
+    CREATE INDEX IF NOT EXISTS idx_auth_audit_log_organization_id ON auth_audit_log(organization_id);
 END $$;
 
 -- =============================================================================
@@ -202,4 +202,4 @@ COMMENT ON COLUMN sessions.organization_id IS 'Organization/tenant for session i
 COMMENT ON COLUMN jwt_signing_keys.organization_id IS 'Organization/tenant for key isolation (NULL = global key)';
 COMMENT ON COLUMN user_permissions.organization_id IS 'Organization/tenant for permission isolation (NULL = global permission)';
 COMMENT ON COLUMN rate_limits.organization_id IS 'Organization/tenant for rate limit isolation (NULL = global limit)';
-COMMENT ON COLUMN audit_logs.organization_id IS 'Organization/tenant for audit log isolation';
+COMMENT ON COLUMN auth_audit_log.organization_id IS 'Organization/tenant for audit log isolation';

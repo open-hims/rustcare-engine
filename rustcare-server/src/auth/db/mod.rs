@@ -127,9 +127,9 @@ impl AuthRepository {
             audit: AuditRepository::new(db_pool.clone()),
             permissions: PermissionRepository::new(pool.clone())
                 .with_audit_logger(audit_logger.clone()),
-            rate_limits: RateLimitRepository::new(db_pool)
+            rate_limits: RateLimitRepository::new(db_pool.clone())
                 .with_audit_logger(audit_logger.clone()),
-            organizations: OrganizationRepository::new(Arc::new(pool))
+            organizations: OrganizationRepository::new(db_pool.clone())
                 .with_audit_logger(audit_logger.clone()),
             rls_context: None,
             audit_logger: Some(audit_logger),
@@ -162,9 +162,9 @@ impl AuthRepository {
             audit: AuditRepository::new(db_pool.clone()),
             permissions: PermissionRepository::new(pool.clone())
                 .with_audit_logger(audit_logger.clone()),
-            rate_limits: RateLimitRepository::new(db_pool)
+            rate_limits: RateLimitRepository::new(db_pool.clone())
                 .with_audit_logger(audit_logger.clone()),
-            organizations: OrganizationRepository::new(Arc::new(pool))
+            organizations: OrganizationRepository::new(db_pool.clone())
                 .with_audit_logger(audit_logger.clone()),
             rls_context: None,
             audit_logger: Some(audit_logger),

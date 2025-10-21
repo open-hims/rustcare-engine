@@ -12,6 +12,7 @@ pub struct JwtKeyRepository {
     pool: DbPool,
     rls_context: Option<RlsContext>,
     audit_logger: Option<Arc<AuditLogger>>,
+    encryption: Option<Arc<database_layer::encryption::DatabaseEncryption>>,
 }
 
 impl JwtKeyRepository {
@@ -20,6 +21,7 @@ impl JwtKeyRepository {
             pool,
             rls_context: None,
             audit_logger: None,
+            encryption: None,
         }
     }
 
@@ -30,6 +32,11 @@ impl JwtKeyRepository {
 
     pub fn with_audit_logger(mut self, logger: Arc<AuditLogger>) -> Self {
         self.audit_logger = Some(logger);
+        self
+    }
+
+    pub fn with_encryption(mut self, enc: Arc<database_layer::encryption::DatabaseEncryption>) -> Self {
+        self.encryption = Some(enc);
         self
     }
 
@@ -48,6 +55,7 @@ impl JwtKeyRepository {
     /// Create a new signing key
     pub async fn create(
         &self,
+        organization_id: Option<Uuid>,
         kid: &str,
         algorithm: &str,
         private_key_pem: &str,
@@ -55,24 +63,33 @@ impl JwtKeyRepository {
         key_size: Option<i32>,
         is_primary: bool,
     ) -> DbResult<JwtSigningKey> {
+        // Encrypt private key before storing
+        let mut enc_private = private_key_pem.to_string();
+        if let Some(enc) = &self.encryption {
+            if let Ok(ct) = enc.encrypt_value(private_key_pem) {
+                enc_private = ct;
+            }
+        }
+
         let key = sqlx::query_as!(
             JwtSigningKey,
             r#"
             INSERT INTO jwt_signing_keys (
-                kid, algorithm, private_key_pem, public_key_pem,
+                organization_id, kid, algorithm, private_key_pem, public_key_pem,
                 status, is_primary, key_size, activated_at
             )
-            VALUES ($1, $2, $3, $4, 'active', $5, $6, CASE WHEN $5 THEN NOW() ELSE NULL END)
+            VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, CASE WHEN $6 THEN NOW() ELSE NULL END)
             RETURNING 
-                id, kid, algorithm, private_key_pem, public_key_pem,
+                id, organization_id, kid, algorithm, private_key_pem, public_key_pem,
                 status as "status: _",
                 is_primary, created_at, activated_at, rotated_at,
                 retired_at, expires_at, tokens_signed, last_used_at,
                 key_size, rotation_reason
             "#,
+            organization_id,
             kid,
             algorithm,
-            private_key_pem,
+            enc_private,
             public_key_pem,
             is_primary,
             key_size
@@ -95,7 +112,7 @@ impl JwtKeyRepository {
             JwtSigningKey,
             r#"
             SELECT 
-                id, kid, algorithm, private_key_pem, public_key_pem,
+                id, organization_id,  kid, algorithm, private_key_pem, public_key_pem,
                 status as "status: _",
                 is_primary, created_at, activated_at, rotated_at,
                 retired_at, expires_at, tokens_signed, last_used_at,
@@ -115,7 +132,7 @@ impl JwtKeyRepository {
             JwtSigningKey,
             r#"
             SELECT 
-                id, kid, algorithm, private_key_pem, public_key_pem,
+                id, organization_id,  kid, algorithm, private_key_pem, public_key_pem,
                 status as "status: _",
                 is_primary, created_at, activated_at, rotated_at,
                 retired_at, expires_at, tokens_signed, last_used_at,
@@ -135,7 +152,7 @@ impl JwtKeyRepository {
             JwtSigningKey,
             r#"
             SELECT 
-                id, kid, algorithm, private_key_pem, public_key_pem,
+                id, organization_id, kid, algorithm, private_key_pem, public_key_pem,
                 status as "status: _",
                 is_primary, created_at, activated_at, rotated_at,
                 retired_at, expires_at, tokens_signed, last_used_at,
@@ -173,7 +190,7 @@ impl JwtKeyRepository {
                 activated_at = COALESCE(activated_at, NOW())
             WHERE kid = $1
             RETURNING 
-                id, kid, algorithm, private_key_pem, public_key_pem,
+                id, organization_id, kid, algorithm, private_key_pem, public_key_pem,
                 status as "status: _",
                 is_primary, created_at, activated_at, rotated_at,
                 retired_at, expires_at, tokens_signed, last_used_at,

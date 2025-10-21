@@ -35,3 +35,8 @@ crypto = { path = "../crypto" }
 deadpool-postgres = "0.11"
 bb8-postgres = "0.8"
 sea-orm-migration = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+aes-gcm = "0.10"
+base64 = "0.22"
+rand = "0.8"

@@ -272,30 +272,6 @@ impl RefreshTokenRepository {
         Ok(rows_affected)
     }
     
-    /// Revoke all tokens for user
-    pub async fn revoke_all_user_tokens(
-        &self,
-        user_id: Uuid,
-        reason: &str,
-    ) -> DbResult<u64> {
-        let result = sqlx::query!(
-            r#"
-            UPDATE refresh_tokens
-            SET 
-                revoked = true,
-                revoked_at = NOW(),
-                revocation_reason = $2
-            WHERE user_id = $1 AND revoked = false
-            "#,
-            user_id,
-            reason
-        )
-        .execute(self.pool.get())
-        .await?;
-        
-        Ok(result.rows_affected())
-    }
-    
     /// Get active tokens for user
     pub async fn get_user_active_tokens(&self, user_id: Uuid) -> DbResult<Vec<RefreshToken>> {
         sqlx::query_as!(

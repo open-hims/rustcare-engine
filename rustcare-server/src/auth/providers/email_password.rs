@@ -194,7 +194,7 @@ impl EmailPasswordProvider {
     /// Record failed login attempt and trigger lockout if needed
     async fn record_failed_attempt(&self, email: &str) -> Result<()> {
         self.rate_limit_repo
-            .increment("login", email, Some("/auth/login"))
+            .increment("login", email, Some("/auth/login"), 300)
             .await?;
         
         // Check if we need to lock the account
@@ -361,6 +361,7 @@ impl Provider for EmailPasswordProvider {
                     claims,
                     cert_serial: None,
                     oauth_provider: None,
+                    organization_id: user.organization_id,
                 })
             }
             
@@ -426,6 +427,7 @@ impl EmailPasswordProvider {
         password: &str,
         full_name: Option<&str>,
         display_name: Option<&str>,
+        organization_id: Uuid,
     ) -> Result<User> {
         // Check if user already exists
         if self.user_exists(email).await? {
@@ -440,6 +442,7 @@ impl EmailPasswordProvider {
             email,
             full_name,
             display_name,
+            organization_id,
         ).await?;
         
         // Create password credential with expiration

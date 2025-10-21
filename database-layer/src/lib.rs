@@ -16,6 +16,7 @@ pub use rls::*;
 pub use encryption::*;
 pub use query::*;
 pub use error::*;
+pub use audit::*;
 
 /// Enterprise database layer with Row Level Security and encryption
 /// 
