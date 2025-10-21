@@ -11,6 +11,7 @@ use tower_http::{
 use tracing::{info, Level};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+mod auth;
 mod handlers;
 mod middleware;
 mod routes;

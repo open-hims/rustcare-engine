@@ -1,21 +1,21 @@
-// Module declarations - to be implemented
-// pub mod connection;
-// pub mod models;
-// pub mod rls;
-// pub mod encryption;
-// pub mod migration;
-// pub mod query;
-// pub mod transaction;
-// pub mod audit;
-// pub mod backup;
-// pub mod error;
+// Module declarations
+pub mod connection;
+pub mod models;
+pub mod rls;
+pub mod encryption;
+pub mod migration;
+pub mod query;
+pub mod transaction;
+pub mod audit;
+pub mod backup;
+pub mod error;
 
-// pub use connection::*;
-// pub use models::*;
-// pub use rls::*;
-// pub use encryption::*;
-// pub use query::*;
-// pub use error::*;
+pub use connection::*;
+pub use models::*;
+pub use rls::*;
+pub use encryption::*;
+pub use query::*;
+pub use error::*;
 
 /// Enterprise database layer with Row Level Security and encryption
 /// 

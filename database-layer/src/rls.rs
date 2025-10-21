@@ -2,6 +2,12 @@ use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+impl Default for RlsContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Row Level Security context
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RlsContext {

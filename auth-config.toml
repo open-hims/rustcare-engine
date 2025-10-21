@@ -1,0 +1,269 @@
+# RustCare Engine Authentication Configuration
+# 
+# This file defines authentication methods, security settings, and provider configurations
+# for the RustCare healthcare platform.
+
+# =============================================================================
+# Authentication Providers
+# =============================================================================
+# Enable one or more authentication methods:
+# - "emailpassword": Traditional email/password login
+# - "oauth": OAuth2/OIDC SSO (Google, Azure AD, Okta, etc.)
+# - "certificate": VPN CA certificate authentication (mTLS)
+# - "saml": SAML 2.0 enterprise SSO
+# - "webauthn": Passwordless biometric/hardware key authentication
+
+providers = ["emailpassword", "oauth", "certificate"]
+
+# =============================================================================
+# JWT Token Configuration
+# =============================================================================
+[token]
+# Access token lifetime in seconds (default: 300 = 5 minutes)
+# Short-lived tokens limit exposure if stolen
+access_token_lifetime = 300
+
+# Refresh token lifetime in days (default: 30 days)
+# Long-lived tokens allow session persistence
+refresh_token_lifetime = 30
+
+# JWT signing algorithm: RS256, RS384, RS512, or EdDSA
+algorithm = "RS256"
+
+# RSA key size (2048, 3072, or 4096 bits)
+# Larger keys = more security but slower signing
+key_size = 4096
+
+# JWT issuer claim (identifies token issuer)
+issuer = "rustcare-engine"
+
+# JWT audience claim (identifies intended recipient)
+# audience = "https://api.openhims.health"
+
+# Key rotation interval in days (default: 90 days)
+# Regularly rotating keys limits impact of key compromise
+key_rotation_days = 90
+
+# Grace period for old keys in days (default: 30 days)
+# Both old and new keys validate tokens during transition
+key_grace_period_days = 30
+
+# Path to store JWT signing keys (private keys encrypted at rest)
+keys_path = "/etc/rustcare/auth/keys"
+
+# =============================================================================
+# Session Management
+# =============================================================================
+[session]
+# Session backend: "redis", "memory", or "database"
+# Redis recommended for production (persistent, distributed)
+backend = "redis"
+
+# Redis connection URL (if backend = "redis")
+redis_url = "redis://localhost:6379"
+
+# Idle timeout in minutes (default: 15 minutes)
+# Session expires after this period of inactivity
+idle_timeout_minutes = 15
+
+# Absolute timeout in hours (default: 8 hours)
+# Maximum session lifetime regardless of activity
+absolute_timeout_hours = 8
+
+# Maximum concurrent sessions per user (default: 3)
+# Prevents unlimited device connections
+max_concurrent_sessions = 3
+
+# Validate IP address consistency
+# Reject requests if IP changes mid-session
+validate_ip = true
+
+# Validate user agent consistency
+# Detect session hijacking via user agent mismatch
+validate_user_agent = true
+
+# Validate device fingerprint
+# Track browser/device characteristics for anomaly detection
+validate_device_fingerprint = true
+
+# =============================================================================
+# Certificate Authentication (VPN CA / mTLS)
+# =============================================================================
+[certificate]
+# Enable certificate-based authentication
+enabled = true
+
+# Require client certificate for all API requests
+# If true, users without valid certificates are denied
+require_client_cert = false
+
+# Path to CA root certificates directory
+# Contains trusted Certificate Authority roots
+ca_roots_path = "/etc/rustcare/ca-certificates/roots"
+
+# Path to CA intermediate certificates (optional)
+ca_intermediates_path = "/etc/rustcare/ca-certificates/intermediates"
+
+# Path to Certificate Revocation Lists (optional)
+crl_path = "/etc/rustcare/ca-certificates/crl"
+
+# Verify full certificate chain
+verify_chain = true
+
+# Check certificate revocation status (CRL or OCSP)
+check_revocation = true
+
+# CRL update interval in seconds (default: 3600 = 1 hour)
+crl_update_interval = 3600
+
+# Allowed certificate key usages
+allowed_key_usages = ["digitalSignature", "keyEncipherment"]
+
+# Maximum certificate chain depth
+max_chain_depth = 5
+
+# OCSP (Online Certificate Status Protocol) configuration
+[certificate.ocsp]
+enabled = true
+# responder_url = "http://ocsp.internal-ca.org"  # Optional: override OCSP URL
+timeout = 5  # seconds
+cache_ttl = 300  # 5 minutes
+fallback_to_crl = true
+
+# Certificate identity mapping
+[certificate.identity_mapping]
+# Primary subject field to extract user identity
+# Options: "emailAddress", "CN" (Common Name), "UID", "serialNumber"
+subject_field = "emailAddress"
+
+# Fallback fields if primary not found
+fallback_fields = ["CN", "UID"]
+
+# Use Subject Alternative Name (SAN) for email extraction
+use_san_email = true
+
+# Custom OID to claim mapping (optional)
+# [certificate.identity_mapping.custom_attributes]
+# "1.2.3.4.5" = "employee_id"
+# "1.2.840.113549.1.9.1" = "email"
+
+# =============================================================================
+# OAuth2 / OIDC SSO Configuration
+# =============================================================================
+[oauth]
+# Default redirect URI after successful authentication
+default_redirect_uri = "https://api.openhims.health/auth/callback"
+
+# Enable PKCE (Proof Key for Code Exchange) for all OAuth flows
+# Recommended for public clients (mobile, SPA)
+enable_pkce = true
+
+# OAuth state parameter timeout in seconds
+state_timeout = 600  # 10 minutes
+
+# Google OAuth Provider
+[[oauth.providers]]
+name = "google"
+provider_type = "oidc"
+client_id = "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
+client_secret = "YOUR_GOOGLE_CLIENT_SECRET"
+authorization_url = "https://accounts.google.com/o/oauth2/v2/auth"
+token_url = "https://oauth2.googleapis.com/token"
+userinfo_url = "https://openidconnect.googleapis.com/v1/userinfo"
+jwks_url = "https://www.googleapis.com/oauth2/v3/certs"
+scopes = ["openid", "profile", "email"]
+
+# Map Google user attributes to internal claims
+[oauth.providers.attribute_mapping]
+sub = "user_id"
+email = "email"
+name = "full_name"
+given_name = "first_name"
+family_name = "last_name"
+
+# Azure AD OAuth Provider
+[[oauth.providers]]
+name = "azure"
+provider_type = "oidc"
+client_id = "YOUR_AZURE_CLIENT_ID"
+client_secret = "YOUR_AZURE_CLIENT_SECRET"
+authorization_url = "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"
+token_url = "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
+userinfo_url = "https://graph.microsoft.com/oidc/userinfo"
+jwks_url = "https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys"
+scopes = ["openid", "profile", "email"]
+
+# Okta OAuth Provider
+[[oauth.providers]]
+name = "okta"
+provider_type = "oidc"
+client_id = "YOUR_OKTA_CLIENT_ID"
+client_secret = "YOUR_OKTA_CLIENT_SECRET"
+authorization_url = "https://your-domain.okta.com/oauth2/v1/authorize"
+token_url = "https://your-domain.okta.com/oauth2/v1/token"
+userinfo_url = "https://your-domain.okta.com/oauth2/v1/userinfo"
+jwks_url = "https://your-domain.okta.com/oauth2/v1/keys"
+scopes = ["openid", "profile", "email"]
+
+# =============================================================================
+# Security Configuration
+# =============================================================================
+[security]
+# Enable anomaly detection
+# Monitor unusual patterns: IP changes, abnormal API calls, suspicious timing
+anomaly_detection = true
+
+# Maximum failed authentication attempts before lockout
+max_failed_attempts = 5
+
+# Account lockout duration in minutes after max failures
+lockout_duration_minutes = 30
+
+# Enable step-up authentication for sensitive operations
+# Requires re-authentication (password, WebAuthn, TOTP) for critical actions
+step_up_auth_enabled = true
+
+# Step-up token lifetime in seconds (default: 120 = 2 minutes)
+step_up_token_lifetime = 120
+
+# Operations requiring step-up authentication
+step_up_required_for = [
+    "patient_data_export",
+    "admin_config_change",
+    "user_permission_modify",
+    "billing_operations",
+    "prescription_create",
+    "medical_record_delete"
+]
+
+# Audit all authentication events for HIPAA compliance
+audit_all_events = true
+
+# Enable rate limiting
+rate_limiting = true
+
+# Rate limit: maximum requests per minute per user
+rate_limit_per_minute = 60
+
+# =============================================================================
+# Multi-Tenant Configuration (Optional)
+# =============================================================================
+# Define organization-specific authentication settings
+# Uncomment and customize for each organization
+
+# [organizations.hospital_a]
+# providers = ["emailpassword", "certificate"]
+# certificate.ca_roots_path = "/etc/rustcare/ca-certificates/hospital-a-ca.pem"
+# certificate.require_client_cert = true
+# session.absolute_timeout_hours = 4  # Shorter timeout for hospital
+
+# [organizations.clinic_b]
+# providers = ["oauth"]
+# oauth.default_redirect_uri = "https://clinic-b.openhims.health/auth/callback"
+# session.absolute_timeout_hours = 12  # Longer timeout for clinic
+
+# [organizations.research_c]
+# providers = ["certificate"]
+# certificate.ca_roots_path = "/etc/rustcare/ca-certificates/research-ca.pem"
+# certificate.require_client_cert = true
+# session.validate_ip = false  # Allow mobile researchers

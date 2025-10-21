@@ -53,10 +53,44 @@ logger-redacted = { path = "../logger-redacted" }
 email-service = { path = "../email-service" }
 database-layer = { path = "../database-layer" }
 
+# Database
+sqlx = { workspace = true }
+ipnetwork = { version = "0.20", features = ["serde"] }
+
+# JWT and Crypto
+jsonwebtoken = "9.2"
+rsa = "0.9"
+sha2 = "0.10"
+base64 = "0.21"
+rand = "0.8"
+
+# Password hashing and MFA
+argon2 = "0.5"               # Argon2id password hashing
+totp-lite = "2.0"            # TOTP for MFA
+data-encoding = "2.5"        # Base32 encoding for TOTP secrets
+subtle = "2.5"               # Constant-time comparisons
+hex = "0.4"                  # Hex encoding for backup codes
+
+# OAuth2 and HTTP client
+oauth2 = "4.4"               # OAuth2 client implementation
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+
+# Session management
+redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
+
+# Certificate authentication
+x509-parser = "0.16"         # X.509 certificate parsing
+rcgen = "0.13"               # Certificate generation (testing)
+pem = "3.0"                  # PEM encoding/decoding
+webpki = "0.22"              # Certificate validation
+webpki-roots = "0.26"        # Mozilla root certificates
+
 # Additional web dependencies
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 clap = { version = "4.4", features = ["derive", "env"] }
 config = "0.14"
+toml = "0.8"
+urlencoding = "2.1"
 
 # OpenAPI documentation
 utoipa = { version = "4.2", features = ["axum_extras", "chrono", "uuid"] }
