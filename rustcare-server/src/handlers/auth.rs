@@ -5,6 +5,7 @@ use axum::{
     response::Json as ResponseJson,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::collections::HashMap;
 use crate::server::RustCareServer;
 use utoipa::ToSchema;
@@ -12,12 +13,17 @@ use anyhow::Result;
 
 /// Authentication request
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(example = json!({
+    "username": "doctor@rustcare.dev",
+    "password": "SecureP@ssw0rd123!",
+    "provider": "local"
+}))]
 pub struct AuthRequest {
     /// Username or email address
     #[schema(example = "doctor@rustcare.dev")]
     pub username: String,
     /// User password
-    #[schema(example = "secure_password123")]
+    #[schema(example = "SecureP@ssw0rd123!")]
     pub password: String,
     /// Authentication provider (optional)
     #[schema(example = "local")]
@@ -29,23 +35,35 @@ pub type LoginRequest = AuthRequest;
 
 /// Authentication response
 #[derive(Debug, Serialize, ToSchema)]
+#[schema(example = json!({
+    "success": true,
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMzQ1NiIsInJvbGUiOiJkb2N0b3IiLCJleHAiOjE3MDMxODQwMDB9.xyz123abc",
+    "expires_in": 3600,
+    "refresh_token": "refresh_xyz789abc456def",
+    "user_id": "user_123456",
+    "permissions": ["patient:read", "patient:write", "appointment:read", "appointment:write"],
+    "error": null
+}))]
 pub struct AuthResponse {
     /// Authentication success status
     pub success: bool,
     /// JWT access token if successful
-    #[schema(example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")]
+    #[schema(example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMzQ1NiIsInJvbGUiOiJkb2N0b3IiLCJleHAiOjE3MDMxODQwMDB9.xyz123abc")]
     pub token: Option<String>,
     /// Token expiration time in seconds
     #[schema(example = 3600)]
     pub expires_in: Option<u64>,
     /// Refresh token for token renewal
+    #[schema(example = "refresh_xyz789abc456def")]
     pub refresh_token: Option<String>,
     /// Authenticated user ID
     #[schema(example = "user_123456")]
     pub user_id: Option<String>,
     /// User permissions
+    #[schema(example = json!(["patient:read", "patient:write", "appointment:read"]))]
     pub permissions: Vec<String>,
     /// Error message if authentication failed
+    #[schema(example = "Invalid credentials")]
     pub error: Option<String>,
 }
 
@@ -116,10 +134,38 @@ pub struct TokenValidationResponse {
     post,
     path = "/api/v1/auth/login",
     tag = "authentication",
-    request_body = AuthRequest,
+    request_body(
+        content = AuthRequest,
+        description = "User login credentials",
+        example = json!({
+            "username": "doctor@rustcare.dev",
+            "password": "SecureP@ssw0rd123!",
+            "provider": "local"
+        })
+    ),
     responses(
-        (status = 200, description = "Authentication successful", body = AuthResponse),
-        (status = 401, description = "Authentication failed", body = AuthResponse),
+        (status = 200, description = "Authentication successful", body = AuthResponse,
+            example = json!({
+                "success": true,
+                "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMzQ1NiIsInJvbGUiOiJkb2N0b3IiLCJleHAiOjE3MDMxODQwMDB9.xyz123abc",
+                "expires_in": 3600,
+                "refresh_token": "refresh_xyz789abc456def",
+                "user_id": "user_123456",
+                "permissions": ["patient:read", "patient:write", "appointment:read", "appointment:write"],
+                "error": null
+            })
+        ),
+        (status = 401, description = "Authentication failed", body = AuthResponse,
+            example = json!({
+                "success": false,
+                "token": null,
+                "expires_in": null,
+                "refresh_token": null,
+                "user_id": null,
+                "permissions": [],
+                "error": "Invalid username or password"
+            })
+        ),
         (status = 429, description = "Too many login attempts")
     )
 )]
