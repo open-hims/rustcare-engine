@@ -1,20 +1,18 @@
-// Module declarations - to be implemented
-// pub mod governance;
-// pub mod policies;
-// pub mod lifecycle;
-// pub mod classification;
-// pub mod retention;
-// pub mod privacy;
-// pub mod discovery;
-// pub mod lineage;
-// pub mod quality;
-// pub mod error;
+// Core modules
+pub mod error;
+pub mod classification;
+pub mod lifecycle;
+pub mod storage;
+pub mod policies;
+pub mod governance;
 
-// pub use governance::*;
-// pub use policies::*;
-// pub use lifecycle::*;
-// pub use classification::*;
-// pub use error::*;
+// Re-exports
+pub use error::{GovernanceError, GovernanceResult};
+pub use classification::{ClassificationMetadata, DataClassification};
+pub use lifecycle::{LifecycleAction, LifecycleRule, RetentionPolicy, StorageTier};
+pub use storage::{AccessLog, ObjectMetadata, ObjectVersion, StorageBackend, InMemoryStorageBackend};
+pub use policies::{AutoClassifier, PolicyAction, PolicyEngine};
+pub use governance::GovernanceEngine;
 
 /// Comprehensive data governance and lifecycle management for RustCare Engine
 /// 

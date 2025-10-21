@@ -1,6 +1,8 @@
 pub mod error;
+pub mod encryption;
 
 pub use error::*;
+pub use encryption::*;
 
 /// Comprehensive cryptographic toolkit for RustCare Engine
 /// 
