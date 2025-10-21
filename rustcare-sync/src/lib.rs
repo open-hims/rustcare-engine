@@ -15,6 +15,7 @@ pub mod crdt;
 pub mod sync_protocol;
 pub mod p2p;
 pub mod encryption;
+pub mod field_encryption;
 
 pub use error::{SyncError, SyncResult};
 pub use local_db::{LocalDatabase, LocalDbConfig, OperationType, SyncQueueEntry};
@@ -24,6 +25,7 @@ pub use crdt::{Crdt, LwwRegister, GCounter, PnCounter, OrSet, Rga};
 pub use sync_protocol::{SyncProtocol, SyncConfig, SyncStats};
 pub use p2p::{P2PSync, P2PConfig, PeerInfo, PeerStatus};
 pub use encryption::{EncryptionConfig, EncryptionKeyManager, DatabaseKey, EncryptionMetadata};
+pub use field_encryption::{FieldEncryption, FieldEncryptionConfig};
 
 /// Sync engine for offline-first operations
 pub struct SyncEngine {
