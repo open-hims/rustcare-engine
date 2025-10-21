@@ -59,7 +59,8 @@ use crate::server::RustCareServer;
         ),
     ),
     servers(
-        (url = "http://localhost:8081", description = "Local development server"),
+        (url = "https://api.openhims.health", description = "Local HTTPS development (custom domain)"),
+        (url = "http://localhost:8081", description = "Local direct HTTP server"),
         (url = "https://api.rustcare.dev", description = "Production server"),
         (url = "https://staging-api.rustcare.dev", description = "Staging server"),
     ),

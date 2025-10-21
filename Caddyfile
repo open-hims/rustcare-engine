@@ -1,0 +1,60 @@
+# Caddyfile for RustCare Engine - Reliable HTTPS with custom domain
+
+{
+    admin off
+    storage file_system {
+        root ./caddy-data
+    }
+    # Force local certificates for all domains
+    local_certs
+}
+
+api.openhims.health {
+    # Use internal CA with explicit configuration
+    tls internal {
+        # Generate new certificate if needed
+        on_demand
+    }
+    
+    reverse_proxy localhost:7077
+    encode gzip
+    
+    header {
+        # CORS headers for API access
+        Access-Control-Allow-Origin "*"
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        Access-Control-Allow-Headers "*"
+        Access-Control-Allow-Credentials "true"
+        
+        # Security headers
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+}
+
+# Production configuration (uncomment and modify for your domain)
+# your-domain.com {
+#     reverse_proxy localhost:8081
+#     encode gzip
+#     
+#     # Automatic HTTPS with Let's Encrypt
+#     tls your-email@example.com
+#     
+#     # Rate limiting
+#     rate_limit {
+#         zone dynamic_zone {
+#             key {remote_host}
+#             events 100
+#             window 1m
+#         }
+#     }
+# }
+
+# Health check endpoint bypass (optional - direct to Rust server)
+localhost:8092 {
+    reverse_proxy /health localhost:7077
+    respond / "Caddy Proxy OK" 200
+}

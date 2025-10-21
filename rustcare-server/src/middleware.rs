@@ -1,5 +1,5 @@
 use axum::{
-    http::{header, HeaderMap, Method, StatusCode},
+    http::{header, HeaderMap, HeaderValue, Method, StatusCode},
     middleware::Next,
     response::Response,
     extract::Request,
@@ -151,8 +151,13 @@ pub async fn rate_limiting_middleware(
 pub fn create_cors_layer() -> CorsLayer {
     CorsLayer::new()
         .allow_origin([
-            "http://localhost:3000".parse().unwrap(),
-            "https://rustcare.com".parse().unwrap(),
+            "https://localhost:8443".parse::<HeaderValue>().unwrap(),
+            "http://localhost:8081".parse::<HeaderValue>().unwrap(),
+            "https://api.openhims.health".parse::<HeaderValue>().unwrap(),
+            "http://localhost:3000".parse::<HeaderValue>().unwrap(),
+            "https://localhost:3000".parse::<HeaderValue>().unwrap(),
+            "http://localhost:8080".parse::<HeaderValue>().unwrap(),
+            "http://127.0.0.1:3000".parse::<HeaderValue>().unwrap(),
         ])
         .allow_methods([
             Method::GET,
