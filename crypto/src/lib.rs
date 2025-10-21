@@ -6,6 +6,7 @@ pub mod envelope;
 pub mod kms;
 pub mod constant_time;
 pub mod memory_security;
+pub mod config;
 
 pub use error::*;
 pub use encryption::*;
@@ -14,6 +15,7 @@ pub use kdf::*;
 pub use envelope::*;
 pub use constant_time::*;
 pub use memory_security::*;
+pub use config::*;
 
 /// Comprehensive cryptographic toolkit for RustCare Engine
 /// 

@@ -17,9 +17,11 @@ mod middleware;
 mod routes;
 mod server;
 mod openapi;
+mod security_state;
 // mod grpc; // Disabled temporarily
 
 use middleware as app_middleware;
+use security_state::SecurityState;
 
 use crate::server::RustCareServer;
 use error_common::{RustCareError, Result};
@@ -69,6 +71,21 @@ async fn main() -> Result<()> {
     info!("🏥 Starting RustCare Engine HTTP Server");
     info!("Version: {}", env!("CARGO_PKG_VERSION"));
     info!("Bind address: {}:{}", args.host, args.port);
+
+    // Initialize security configuration
+    info!("🔐 Initializing security subsystems...");
+    match SecurityState::from_env().await {
+        Ok(security) => {
+            security.print_summary();
+            info!("✅ Security initialization complete");
+            // TODO: Store security state in server context
+        }
+        Err(e) => {
+            tracing::error!("❌ Security initialization failed: {}", e);
+            tracing::error!("   Please check your .env file and environment variables");
+            return Err(RustCareError::InternalError(format!("Security init failed: {}", e)));
+        }
+    }
 
     // Initialize redacted logger for HIPAA compliance
     // TODO: Initialize RedactedLogger properly

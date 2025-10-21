@@ -38,6 +38,9 @@ pub enum CryptoError {
     #[error("Key derivation failed: {0}")]
     KeyDerivationFailed(String),
     
+    #[error("Configuration error: {0}")]
+    Configuration(String),
+    
     #[error("Internal error: {0}")]
     InternalError(#[from] anyhow::Error),
 }
