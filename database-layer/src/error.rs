@@ -8,6 +8,12 @@ pub enum DatabaseError {
     #[error("Query failed: {0}")]
     QueryFailed(String),
     
+    #[error("Query error: {0}")]
+    QueryError(String),
+    
+    #[error("Configuration error: {0}")]
+    ConfigurationError(String),
+    
     #[error("RLS policy violation")]
     RlsPolicyViolation,
     
