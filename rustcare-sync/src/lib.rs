@@ -16,6 +16,7 @@ pub mod sync_protocol;
 pub mod p2p;
 pub mod encryption;
 pub mod field_encryption;
+pub mod audit;
 
 pub use error::{SyncError, SyncResult};
 pub use local_db::{LocalDatabase, LocalDbConfig, OperationType, SyncQueueEntry};
@@ -26,6 +27,7 @@ pub use sync_protocol::{SyncProtocol, SyncConfig, SyncStats};
 pub use p2p::{P2PSync, P2PConfig, PeerInfo, PeerStatus};
 pub use encryption::{EncryptionConfig, EncryptionKeyManager, DatabaseKey, EncryptionMetadata};
 pub use field_encryption::{FieldEncryption, FieldEncryptionConfig};
+pub use audit::{AuditLogger, AuditConfig, AuditAction, AuditEntry};
 
 /// Sync engine for offline-first operations
 pub struct SyncEngine {
@@ -70,6 +72,9 @@ mod tests {
             max_connections: 5,
             enable_wal: true,
             enable_secure_delete: true,
+            audit_config: None,
+            user_id: None,
+            user_email: None,
         };
         
         let engine = SyncEngine::new(config).await.unwrap();

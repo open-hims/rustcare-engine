@@ -299,6 +299,9 @@ mod tests {
             max_connections: 5,
             enable_wal: true,
             enable_secure_delete: true,
+            audit_config: None,
+            user_id: None,
+            user_email: None,
         };
         
         Arc::new(LocalDatabase::new(config).await.unwrap())

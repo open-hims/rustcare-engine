@@ -7,10 +7,12 @@
 //! - Conflict detection and resolution
 
 use crate::error::{SyncError, SyncResult};
+use crate::audit::{AuditLogger, AuditConfig, AuditAction};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqlitePool, Row};
 use uuid::Uuid;
+use tokio::sync::Mutex;
 
 /// Configuration for local database
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,6 +28,12 @@ pub struct LocalDbConfig {
     /// Whether to enable secure deletion (overwrites freed pages)
     /// This is required for HIPAA compliance
     pub enable_secure_delete: bool,
+    /// Audit configuration (optional, for HIPAA compliance)
+    pub audit_config: Option<AuditConfig>,
+    /// User ID operating this database (for audit trail)
+    pub user_id: Option<String>,
+    /// User email (for audit trail)
+    pub user_email: Option<String>,
 }
 
 impl Default for LocalDbConfig {
@@ -36,6 +44,9 @@ impl Default for LocalDbConfig {
             max_connections: 5,
             enable_wal: true,
             enable_secure_delete: true, // Default to enabled for HIPAA compliance
+            audit_config: Some(AuditConfig::default()),
+            user_id: None,
+            user_email: None,
         }
     }
 }
@@ -106,6 +117,9 @@ pub struct SyncQueueEntry {
 pub struct LocalDatabase {
     pool: SqlitePool,
     node_id: Uuid,
+    audit_logger: Option<Mutex<AuditLogger>>,
+    user_id: Option<String>,
+    user_email: Option<String>,
 }
 
 impl LocalDatabase {
@@ -136,13 +150,35 @@ impl LocalDatabase {
             .execute(&pool)
             .await?;
         
-        let db = Self {
+        // Initialize audit logger if configured
+        let audit_logger = if let Some(audit_config) = config.audit_config {
+            Some(Mutex::new(AuditLogger::new(audit_config).await?))
+        } else {
+            None
+        };
+        
+        let user_id = config.user_id.clone();
+        let user_email = config.user_email.clone();
+        
+        let mut db = Self {
             pool,
             node_id: config.node_id,
+            audit_logger,
+            user_id,
+            user_email,
         };
         
         // Initialize schema
         db.initialize_schema().await?;
+        
+        // Log database open event
+        db.audit_log(
+            AuditAction::DatabaseOpen,
+            format!("database/{}", config.db_path),
+            false,
+            true,
+            serde_json::json!({"node_id": config.node_id.to_string()}),
+        ).await?;
         
         Ok(db)
     }
@@ -248,6 +284,26 @@ impl LocalDatabase {
         Ok(())
     }
     
+    /// Helper method to log audit events
+    async fn audit_log(
+        &self,
+        action: AuditAction,
+        resource: String,
+        phi_flag: bool,
+        success: bool,
+        metadata: serde_json::Value,
+    ) -> SyncResult<()> {
+        if let Some(ref logger) = self.audit_logger {
+            let actor = self.user_email.clone()
+                .or_else(|| self.user_id.clone())
+                .unwrap_or_else(|| format!("node:{}", self.node_id));
+            
+            let mut logger_guard = logger.lock().await;
+            logger_guard.log(action, actor, resource, phi_flag, success, metadata).await?;
+        }
+        Ok(())
+    }
+    
     /// Queue an operation for sync
     pub async fn queue_operation(
         &self,
@@ -278,6 +334,25 @@ impl LocalDatabase {
         .execute(&self.pool)
         .await?;
         
+        // Audit log the operation
+        let audit_action = match operation {
+            OperationType::Create => AuditAction::Create,
+            OperationType::Update => AuditAction::Update,
+            OperationType::Delete => AuditAction::Delete,
+        };
+        
+        self.audit_log(
+            audit_action,
+            format!("{}/{}", entity_type, entity_id),
+            true, // Assume PHI by default for healthcare data
+            true,
+            serde_json::json!({
+                "operation_id": operation_id.to_string(),
+                "vector_clock": vector_clock,
+                "data_size": data.to_string().len(),
+            }),
+        ).await?;
+        
         tracing::debug!(
             operation_id = %operation_id,
             entity_type = entity_type,
@@ -304,6 +379,15 @@ impl LocalDatabase {
         .bind(limit)
         .fetch_all(&self.pool)
         .await?;
+        
+        // Audit log the read operation
+        self.audit_log(
+            AuditAction::Read,
+            format!("sync_queue (limit: {})", limit),
+            true,
+            true,
+            serde_json::json!({"count": rows.len()}),
+        ).await?;
         
         let mut entries = Vec::new();
         for row in rows {
@@ -455,6 +539,9 @@ mod tests {
             max_connections: 5,
             enable_wal: true,
             enable_secure_delete: true,
+            audit_config: None, // Disable audit for most tests
+            user_id: Some("test_user".to_string()),
+            user_email: Some("test@example.com".to_string()),
         };
         
         LocalDatabase::new(config).await
@@ -595,6 +682,9 @@ mod tests {
             max_connections: 5,
             enable_wal: true,
             enable_secure_delete: false, // Explicitly disabled
+            audit_config: None,
+            user_id: None,
+            user_email: None,
         };
         
         let db = LocalDatabase::new(config).await.unwrap();
