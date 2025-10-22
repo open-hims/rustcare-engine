@@ -18,6 +18,7 @@ pub mod encryption;
 pub mod field_encryption;
 pub mod audit;
 pub mod rate_limiter;
+pub mod key_manager;
 
 pub use error::{SyncError, SyncResult};
 pub use local_db::{LocalDatabase, LocalDbConfig, OperationType, SyncQueueEntry};
@@ -30,6 +31,7 @@ pub use encryption::{EncryptionConfig, EncryptionKeyManager, DatabaseKey, Encryp
 pub use field_encryption::{FieldEncryption, FieldEncryptionConfig};
 pub use audit::{AuditLogger, AuditConfig, AuditAction, AuditEntry};
 pub use rate_limiter::{RateLimiter, RateLimiterConfig};
+pub use key_manager::{LocalDbKeyManager, KeyManagerConfig, LocalDbKeyMetadata};
 
 /// Sync engine for offline-first operations
 pub struct SyncEngine {
@@ -78,6 +80,7 @@ mod tests {
             user_id: None,
             user_email: None,
             rate_limiter_config: None,
+            kms_config: None,
         };
         
         let engine = SyncEngine::new(config).await.unwrap();

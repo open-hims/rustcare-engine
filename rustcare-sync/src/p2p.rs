@@ -303,6 +303,7 @@ mod tests {
             user_id: None,
             user_email: None,
             rate_limiter_config: None,
+            kms_config: None,
         };
         
         Arc::new(LocalDatabase::new(config).await.unwrap())

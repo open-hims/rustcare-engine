@@ -36,6 +36,10 @@ pub struct LocalDbConfig {
     pub user_email: Option<String>,
     /// Rate limiter configuration (optional, to prevent abuse)
     pub rate_limiter_config: Option<crate::rate_limiter::RateLimiterConfig>,
+    /// KMS configuration for encryption key management (optional)
+    /// When configured, uses KMS (AWS KMS, Vault, etc.) to manage encryption keys
+    /// instead of password-based key derivation
+    pub kms_config: Option<crate::key_manager::KeyManagerConfig>,
 }
 
 impl Default for LocalDbConfig {
@@ -50,6 +54,7 @@ impl Default for LocalDbConfig {
             user_id: None,
             user_email: None,
             rate_limiter_config: Some(crate::rate_limiter::RateLimiterConfig::default()),
+            kms_config: None, // KMS is optional, defaults to password-based key derivation
         }
     }
 }
@@ -551,6 +556,7 @@ mod tests {
             user_id: Some("test_user".to_string()),
             user_email: Some("test@example.com".to_string()),
             rate_limiter_config: None, // Disable rate limiting for most tests
+            kms_config: None, // Use password-based key derivation for tests
         };
         
         LocalDatabase::new(config).await
@@ -695,6 +701,7 @@ mod tests {
             user_id: None,
             user_email: None,
             rate_limiter_config: None,
+            kms_config: None, // Use password-based key derivation for tests
         };
         
         let db = LocalDatabase::new(config).await.unwrap();
