@@ -19,6 +19,7 @@ pub mod field_encryption;
 pub mod audit;
 pub mod rate_limiter;
 pub mod key_manager;
+pub mod secure_memory;
 
 pub use error::{SyncError, SyncResult};
 pub use local_db::{LocalDatabase, LocalDbConfig, OperationType, SyncQueueEntry};
@@ -32,6 +33,10 @@ pub use field_encryption::{FieldEncryption, FieldEncryptionConfig};
 pub use audit::{AuditLogger, AuditConfig, AuditAction, AuditEntry};
 pub use rate_limiter::{RateLimiter, RateLimiterConfig};
 pub use key_manager::{LocalDbKeyManager, KeyManagerConfig, LocalDbKeyMetadata};
+pub use secure_memory::{
+    SecureString, SecureVec, SecureData, SecurePatientData, SecureMedicalRecord,
+    IntoSecure, IntoSecureVec,
+};
 
 /// Sync engine for offline-first operations
 pub struct SyncEngine {

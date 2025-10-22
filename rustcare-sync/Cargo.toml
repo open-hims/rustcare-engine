@@ -45,6 +45,7 @@ sha2 = "0.10"         # Hashing for vector clocks
 base64 = "0.21"       # Encoding
 hex = "0.4"           # Hex encoding for encryption keys
 zeroize = "1.7"       # Secure memory zeroing
+secrecy = "0.8"       # Secret types for PHI in memory
 reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }  # HTTP client for sync
 
 # P2P networking (optional)
