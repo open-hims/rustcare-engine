@@ -302,6 +302,7 @@ mod tests {
             audit_config: None,
             user_id: None,
             user_email: None,
+            rate_limiter_config: None,
         };
         
         Arc::new(LocalDatabase::new(config).await.unwrap())

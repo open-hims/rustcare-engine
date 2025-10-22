@@ -34,6 +34,8 @@ pub struct LocalDbConfig {
     pub user_id: Option<String>,
     /// User email (for audit trail)
     pub user_email: Option<String>,
+    /// Rate limiter configuration (optional, to prevent abuse)
+    pub rate_limiter_config: Option<crate::rate_limiter::RateLimiterConfig>,
 }
 
 impl Default for LocalDbConfig {
@@ -47,6 +49,7 @@ impl Default for LocalDbConfig {
             audit_config: Some(AuditConfig::default()),
             user_id: None,
             user_email: None,
+            rate_limiter_config: Some(crate::rate_limiter::RateLimiterConfig::default()),
         }
     }
 }
@@ -120,6 +123,7 @@ pub struct LocalDatabase {
     audit_logger: Option<Mutex<AuditLogger>>,
     user_id: Option<String>,
     user_email: Option<String>,
+    rate_limiter: Option<crate::rate_limiter::RateLimiter>,
 }
 
 impl LocalDatabase {
@@ -157,6 +161,9 @@ impl LocalDatabase {
             None
         };
         
+        // Initialize rate limiter if configured
+        let rate_limiter = config.rate_limiter_config.map(crate::rate_limiter::RateLimiter::new);
+        
         let user_id = config.user_id.clone();
         let user_email = config.user_email.clone();
         
@@ -166,6 +173,7 @@ impl LocalDatabase {
             audit_logger,
             user_id,
             user_email,
+            rate_limiter,
         };
         
         // Initialize schema
@@ -542,6 +550,7 @@ mod tests {
             audit_config: None, // Disable audit for most tests
             user_id: Some("test_user".to_string()),
             user_email: Some("test@example.com".to_string()),
+            rate_limiter_config: None, // Disable rate limiting for most tests
         };
         
         LocalDatabase::new(config).await
@@ -685,6 +694,7 @@ mod tests {
             audit_config: None,
             user_id: None,
             user_email: None,
+            rate_limiter_config: None,
         };
         
         let db = LocalDatabase::new(config).await.unwrap();

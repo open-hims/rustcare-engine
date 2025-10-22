@@ -37,6 +37,12 @@ pub enum SyncError {
     #[error("Encryption error: {0}")]
     Encryption(#[from] crypto::CryptoError),
     
+    #[error("Rate limit exceeded for user {user_id}, retry after {retry_after:?}")]
+    RateLimitExceeded {
+        user_id: uuid::Uuid,
+        retry_after: std::time::Duration,
+    },
+    
     #[error("Internal error: {0}")]
     Internal(String),
 }
