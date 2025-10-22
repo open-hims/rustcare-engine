@@ -23,6 +23,11 @@ if ! grep -q "api.openhims.health" /etc/hosts; then
 else
     echo "✅ Domain api.openhims.health already configured"
 fi
+# Load environment variables
+if [ -f .env ]; then
+    export $(cat .env | grep -v '^#' | xargs)
+fi
+
 # Start Rust server in background
 echo "📡 Starting Rust server on internal port 7077..."
 cargo run --bin rustcare-server -- --port 7077 &

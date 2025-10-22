@@ -4,6 +4,8 @@ Cargo.lock
 **/*.rs.bk
 *.pdb
 
+caddy-data/
+
 # Debug builds
 debug/
 target/debug/
