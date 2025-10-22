@@ -269,6 +269,45 @@ impl LocalDatabase {
             .execute(&self.pool)
             .await?;
         
+        // Create conflict resolutions table for manual conflict resolution tracking
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS conflict_resolutions (
+                conflict_id TEXT PRIMARY KEY,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                conflict_type TEXT NOT NULL,
+                local_version TEXT NOT NULL,
+                remote_version TEXT NOT NULL,
+                local_vector_clock TEXT NOT NULL,
+                remote_vector_clock TEXT NOT NULL,
+                diffs TEXT NOT NULL,
+                detected_at TEXT NOT NULL,
+                assigned_to TEXT,
+                resolved INTEGER NOT NULL DEFAULT 0,
+                resolution_strategy TEXT,
+                resolved_value TEXT,
+                resolved_by TEXT,
+                resolved_at TEXT,
+                notes TEXT,
+                metadata TEXT NOT NULL
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+        
+        // Create indexes for conflict_resolutions
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_conflict_resolutions_resolved ON conflict_resolutions(resolved)")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_conflict_resolutions_entity ON conflict_resolutions(entity_type, entity_id)")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_conflict_resolutions_assigned ON conflict_resolutions(assigned_to, resolved)")
+            .execute(&self.pool)
+            .await?;
+        
         // Create metadata table for storing sync state
         sqlx::query(
             r#"
@@ -530,6 +569,219 @@ impl LocalDatabase {
         Ok(())
     }
     
+    /// Store an unresolved conflict for UI review
+    pub async fn store_unresolved_conflict(
+        &self,
+        conflict: &crate::conflict_resolution::UnresolvedConflict,
+    ) -> SyncResult<()> {
+        let diffs_json = serde_json::to_string(&conflict.diffs)?;
+        
+        sqlx::query(
+            r#"
+            INSERT INTO conflict_resolutions (
+                conflict_id, entity_type, entity_id, conflict_type,
+                local_version, remote_version, local_vector_clock, remote_vector_clock,
+                diffs, detected_at, assigned_to, resolved, metadata
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+            "#,
+        )
+        .bind(conflict.id.to_string())
+        .bind(&conflict.entity_type)
+        .bind(conflict.entity_id.to_string())
+        .bind(conflict.conflict_type.as_str())
+        .bind(serde_json::to_string(&conflict.local_version)?)
+        .bind(serde_json::to_string(&conflict.remote_version)?)
+        .bind(&conflict.local_vector_clock)
+        .bind(&conflict.remote_vector_clock)
+        .bind(diffs_json)
+        .bind(conflict.detected_at.to_rfc3339())
+        .bind(&conflict.assigned_to)
+        .bind(serde_json::to_string(&conflict.metadata)?)
+        .execute(&self.pool)
+        .await?;
+        
+        tracing::info!(
+            conflict_id = %conflict.id,
+            entity_type = %conflict.entity_type,
+            entity_id = %conflict.entity_id,
+            "Stored unresolved conflict"
+        );
+        
+        Ok(())
+    }
+    
+    /// Get all unresolved conflicts
+    pub async fn get_unresolved_conflicts(
+        &self,
+    ) -> SyncResult<Vec<crate::conflict_resolution::UnresolvedConflict>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT conflict_id, entity_type, entity_id, conflict_type,
+                   local_version, remote_version, local_vector_clock, remote_vector_clock,
+                   diffs, detected_at, assigned_to, metadata
+            FROM conflict_resolutions
+            WHERE resolved = 0
+            ORDER BY detected_at ASC
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        
+        let mut conflicts = Vec::new();
+        for row in rows {
+            let conflict_type_str: String = row.try_get("conflict_type")?;
+            let conflict_type = match conflict_type_str.as_str() {
+                "concurrent_modification" => crate::conflict_resolution::ConflictType::ConcurrentModification,
+                "delete_modify" => crate::conflict_resolution::ConflictType::DeleteModify,
+                "concurrent_delete" => crate::conflict_resolution::ConflictType::ConcurrentDelete,
+                "structural" => crate::conflict_resolution::ConflictType::Structural,
+                "business_rule" => crate::conflict_resolution::ConflictType::BusinessRule,
+                _ => crate::conflict_resolution::ConflictType::ConcurrentModification,
+            };
+            
+            conflicts.push(crate::conflict_resolution::UnresolvedConflict {
+                id: Uuid::parse_str(&row.try_get::<String, _>("conflict_id")?)?,
+                entity_type: row.try_get("entity_type")?,
+                entity_id: Uuid::parse_str(&row.try_get::<String, _>("entity_id")?)?,
+                conflict_type,
+                local_version: serde_json::from_str(&row.try_get::<String, _>("local_version")?)?,
+                remote_version: serde_json::from_str(&row.try_get::<String, _>("remote_version")?)?,
+                diffs: serde_json::from_str(&row.try_get::<String, _>("diffs")?)?,
+                local_vector_clock: row.try_get("local_vector_clock")?,
+                remote_vector_clock: row.try_get("remote_vector_clock")?,
+                detected_at: DateTime::parse_from_rfc3339(&row.try_get::<String, _>("detected_at")?)?.with_timezone(&Utc),
+                assigned_to: row.try_get("assigned_to")?,
+                metadata: serde_json::from_str(&row.try_get::<String, _>("metadata")?)?,
+            });
+        }
+        
+        Ok(conflicts)
+    }
+    
+    /// Get unresolved conflicts assigned to a specific user
+    pub async fn get_conflicts_assigned_to(
+        &self,
+        user_id: &str,
+    ) -> SyncResult<Vec<crate::conflict_resolution::UnresolvedConflict>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT conflict_id, entity_type, entity_id, conflict_type,
+                   local_version, remote_version, local_vector_clock, remote_vector_clock,
+                   diffs, detected_at, assigned_to, metadata
+            FROM conflict_resolutions
+            WHERE resolved = 0 AND assigned_to = ?
+            ORDER BY detected_at ASC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+        
+        let mut conflicts = Vec::new();
+        for row in rows {
+            let conflict_type_str: String = row.try_get("conflict_type")?;
+            let conflict_type = match conflict_type_str.as_str() {
+                "concurrent_modification" => crate::conflict_resolution::ConflictType::ConcurrentModification,
+                "delete_modify" => crate::conflict_resolution::ConflictType::DeleteModify,
+                "concurrent_delete" => crate::conflict_resolution::ConflictType::ConcurrentDelete,
+                "structural" => crate::conflict_resolution::ConflictType::Structural,
+                "business_rule" => crate::conflict_resolution::ConflictType::BusinessRule,
+                _ => crate::conflict_resolution::ConflictType::ConcurrentModification,
+            };
+            
+            conflicts.push(crate::conflict_resolution::UnresolvedConflict {
+                id: Uuid::parse_str(&row.try_get::<String, _>("conflict_id")?)?,
+                entity_type: row.try_get("entity_type")?,
+                entity_id: Uuid::parse_str(&row.try_get::<String, _>("entity_id")?)?,
+                conflict_type,
+                local_version: serde_json::from_str(&row.try_get::<String, _>("local_version")?)?,
+                remote_version: serde_json::from_str(&row.try_get::<String, _>("remote_version")?)?,
+                diffs: serde_json::from_str(&row.try_get::<String, _>("diffs")?)?,
+                local_vector_clock: row.try_get("local_vector_clock")?,
+                remote_vector_clock: row.try_get("remote_vector_clock")?,
+                detected_at: DateTime::parse_from_rfc3339(&row.try_get::<String, _>("detected_at")?)?.with_timezone(&Utc),
+                assigned_to: row.try_get("assigned_to")?,
+                metadata: serde_json::from_str(&row.try_get::<String, _>("metadata")?)?,
+            });
+        }
+        
+        Ok(conflicts)
+    }
+    
+    /// Store a resolved conflict
+    pub async fn store_resolved_conflict(
+        &self,
+        resolution: &crate::conflict_resolution::ResolvedConflict,
+    ) -> SyncResult<()> {
+        sqlx::query(
+            r#"
+            UPDATE conflict_resolutions
+            SET resolved = 1,
+                resolution_strategy = ?,
+                resolved_value = ?,
+                resolved_by = ?,
+                resolved_at = ?,
+                notes = ?
+            WHERE conflict_id = ?
+            "#,
+        )
+        .bind(resolution.strategy.as_str())
+        .bind(serde_json::to_string(&resolution.resolved_value)?)
+        .bind(&resolution.resolved_by)
+        .bind(resolution.resolved_at.to_rfc3339())
+        .bind(&resolution.notes)
+        .bind(resolution.conflict_id.to_string())
+        .execute(&self.pool)
+        .await?;
+        
+        tracing::info!(
+            conflict_id = %resolution.conflict_id,
+            strategy = %resolution.strategy.as_str(),
+            resolved_by = %resolution.resolved_by,
+            "Resolved conflict"
+        );
+        
+        Ok(())
+    }
+    
+    /// Get conflict resolution history for an entity
+    pub async fn get_resolution_history(
+        &self,
+        entity_type: &str,
+        entity_id: Uuid,
+    ) -> SyncResult<Vec<crate::conflict_resolution::ResolvedConflict>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT conflict_id, resolution_strategy, resolved_value,
+                   resolved_by, resolved_at, notes
+            FROM conflict_resolutions
+            WHERE resolved = 1 AND entity_type = ? AND entity_id = ?
+            ORDER BY resolved_at DESC
+            "#,
+        )
+        .bind(entity_type)
+        .bind(entity_id.to_string())
+        .fetch_all(&self.pool)
+        .await?;
+        
+        let mut resolutions = Vec::new();
+        for row in rows {
+            let strategy_str: String = row.try_get("resolution_strategy")?;
+            let strategy = crate::conflict_resolution::ConflictResolutionStrategy::from_str(&strategy_str)?;
+            
+            resolutions.push(crate::conflict_resolution::ResolvedConflict {
+                conflict_id: Uuid::parse_str(&row.try_get::<String, _>("conflict_id")?)?,
+                strategy,
+                resolved_value: serde_json::from_str(&row.try_get::<String, _>("resolved_value")?)?,
+                resolved_by: row.try_get("resolved_by")?,
+                resolved_at: DateTime::parse_from_rfc3339(&row.try_get::<String, _>("resolved_at")?)?.with_timezone(&Utc),
+                notes: row.try_get("notes")?,
+            });
+        }
+        
+        Ok(resolutions)
+    }
+    
     /// Close database connection
     pub async fn close(self) -> SyncResult<()> {
         self.pool.close().await;
@@ -714,5 +966,118 @@ mod tests {
         
         let secure_delete: i64 = row.try_get(0).unwrap();
         assert_eq!(secure_delete, 0, "secure_delete should be disabled");
+    }
+    
+    #[tokio::test]
+    async fn test_store_and_get_unresolved_conflict() {
+        use crate::conflict_resolution::{ConflictResolver, ConflictType};
+        
+        let db = create_test_db().await.unwrap();
+        let resolver = ConflictResolver::new();
+        
+        let entity_id = Uuid::new_v4();
+        let local = serde_json::json!({"name": "Alice", "age": 30});
+        let remote = serde_json::json!({"name": "Alice", "age": 31});
+        
+        let conflict = resolver.create_conflict(
+            "patient".to_string(),
+            entity_id,
+            ConflictType::ConcurrentModification,
+            local,
+            remote,
+            "node1:10".to_string(),
+            "node2:15".to_string(),
+        );
+        
+        db.store_unresolved_conflict(&conflict).await.unwrap();
+        
+        let conflicts = db.get_unresolved_conflicts().await.unwrap();
+        assert_eq!(conflicts.len(), 1);
+        assert_eq!(conflicts[0].entity_type, "patient");
+        assert_eq!(conflicts[0].entity_id, entity_id);
+        assert!(!conflicts[0].diffs.is_empty());
+    }
+    
+    #[tokio::test]
+    async fn test_resolve_conflict() {
+        use crate::conflict_resolution::{ConflictResolver, ConflictType};
+        
+        let db = create_test_db().await.unwrap();
+        let resolver = ConflictResolver::new();
+        
+        let entity_id = Uuid::new_v4();
+        let conflict = resolver.create_conflict(
+            "appointment".to_string(),
+            entity_id,
+            ConflictType::DeleteModify,
+            serde_json::json!({"status": "pending"}),
+            serde_json::json!({"status": "cancelled"}),
+            "node1:5".to_string(),
+            "node2:8".to_string(),
+        );
+        
+        db.store_unresolved_conflict(&conflict).await.unwrap();
+        
+        // Resolve by accepting local
+        let resolution = resolver.resolve_accept_local(
+            &conflict,
+            "doctor@example.com".to_string(),
+            Some("Local version is correct".to_string()),
+        );
+        
+        db.store_resolved_conflict(&resolution).await.unwrap();
+        
+        // Should no longer appear in unresolved
+        let unresolved = db.get_unresolved_conflicts().await.unwrap();
+        assert_eq!(unresolved.len(), 0);
+        
+        // Should appear in history
+        let history = db.get_resolution_history("appointment", entity_id).await.unwrap();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].resolved_by, "doctor@example.com");
+    }
+    
+    #[tokio::test]
+    async fn test_get_conflicts_assigned_to() {
+        use crate::conflict_resolution::{ConflictResolver, ConflictType};
+        
+        let db = create_test_db().await.unwrap();
+        let resolver = ConflictResolver::new();
+        
+        // Create conflicts assigned to different users
+        let mut conflict1 = resolver.create_conflict(
+            "patient".to_string(),
+            Uuid::new_v4(),
+            ConflictType::ConcurrentModification,
+            serde_json::json!({"test": 1}),
+            serde_json::json!({"test": 2}),
+            "n1:1".to_string(),
+            "n2:1".to_string(),
+        );
+        conflict1.assigned_to = Some("user1".to_string());
+        
+        let mut conflict2 = resolver.create_conflict(
+            "patient".to_string(),
+            Uuid::new_v4(),
+            ConflictType::ConcurrentModification,
+            serde_json::json!({"test": 3}),
+            serde_json::json!({"test": 4}),
+            "n1:2".to_string(),
+            "n2:2".to_string(),
+        );
+        conflict2.assigned_to = Some("user2".to_string());
+        
+        db.store_unresolved_conflict(&conflict1).await.unwrap();
+        db.store_unresolved_conflict(&conflict2).await.unwrap();
+        
+        // Get conflicts for user1
+        let user1_conflicts = db.get_conflicts_assigned_to("user1").await.unwrap();
+        assert_eq!(user1_conflicts.len(), 1);
+        assert_eq!(user1_conflicts[0].id, conflict1.id);
+        
+        // Get conflicts for user2
+        let user2_conflicts = db.get_conflicts_assigned_to("user2").await.unwrap();
+        assert_eq!(user2_conflicts.len(), 1);
+        assert_eq!(user2_conflicts[0].id, conflict2.id);
     }
 }

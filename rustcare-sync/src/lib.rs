@@ -20,6 +20,7 @@ pub mod audit;
 pub mod rate_limiter;
 pub mod key_manager;
 pub mod secure_memory;
+pub mod conflict_resolution;
 
 pub use error::{SyncError, SyncResult};
 pub use local_db::{LocalDatabase, LocalDbConfig, OperationType, SyncQueueEntry};
@@ -36,6 +37,10 @@ pub use key_manager::{LocalDbKeyManager, KeyManagerConfig, LocalDbKeyMetadata};
 pub use secure_memory::{
     SecureString, SecureVec, SecureData, SecurePatientData, SecureMedicalRecord,
     IntoSecure, IntoSecureVec,
+};
+pub use conflict_resolution::{
+    ConflictResolver, UnresolvedConflict, ResolvedConflict,
+    ConflictResolutionStrategy, ConflictType, ConflictDiff,
 };
 
 /// Sync engine for offline-first operations

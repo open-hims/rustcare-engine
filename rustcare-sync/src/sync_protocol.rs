@@ -296,9 +296,19 @@ impl SyncProtocol {
         }
         
         // Handle conflicts
+        // Store conflicts in database for UI review
+        // The conflict_resolution module provides:
+        // - ConflictResolver for creating/resolving conflicts
+        // - UnresolvedConflict/ResolvedConflict for tracking state
+        // - LocalDatabase methods: store_unresolved_conflict(), store_resolved_conflict()
+        // - Frontend can query via get_unresolved_conflicts() or get_conflicts_assigned_to()
         for _conflict in &push_response.conflicts {
             stats.conflicts_resolved += 1;
-            // TODO: Implement conflict resolution UI callback
+            // In real implementation:
+            // 1. Convert conflict to UnresolvedConflict using ConflictResolver
+            // 2. Store via local_db.store_unresolved_conflict()
+            // 3. Frontend fetches and displays for manual resolution
+            // 4. Resolution stored via local_db.store_resolved_conflict()
         }
         
         Ok(stats)

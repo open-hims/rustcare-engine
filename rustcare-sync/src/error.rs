@@ -59,4 +59,16 @@ impl From<bincode::Error> for SyncError {
     }
 }
 
+impl From<uuid::Error> for SyncError {
+    fn from(err: uuid::Error) -> Self {
+        SyncError::InvalidOperation(format!("Invalid UUID: {}", err))
+    }
+}
+
+impl From<chrono::ParseError> for SyncError {
+    fn from(err: chrono::ParseError) -> Self {
+        SyncError::InvalidOperation(format!("Invalid timestamp: {}", err))
+    }
+}
+
 pub type SyncResult<T> = Result<T, SyncError>;
