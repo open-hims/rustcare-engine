@@ -3,7 +3,7 @@ use axum::{
     Router,
 };
 use crate::{
-    handlers::{health, auth, workflow, sync}, // websocket temporarily disabled
+    handlers::{health, auth, workflow, sync, permissions}, // websocket temporarily disabled
     server::RustCareServer,
     openapi,
 };
@@ -42,12 +42,32 @@ pub fn sync_routes() -> Router<RustCareServer> {
         .route("/sync/push", post(sync::push))
 }
 
+/// Create permission management routes
+pub fn permission_routes() -> Router<RustCareServer> {
+    Router::new()
+        // Resource management
+        .route("/permissions/resources", get(permissions::list_resources))
+        .route("/permissions/resources", post(permissions::create_resource))
+        // Group management
+        .route("/permissions/groups", get(permissions::list_groups))
+        .route("/permissions/groups", post(permissions::create_group))
+        // Role management
+        .route("/permissions/roles", get(permissions::list_roles))
+        .route("/permissions/roles", post(permissions::create_role))
+        // User permissions
+        .route("/permissions/users/:user_id", get(permissions::get_user_permissions))
+        .route("/permissions/users/:user_id", put(permissions::assign_user_permissions))
+        // Permission check endpoint (for Remix loaders)
+        .route("/auth/check", post(permissions::check_permission))
+}
+
 /// Create API v1 routes
 pub fn api_v1_routes() -> Router<RustCareServer> {
     Router::new()
         .nest("/auth", auth_routes())
         .nest("/workflow", workflow_routes())
         .merge(sync_routes())
+        .merge(permission_routes())
         // TODO: Add more API routes here:
         // .nest("/plugins", plugin_routes())
         // .nest("/audit", audit_routes())
