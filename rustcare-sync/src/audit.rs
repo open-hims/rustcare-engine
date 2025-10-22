@@ -125,21 +125,24 @@ impl AuditEntry {
         };
         
         // Calculate hash of this entry
-        entry.entry_hash = entry.calculate_hash();
+        entry.entry_hash = entry.compute_hash();
         
         entry
     }
     
-    /// Calculate cryptographic hash of this entry
-    fn calculate_hash(&self) -> String {
+    /// Compute cryptographic hash of this entry
+    fn compute_hash(&self) -> String {
         let mut hasher = Sha256::new();
         
         // Include all fields except entry_hash itself
-        hasher.update(self.id.as_bytes());
+        // Use string representations to match database storage format
+        hasher.update(self.id.to_string().as_bytes());
         hasher.update(self.timestamp.to_rfc3339().as_bytes());
         hasher.update(format!("{:?}", self.action).as_bytes());
         hasher.update(self.actor.as_bytes());
         hasher.update(self.resource.as_bytes());
+        hasher.update(self.entity_type.as_ref().map(|s| s.as_str()).unwrap_or("").as_bytes());
+        hasher.update(self.entity_id.as_ref().map(|id| id.to_string()).unwrap_or_default().as_bytes());
         hasher.update(&[self.phi_flag as u8]);
         hasher.update(&[self.success as u8]);
         hasher.update(self.metadata.to_string().as_bytes());
@@ -355,7 +358,7 @@ impl AuditLogger {
         let rows = sqlx::query(
             r#"
             SELECT id, timestamp, action, actor, resource,
-                   phi_flag, success, metadata, prev_hash, entry_hash
+                   entity_type, entity_id, phi_flag, success, metadata, prev_hash, entry_hash
             FROM audit_log
             ORDER BY timestamp ASC
             "#,
@@ -380,17 +383,21 @@ impl AuditLogger {
             let action: String = row.try_get("action")?;
             let actor: String = row.try_get("actor")?;
             let resource: String = row.try_get("resource")?;
+            let entity_type: Option<String> = row.try_get("entity_type")?;
+            let entity_id: Option<String> = row.try_get("entity_id")?;
             let phi_flag: i32 = row.try_get("phi_flag")?;
             let success: i32 = row.try_get("success")?;
             let metadata: String = row.try_get("metadata")?;
             
-            // Calculate expected hash
+            // Calculate expected hash (must match compute_hash logic)
             let mut hasher = Sha256::new();
             hasher.update(id.as_bytes());
             hasher.update(timestamp.as_bytes());
             hasher.update(action.as_bytes());
             hasher.update(actor.as_bytes());
             hasher.update(resource.as_bytes());
+            hasher.update(entity_type.as_ref().map(|s| s.as_str()).unwrap_or("").as_bytes());
+            hasher.update(entity_id.as_ref().map(|s| s.as_str()).unwrap_or("").as_bytes());
             hasher.update(&[phi_flag as u8]);
             hasher.update(&[success as u8]);
             hasher.update(metadata.as_bytes());
@@ -399,6 +406,14 @@ impl AuditLogger {
             let calculated_hash = format!("{:x}", hasher.finalize());
             
             if calculated_hash != entry_hash {
+                #[cfg(test)]
+                {
+                    eprintln!("Hash mismatch!");
+                    eprintln!("  ID: {}", id);
+                    eprintln!("  Expected hash: {}", entry_hash);
+                    eprintln!("  Calculated hash: {}", calculated_hash);
+                    eprintln!("  Prev hash: {}", prev_hash);
+                }
                 return Ok(false);
             }
             
@@ -496,14 +511,20 @@ mod tests {
     
     fn get_test_audit_path() -> PathBuf {
         let temp_dir = std::env::temp_dir();
+        // Use a unique UUID for each test run to avoid conflicts
         temp_dir.join(format!("test_audit_{}.db", uuid::Uuid::new_v4()))
     }
     
     async fn create_test_logger() -> SyncResult<AuditLogger> {
-        let audit_db_path = get_test_audit_path().to_str().unwrap().to_string();
+        let audit_db_path = get_test_audit_path();
+        
+        // Clean up if exists
+        if audit_db_path.exists() {
+            let _ = std::fs::remove_file(&audit_db_path);
+        }
         
         let config = AuditConfig {
-            audit_db_path,
+            audit_db_path: audit_db_path.to_str().unwrap().to_string(),
             enabled: true,
             max_entries_before_rotation: 100_000,
             log_reads: true,
