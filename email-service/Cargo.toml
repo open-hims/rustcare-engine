@@ -30,15 +30,14 @@ crypto = { path = "../crypto" }
 events-bus = { path = "../events-bus" }
 audit-engine = { path = "../audit-engine" }
 
+# Stalwart Labs email libraries (production-grade SMTP)
+mail-send = "0.4"
+mail-auth = "0.3"
+mail-builder = "0.3"
+
 # Email specific dependencies
-lettre = { version = "0.11", features = ["rustls-tls", "smtp-transport", "builder"] }
 mail-parser = "0.8"
 handlebars = "4.4"
 html2text = "0.6"
 mime = "0.3"
 base64 = "0.21"
-
-# Stalwart Labs email libraries
-mail-send = "0.4"
-mail-auth = "0.3"
-mail-builder = "0.3"

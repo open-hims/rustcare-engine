@@ -224,3 +224,6 @@ zanzibar_policies/local/
 tarpaulin-report.html
 *.folded
 benchmark_results/
+# Environment and keys (NEVER COMMIT)
+.env
+config/keys/*.pem

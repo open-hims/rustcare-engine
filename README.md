@@ -61,6 +61,25 @@ cargo build --release --bin rustcare
 
 ### Development Setup
 
+#### Infrastructure Setup
+
+For setting up PostgreSQL, Redis, and running database migrations, see the **[rustcare-infra](https://github.com/open-hims/rustcare-infra)** repository:
+
+```bash
+# Clone infra repo (if separate)
+cd ..
+git clone https://github.com/open-hims/rustcare-infra.git
+cd rustcare-infra
+
+# Install PostgreSQL & Redis
+./setup-infrastructure.sh
+
+# Create database and run migrations
+./setup-db.sh --fresh
+```
+
+Or if using Docker:
+
 ```bash
 # Start development dependencies (PostgreSQL, Redis, etc.)
 docker-compose up -d
