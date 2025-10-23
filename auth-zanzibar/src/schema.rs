@@ -101,6 +101,130 @@ impl Schema {
                     inherits_from: None,
                     description: "Member of this role".to_string(),
                 },
+                RelationDefinition {
+                    name: "can_elevate".to_string(),
+                    inherits_from: None,
+                    description: "Can request elevated/break-glass access".to_string(),
+                },
+            ],
+        });
+        
+        // Patient Records (HIPAA-compliant)
+        namespaces.insert("patient_record".to_string(), NamespaceDefinition {
+            name: "patient_record".to_string(),
+            relations: vec![
+                RelationDefinition {
+                    name: "owner".to_string(),
+                    inherits_from: Some("editor".to_string()),
+                    description: "Full ownership of patient record".to_string(),
+                },
+                RelationDefinition {
+                    name: "editor".to_string(),
+                    inherits_from: Some("viewer".to_string()),
+                    description: "Can edit patient record".to_string(),
+                },
+                RelationDefinition {
+                    name: "viewer".to_string(),
+                    inherits_from: None,
+                    description: "Can view patient record".to_string(),
+                },
+                RelationDefinition {
+                    name: "viewers".to_string(), // Userset relation
+                    inherits_from: None,
+                    description: "Set of viewers for this patient".to_string(),
+                },
+            ],
+        });
+        
+        // Lab Reports
+        namespaces.insert("lab_report".to_string(), NamespaceDefinition {
+            name: "lab_report".to_string(),
+            relations: vec![
+                RelationDefinition {
+                    name: "owner".to_string(),
+                    inherits_from: Some("viewer".to_string()),
+                    description: "Owner of lab report".to_string(),
+                },
+                RelationDefinition {
+                    name: "viewer".to_string(),
+                    inherits_from: None,
+                    description: "Can view lab report".to_string(),
+                },
+            ],
+        });
+        
+        // Billing Records
+        namespaces.insert("billing_record".to_string(), NamespaceDefinition {
+            name: "billing_record".to_string(),
+            relations: vec![
+                RelationDefinition {
+                    name: "owner".to_string(),
+                    inherits_from: Some("viewer".to_string()),
+                    description: "Owner of billing record".to_string(),
+                },
+                RelationDefinition {
+                    name: "viewer".to_string(),
+                    inherits_from: None,
+                    description: "Can view billing record".to_string(),
+                },
+            ],
+        });
+        
+        // Ward (Hospital Department)
+        namespaces.insert("ward".to_string(), NamespaceDefinition {
+            name: "ward".to_string(),
+            relations: vec![
+                RelationDefinition {
+                    name: "admin".to_string(),
+                    inherits_from: Some("member".to_string()),
+                    description: "Ward administrator".to_string(),
+                },
+                RelationDefinition {
+                    name: "member".to_string(),
+                    inherits_from: None,
+                    description: "Member of this ward".to_string(),
+                },
+            ],
+        });
+        
+        // Study (Clinical Research)
+        namespaces.insert("study".to_string(), NamespaceDefinition {
+            name: "study".to_string(),
+            relations: vec![
+                RelationDefinition {
+                    name: "principal_investigator".to_string(),
+                    inherits_from: Some("member".to_string()),
+                    description: "Principal investigator of study".to_string(),
+                },
+                RelationDefinition {
+                    name: "member".to_string(),
+                    inherits_from: None,
+                    description: "Researcher in this study".to_string(),
+                },
+            ],
+        });
+        
+        // User (for delegation and user-to-user relationships)
+        namespaces.insert("user".to_string(), NamespaceDefinition {
+            name: "user".to_string(),
+            relations: vec![
+                RelationDefinition {
+                    name: "delegate".to_string(),
+                    inherits_from: None,
+                    description: "Temporary delegation of access".to_string(),
+                },
+            ],
+        });
+        
+        // Group (for group-based permissions)
+        namespaces.insert("group".to_string(), NamespaceDefinition {
+            name: "group".to_string(),
+            relations: vec![
+                RelationDefinition {
+                    name: "member".to_string(),
+                    inherits_from: None,
+                    description: "Member of this group".to_string(),
+                },
             ],
         });
         

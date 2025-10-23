@@ -47,11 +47,11 @@ check_external_services
 
 # Database configuration from environment or defaults
 DB_USER="${DB_USER:-rustcare}"
-DB_PASSWORD="${DB_PASSWORD:-rustcare_dev_password_change_in_prod}"
+DB_PASSWORD="${DB_PASSWORD:-uVp0ezWXSj2EIuA8tC20oHPzm1aR9T}"
 DB_NAME_DEV="${DB_NAME_DEV:-rustcare_dev}"
 DB_NAME_TEST="${DB_NAME_TEST:-rustcare_test}"
 DB_HOST="${DB_HOST:-localhost}"
-DB_PORT="${DB_PORT:-5432}"
+DB_PORT="${DB_PORT:-5433}"
 
 echo -e "${BLUE}Database Configuration:${NC}"
 echo "  User: $DB_USER"
@@ -124,6 +124,8 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";      -- Cryptographic functions
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";       -- Trigram search support
 CREATE EXTENSION IF NOT EXISTS "btree_gin";     -- GIN indexes for btree types
 CREATE EXTENSION IF NOT EXISTS "btree_gist";    -- GiST indexes for btree types
+CREATE EXTENSION IF NOT EXISTS "ltree";         -- Hierarchical tree-like structures
+CREATE EXTENSION IF NOT EXISTS "citext";        -- Case-insensitive text type
 
 -- JSON extensions
 CREATE EXTENSION IF NOT EXISTS "jsonb_plperl" CASCADE; -- JSONB Perl support (if available)

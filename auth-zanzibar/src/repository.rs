@@ -156,4 +156,6 @@ mod tests {
     }
 }
 
-pub struct ZanzibarRepository {}
+// PostgreSQL repository implementation
+pub mod postgres;
+pub use postgres::PostgresTupleRepository;

@@ -38,6 +38,12 @@ pub enum ZanzibarError {
     #[error("Repository error: {0}")]
     RepositoryError(String),
     
+    #[error("Storage error: {0}")]
+    StorageError(String),
+    
+    #[error("Validation error: {0}")]
+    ValidationError(String),
+    
     #[error("Internal error: {0}")]
     InternalError(#[from] anyhow::Error),
 }

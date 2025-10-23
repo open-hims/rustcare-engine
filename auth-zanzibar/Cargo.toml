@@ -22,6 +22,7 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 tracing = { workspace = true }
+sqlx = { workspace = true }
 
 # Internal dependencies
 auth-identity = { path = "../auth-identity" }

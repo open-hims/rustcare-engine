@@ -4,5 +4,7 @@
 //! and domain logic (repositories, models).
 
 pub mod organization_service;
+pub mod compliance_service;
 
 pub use organization_service::OrganizationService;
+pub use compliance_service::ComplianceService;

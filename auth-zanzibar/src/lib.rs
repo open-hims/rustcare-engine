@@ -51,8 +51,10 @@ pub mod schema;
 pub mod check;
 pub mod expand;
 pub mod error;
+pub mod rls_integration;
 
 pub use models::*;
 pub use engine::*;
 pub use schema::*;
 pub use error::*;
+pub use rls_integration::{RlsContext, RlsMiddleware};
