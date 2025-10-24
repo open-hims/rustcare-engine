@@ -3,7 +3,7 @@ applyTo: rustcare-ui/**, rustcare-engine/**
 ---
 
 Server running at https://api.openhims.health
-
+Dont create readme or instruction files unless explicitly requested.
 Mainly check for modules that we can reuse without reinventing the wheel.
 
 No Readme or instruction files should be created after finishing the task unless explicitly requested.
