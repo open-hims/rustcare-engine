@@ -20,7 +20,7 @@ members = [
     "plugin-runtime-core",
     "plugins-registry-api",
     "rustcare-server",
-    "rustcare-sync",
+    "rustcare-sync", "device-manager",
 ]
 
 [workspace.package]
