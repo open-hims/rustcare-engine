@@ -429,11 +429,11 @@ pub async fn assess_entity_compliance(
 pub async fn list_frameworks(
     State(server): State<RustCareServer>,
 ) -> Result<ResponseJson<Vec<ComplianceFramework>>, StatusCode> {
-    // Filter out soft-deleted frameworks by excluding status='deleted'
+    // Filter out soft-deleted frameworks by excluding status='deprecated'
     match server.compliance_repo.list_frameworks(None, Some("active"), None, None).await {
         Ok(mut frameworks) => {
-            // Additional filtering to exclude any deleted frameworks that might slip through
-            frameworks.retain(|f| f.status.as_str() != "deleted");
+            // Additional filtering to exclude any deprecated frameworks that might slip through
+            frameworks.retain(|f| f.status.as_str() != "deprecated");
             
             tracing::info!("Successfully retrieved {} active compliance frameworks", frameworks.len());
             Ok(Json(frameworks))
@@ -574,14 +574,14 @@ pub async fn delete_framework(
 
     let framework = existing_framework.unwrap();
     
-    // Check if already soft deleted
-    if framework.status.as_str() == "deleted" {
-        return Err(ApiError::conflict("Framework is already deleted"));
+    // Check if already soft deleted (deprecated)
+    if framework.status.as_str() == "deprecated" {
+        return Err(ApiError::conflict("Framework is already deprecated"));
     }
 
-    // Check if framework has active dependent rules (not soft deleted)
+    // Check if framework has active dependent rules (not deprecated)
     let active_rule_count = sqlx::query!(
-        "SELECT COUNT(*) as count FROM compliance_rules WHERE framework_id = $1 AND status != 'deleted'",
+        "SELECT COUNT(*) as count FROM compliance_rules WHERE framework_id = $1 AND status != 'deprecated'",
         id
     )
     .fetch_one(&server.db_pool)
@@ -594,18 +594,17 @@ pub async fn delete_framework(
         ));
     }
 
-    // Soft delete the framework by updating status
+    // Soft delete the framework by setting status to 'deprecated' (maintains audit trail)
     sqlx::query!(
         r#"
         UPDATE compliance_frameworks 
         SET 
-            status = 'deleted',
+            status = 'deprecated',
             updated_at = NOW(),
-            updated_by = $2
+            updated_by = NULL
         WHERE id = $1
         "#,
-        id,
-        Some(Uuid::new_v4()) // TODO: Replace with actual user ID from auth context
+        id
     )
     .execute(&server.db_pool)
     .await
@@ -720,9 +719,9 @@ pub async fn update_rule(
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateComplianceRuleRequest>,
 ) -> Result<Json<crate::error::ApiResponse<ComplianceRule>>, ApiError> {
-    // Validate that rule exists
+    // Validate that rule exists and is not deprecated
     let existing_rule = sqlx::query!(
-        "SELECT id FROM compliance_rules WHERE id = $1 AND status != 'deleted'",
+        "SELECT id FROM compliance_rules WHERE id = $1 AND status != 'deprecated'",
         id
     )
     .fetch_optional(&server.db_pool)
@@ -843,23 +842,22 @@ pub async fn delete_rule(
 
     let rule = existing_rule.unwrap();
     
-    // Check if already soft deleted
-    if rule.status.as_str() == "deleted" {
-        return Err(ApiError::conflict("Rule is already deleted"));
+    // Check if already soft deleted (deprecated)
+    if rule.status.as_str() == "deprecated" {
+        return Err(ApiError::conflict("Rule is already deprecated"));
     }
 
-    // Soft delete the rule by updating status to 'deleted'
+    // Soft delete the rule by setting status to 'deprecated' (maintains audit trail)
     sqlx::query!(
         r#"
         UPDATE compliance_rules 
         SET 
-            status = 'deleted',
+            status = 'deprecated',
             updated_at = NOW(),
-            updated_by = $2
+            updated_by = NULL
         WHERE id = $1
         "#,
-        id,
-        Some(Uuid::new_v4()) // TODO: Replace with actual user ID from auth context
+        id
     )
     .execute(&server.db_pool)
     .await
@@ -867,7 +865,7 @@ pub async fn delete_rule(
 
     tracing::info!(
         rule_id = %id,
-        "Successfully soft deleted compliance rule"
+        "Successfully soft deleted compliance rule (deprecated)"
     );
 
     Ok(Json(crate::error::api_success(())))

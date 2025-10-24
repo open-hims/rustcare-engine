@@ -20,13 +20,10 @@ api.openhims.health {
     encode gzip
     
     header {
-        # CORS headers for API access
-        Access-Control-Allow-Origin "*"
-        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-        Access-Control-Allow-Headers "*"
-        Access-Control-Allow-Credentials "true"
+        # CORS headers are handled by the Rust backend middleware
+        # Do NOT add CORS headers here to avoid duplicate header issues
         
-        # Security headers
+        # Security headers only
         Strict-Transport-Security "max-age=31536000; includeSubDomains"
         X-Content-Type-Options "nosniff"
         X-Frame-Options "SAMEORIGIN"

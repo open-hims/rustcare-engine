@@ -96,6 +96,7 @@ pub fn organization_routes() -> Router<RustCareServer> {
     Router::new()
         .route("/organizations", get(organizations::list_organizations))
         .route("/organizations", post(organizations::create_organization))
+        .route("/role-templates", get(organizations::get_role_templates))
         .route("/organizations/:org_id/roles", get(organizations::list_organization_roles))
         .route("/organizations/:org_id/roles", post(organizations::create_organization_role))
         .route("/organizations/:org_id/employees", get(organizations::list_organization_employees))

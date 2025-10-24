@@ -149,16 +149,10 @@ pub async fn rate_limiting_middleware(
 
 /// Create CORS layer for the application
 pub fn create_cors_layer() -> CorsLayer {
+    use tower_http::cors::Any;
+    
     CorsLayer::new()
-        .allow_origin([
-            "https://localhost:8443".parse::<HeaderValue>().unwrap(),
-            "http://localhost:8081".parse::<HeaderValue>().unwrap(),
-            "https://api.openhims.health".parse::<HeaderValue>().unwrap(),
-            "http://localhost:3000".parse::<HeaderValue>().unwrap(),
-            "https://localhost:3000".parse::<HeaderValue>().unwrap(),
-            "http://localhost:8080".parse::<HeaderValue>().unwrap(),
-            "http://127.0.0.1:3000".parse::<HeaderValue>().unwrap(),
-        ])
+        .allow_origin(Any)  // Allow all origins in development
         .allow_methods([
             Method::GET,
             Method::POST,
@@ -171,7 +165,10 @@ pub fn create_cors_layer() -> CorsLayer {
             header::AUTHORIZATION,
             header::CONTENT_TYPE,
             header::ACCEPT,
+            header::ORIGIN,
             "X-HIPAA-Consent".parse().unwrap(),
+            "X-Requested-With".parse().unwrap(),
         ])
+        .allow_credentials(false)
         .max_age(Duration::from_secs(3600))
 }
