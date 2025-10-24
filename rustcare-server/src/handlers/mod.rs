@@ -3,6 +3,9 @@ pub mod auth;
 pub mod workflow;
 pub mod sync;
 pub mod permissions;
+pub mod geographic;
+pub mod compliance;
+pub mod organizations;
 // pub mod websocket; // Temporarily disabled
 
 // Re-export all handler modules for easy access

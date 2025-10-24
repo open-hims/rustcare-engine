@@ -3,7 +3,7 @@ use axum::{
     Router,
 };
 use crate::{
-    handlers::{health, auth, workflow, sync, permissions}, // websocket temporarily disabled
+    handlers::{health, auth, workflow, sync, permissions, geographic, compliance, organizations}, // websocket temporarily disabled
     server::RustCareServer,
     openapi,
 };
@@ -61,6 +61,49 @@ pub fn permission_routes() -> Router<RustCareServer> {
         .route("/auth/check", post(permissions::check_permission))
 }
 
+/// Create geographic location management routes
+pub fn geographic_routes() -> Router<RustCareServer> {
+    Router::new()
+        .route("/geographic/regions", get(geographic::list_geographic_regions))
+        .route("/geographic/regions", post(geographic::create_geographic_region))
+        .route("/geographic/regions/:id", get(geographic::get_geographic_region))
+        .route("/geographic/regions/:id", put(geographic::update_geographic_region))
+        .route("/geographic/regions/:id", delete(geographic::delete_geographic_region))
+        .route("/geographic/regions/:id/hierarchy", get(geographic::get_geographic_hierarchy))
+        .route("/geographic/postal-codes/:postal_code/compliance", get(geographic::get_postal_code_compliance))
+}
+
+/// Create compliance framework management routes
+pub fn compliance_routes() -> Router<RustCareServer> {
+    Router::new()
+        .route("/compliance/frameworks", get(compliance::list_frameworks))
+        .route("/compliance/frameworks", post(compliance::create_framework))
+        .route("/compliance/frameworks/:id", get(compliance::get_framework))
+        .route("/compliance/frameworks/:id", put(compliance::update_framework))
+        .route("/compliance/frameworks/:id", delete(compliance::delete_framework))
+        .route("/compliance/frameworks/:id/rules", get(compliance::list_framework_rules))
+        .route("/compliance/rules", get(compliance::list_rules))
+        .route("/compliance/rules", post(compliance::create_rule))
+        .route("/compliance/rules/:id", get(compliance::get_rule))
+        .route("/compliance/rules/:id", put(compliance::update_rule))
+        .route("/compliance/rules/:id", delete(compliance::delete_rule))
+        .route("/compliance/assignment/auto", post(compliance::auto_assign_compliance))
+        .route("/compliance/entity/:entity_id", get(compliance::get_entity_compliance))
+}
+
+/// Create organization management routes
+pub fn organization_routes() -> Router<RustCareServer> {
+    Router::new()
+        .route("/organizations", get(organizations::list_organizations))
+        .route("/organizations", post(organizations::create_organization))
+        .route("/organizations/:org_id/roles", get(organizations::list_organization_roles))
+        .route("/organizations/:org_id/roles", post(organizations::create_organization_role))
+        .route("/organizations/:org_id/employees", get(organizations::list_organization_employees))
+        .route("/organizations/:org_id/employees/:employee_id/roles", post(organizations::assign_employee_role))
+        .route("/organizations/:org_id/patients", get(organizations::list_organization_patients))
+        .route("/organizations/:org_id/patients", post(organizations::create_organization_patient))
+}
+
 /// Create API v1 routes
 pub fn api_v1_routes() -> Router<RustCareServer> {
     Router::new()
@@ -68,6 +111,9 @@ pub fn api_v1_routes() -> Router<RustCareServer> {
         .nest("/workflow", workflow_routes())
         .merge(sync_routes())
         .merge(permission_routes())
+        .merge(geographic_routes())
+        .merge(compliance_routes())
+        .merge(organization_routes())
         // TODO: Add more API routes here:
         // .nest("/plugins", plugin_routes())
         // .nest("/audit", audit_routes())

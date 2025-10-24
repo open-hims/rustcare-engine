@@ -3,15 +3,24 @@ use axum::{
     Router,
 };
 use clap::Parser;
-use std::net::SocketAddr;
+use colored::*;
+use std::{io, net::SocketAddr, env};
 use tower::ServiceBuilder;
 use tower_http::{
     trace::TraceLayer,
 };
 use tracing::{info, Level};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{
+    fmt::{self, time::ChronoUtc},
+    layer::SubscriberExt,
+    util::SubscriberInitExt,
+    field::RecordFields,
+    EnvFilter,
+};
+use tracing_subscriber::fmt::FormatFields;
 
 mod auth;
+mod error;
 mod handlers;
 mod middleware;
 mod routes;
@@ -68,21 +77,21 @@ async fn main() -> Result<()> {
     // Initialize tracing with our redacted logger
     init_tracing(args.verbose).await?;
 
-    info!("🏥 Starting RustCare Engine HTTP Server");
-    info!("Version: {}", env!("CARGO_PKG_VERSION"));
-    info!("Bind address: {}:{}", args.host, args.port);
+    info!("🏥 {}", "Starting RustCare Engine HTTP Server".bright_cyan());
+    info!("📋 Version: {}", env!("CARGO_PKG_VERSION").bright_white());
+    info!("🌐 Bind address: {}", format!("{}:{}", args.host, args.port).bright_yellow());
 
     // Initialize security configuration
-    info!("🔐 Initializing security subsystems...");
+    info!("🔐 {}", "Initializing security subsystems...".bright_cyan());
     match SecurityState::from_env().await {
         Ok(security) => {
             security.print_summary();
-            info!("✅ Security initialization complete");
+            info!("✅ {}", "Security initialization complete".bright_green());
             // TODO: Store security state in server context
         }
         Err(e) => {
-            tracing::error!("❌ Security initialization failed: {}", e);
-            tracing::error!("   Please check your .env file and environment variables");
+            tracing::error!("❌ {}: {}", "Security initialization failed".bright_red(), e);
+            tracing::error!("   {}", "Please check your .env file and environment variables".bright_yellow());
             return Err(RustCareError::InternalError(format!("Security init failed: {}", e)));
         }
     }
@@ -109,15 +118,15 @@ async fn main() -> Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await
         .map_err(|e| RustCareError::NetworkError(format!("Failed to bind to {}: {}", addr, e)))?;
     
-    info!("🚀 RustCare Engine server running on http://{}:{}", args.host, args.port);
-    info!("📋 Health check available at: http://{}:{}/health", args.host, args.port);
-    info!("📋 API v1 available at: http://{}:{}/api/v1", args.host, args.port);
-    info!("🔐 Authentication endpoints: http://{}:{}/api/v1/auth", args.host, args.port);
-    info!("⚙️  Workflow endpoints: http://{}:{}/api/v1/workflow", args.host, args.port);
-    info!("🔌 WebSocket endpoints: ws://{}:{}/ws", args.host, args.port);
+    info!("🚀 {}", format!("RustCare Engine server running on http://{}:{}", args.host, args.port).bright_green());
+    info!("📋 {}", format!("Health check available at: http://{}:{}/health", args.host, args.port).bright_blue());
+    info!("📋 {}", format!("API v1 available at: http://{}:{}/api/v1", args.host, args.port).bright_blue());
+    info!("🔐 {}", format!("Authentication endpoints: http://{}:{}/api/v1/auth", args.host, args.port).bright_blue());
+    info!("⚙️  {}", format!("Workflow endpoints: http://{}:{}/api/v1/workflow", args.host, args.port).bright_blue());
+    info!("🔌 {}", format!("WebSocket endpoints: ws://{}:{}/ws", args.host, args.port).bright_blue());
     
     if args.enable_grpc {
-        info!("🔧 gRPC server available on grpc://{}:{}", args.host, args.grpc_port);
+        info!("🔧 {}", format!("gRPC server available on grpc://{}:{}", args.host, args.grpc_port).bright_purple());
     }
 
     // Run HTTP server
@@ -157,18 +166,210 @@ async fn init_tracing(verbose: bool) -> Result<()> {
         Level::INFO
     };
 
-    // Initialize with HIPAA-compliant logging
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| format!("rustcare_server={},tower_http=info", level).into())
-        )
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_target(false)
-                .json() // Use JSON format for structured logging
-        )
-        .init();
+    // Check if we're in development or production
+    let is_development = env::var("RUSTCARE_ENV").unwrap_or_else(|_| "development".to_string()) == "development";
+    let use_colors = env::var("NO_COLOR").is_err() && atty::is(atty::Stream::Stdout);
+
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| {
+            format!(
+                "rustcare_server={},tower_http=info,sqlx=warn,hyper=info,reqwest=info",
+                level
+            ).into()
+        });
+
+    if is_development && use_colors {
+        // Beautiful colored development logging
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(
+                fmt::layer()
+                    .with_target(true)
+                    .with_thread_ids(true)
+                    .with_thread_names(true)
+                    .with_file(true)
+                    .with_line_number(true)
+                    .with_timer(ChronoUtc::rfc_3339())
+                    .with_ansi(true)
+                    .with_level(true)
+                    .event_format(ColoredFormatter::new())
+                    .fmt_fields(ColoredFieldFormatter::new())
+            )
+            .init();
+
+        // Print a beautiful startup banner
+        print_startup_banner();
+    } else {
+        // Structured JSON logging for production
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(
+                fmt::layer()
+                    .with_target(false)
+                    .with_timer(ChronoUtc::rfc_3339())
+                    .with_ansi(false)
+                    .json()
+            )
+            .init();
+    }
 
     Ok(())
+}
+
+fn print_startup_banner() {
+    println!("{}", "╔══════════════════════════════════════════════════════════════╗".bright_cyan());
+    println!("{}", "║                        🏥 RUSTCARE ENGINE                    ║".bright_cyan());
+    println!("{}", "║                  HIPAA-Compliant Healthcare Platform         ║".bright_cyan());
+    println!("{}", "╚══════════════════════════════════════════════════════════════╝".bright_cyan());
+    println!();
+}
+
+// Custom colored formatter for development
+struct ColoredFormatter {
+    timer: ChronoUtc,
+}
+
+impl ColoredFormatter {
+    fn new() -> Self {
+        Self {
+            timer: ChronoUtc::rfc_3339(),
+        }
+    }
+}
+
+impl<S, N> tracing_subscriber::fmt::FormatEvent<S, N> for ColoredFormatter
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+    N: for<'a> tracing_subscriber::fmt::FormatFields<'a> + 'static,
+{
+    fn format_event(
+        &self,
+        ctx: &tracing_subscriber::fmt::FmtContext<'_, S, N>,
+        mut writer: tracing_subscriber::fmt::format::Writer<'_>,
+        event: &tracing::Event<'_>,
+    ) -> std::fmt::Result {
+        let metadata = event.metadata();
+        
+        // Format timestamp
+        write!(writer, "{} ", chrono::Utc::now().format("%H:%M:%S%.3f").to_string().bright_black())?;
+        
+        // Format level with colors
+        let level_str = match *metadata.level() {
+            Level::TRACE => "TRACE".bright_purple(),
+            Level::DEBUG => "DEBUG".bright_blue(),
+            Level::INFO => " INFO".bright_green(),
+            Level::WARN => " WARN".bright_yellow(),
+            Level::ERROR => "ERROR".bright_red(),
+        };
+        write!(writer, "[{}] ", level_str)?;
+
+        // Format target/module
+        if let Some(target) = metadata.target().split("::").last() {
+            write!(writer, "{:<15} ", target.bright_cyan())?;
+        }
+
+        // Format thread info
+        if let Some(thread_name) = std::thread::current().name() {
+            if thread_name != "main" {
+                write!(writer, "({}) ", thread_name.bright_magenta())?;
+            }
+        }
+
+        // Format the actual message
+        ctx.format_fields(writer.by_ref(), event)?;
+
+        // Add file and line info for debug/trace
+        if metadata.level() <= &Level::DEBUG {
+            if let (Some(file), Some(line)) = (metadata.file(), metadata.line()) {
+                let file_short = file.split('/').last().unwrap_or(file);
+                write!(writer, " {}{}:{}{}", 
+                    "(".bright_black(), 
+                    file_short.bright_black(), 
+                    line.to_string().bright_black(),
+                    ")".bright_black()
+                )?;
+            }
+        }
+
+        writeln!(writer)
+    }
+}
+
+// Custom field formatter for colored output
+struct ColoredFieldFormatter;
+
+impl ColoredFieldFormatter {
+    fn new() -> Self {
+        Self
+    }
+}
+
+impl<'a> tracing_subscriber::fmt::FormatFields<'a> for ColoredFieldFormatter {
+    fn format_fields<R: RecordFields>(
+        &self,
+        writer: tracing_subscriber::fmt::format::Writer<'_>,
+        fields: R,
+    ) -> std::fmt::Result {
+        let mut visitor = ColoredFieldVisitor {
+            writer,
+            is_first: true,
+        };
+        fields.record(&mut visitor);
+        Ok(())
+    }
+}
+
+struct ColoredFieldVisitor<'a> {
+    writer: tracing_subscriber::fmt::format::Writer<'a>,
+    is_first: bool,
+}
+
+impl<'a> tracing::field::Visit for ColoredFieldVisitor<'a> {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        if field.name() == "message" {
+            // For message field, try to extract the actual text if it's a ColoredString
+            let debug_str = format!("{:?}", value);
+            if debug_str.contains("ColoredString") {
+                // Extract the actual text from ColoredString debug output
+                if let Some(start) = debug_str.find("input: \"") {
+                    if let Some(end) = debug_str[start + 8..].find("\"") {
+                        let actual_text = &debug_str[start + 8..start + 8 + end];
+                        write!(self.writer, "{}", actual_text.white().bold()).unwrap();
+                        return;
+                    }
+                }
+            }
+            write!(self.writer, "{}", debug_str.white().bold()).unwrap();
+        } else {
+            if !self.is_first {
+                write!(self.writer, " ").unwrap();
+            }
+            write!(
+                self.writer,
+                "{}{}={}", 
+                if self.is_first { "" } else { " " },
+                field.name().bright_yellow(),
+                format!("{:?}", value).bright_white()
+            ).unwrap();
+        }
+        self.is_first = false;
+    }
+
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        if field.name() == "message" {
+            write!(self.writer, "{}", value.white().bold()).unwrap();
+        } else {
+            if !self.is_first {
+                write!(self.writer, " ").unwrap();
+            }
+            write!(
+                self.writer,
+                "{}{}={}", 
+                if self.is_first { "" } else { " " },
+                field.name().bright_yellow(),
+                value.bright_white()
+            ).unwrap();
+        }
+        self.is_first = false;
+    }
 }

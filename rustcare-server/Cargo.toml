@@ -87,7 +87,13 @@ webpki = "0.22"              # Certificate validation
 webpki-roots = "0.26"        # Mozilla root certificates
 
 # Additional web dependencies
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "ansi", "chrono"] }
+tracing-tree = "0.3"         # Beautiful hierarchical logging
+tracing-appender = "0.2"     # File logging with rotation
+console-subscriber = "0.2"   # Tokio console integration
+indicatif = "0.17"           # Progress bars and spinners
+colored = "2.0"              # Colored terminal output
+atty = "0.2"                 # Terminal detection
 clap = { version = "4.4", features = ["derive", "env"] }
 config = "0.14"
 toml = "0.8"

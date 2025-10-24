@@ -163,7 +163,7 @@ impl AuditLogger {
         let result = sqlx::query!(
             r#"
             DELETE FROM auth_audit_log
-            WHERE timestamp < NOW() - ($1 || ' days')::interval
+            WHERE timestamp < NOW() - ($1 || ' days'):: interval
             "#,
             self.retention_days.to_string()
         )

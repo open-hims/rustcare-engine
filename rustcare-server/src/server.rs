@@ -1,12 +1,20 @@
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use sqlx::{Pool, Postgres};
+use database_layer::{GeographicRepository, ComplianceRepository};
 
 /// Main RustCare server state
 #[derive(Clone, Debug)]
 pub struct RustCareServer {
     /// Server configuration
     pub config: ServerConfig,
+    /// Database connection pool
+    pub db_pool: Pool<Postgres>,
+    /// Geographic repository
+    pub geographic_repo: GeographicRepository,
+    /// Compliance repository
+    pub compliance_repo: ComplianceRepository,
     /// Authentication gateway instance (placeholder)
     pub auth_gateway: Arc<()>,
     /// Plugin runtime instance (placeholder)
@@ -49,6 +57,21 @@ impl RustCareServer {
             plugin_directory: "./plugins".to_string(),
         };
 
+        // Initialize database connection pool
+        let database_url = std::env::var("DATABASE_URL")
+            .unwrap_or_else(|_| "postgresql://rustcare:rustcare@localhost:5432/rustcare".to_string());
+        
+        let db_pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(20)
+            .connect(&database_url)
+            .await?;
+
+        // Initialize geographic repository
+        let geographic_repo = GeographicRepository::new(db_pool.clone());
+
+        // Initialize compliance repository
+        let compliance_repo = ComplianceRepository::new(db_pool.clone());
+
         // Initialize auth gateway (placeholder)
         let auth_gateway = Arc::new(());
 
@@ -66,6 +89,9 @@ impl RustCareServer {
 
         Ok(Self {
             config,
+            db_pool,
+            geographic_repo,
+            compliance_repo,
             auth_gateway,
             plugin_runtime,
             audit_engine,

@@ -259,15 +259,14 @@ impl EmailService {
     /// Internal method to send a constructed message using Stalwart mail-send
     async fn send_message(&self, message: MessageBuilder<'_>) -> EmailResult<String> {
         // Build the SMTP client
-        let mut smtp_client = SmtpClientBuilder::new(&self.config.smtp_host, self.config.smtp_port)
+        let mut smtp_client = SmtpClientBuilder::new(self.config.smtp_host.as_str(), self.config.smtp_port)
             .implicit_tls(false);
 
         // Add credentials if provided
         if !self.config.smtp_username.is_empty() {
-            smtp_client = smtp_client.credentials((
-                self.config.smtp_username.as_str(),
-                self.config.smtp_password.as_str(),
-            ));
+            let username = self.config.smtp_username.as_str();
+            let password = self.config.smtp_password.as_str();
+            smtp_client = smtp_client.credentials((username, password));
         }
 
         // Connect to SMTP server

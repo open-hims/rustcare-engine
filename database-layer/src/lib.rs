@@ -11,6 +11,8 @@ pub mod backup;
 pub mod error;
 pub mod authorization;
 pub mod tde;
+pub mod geographic_repository;
+pub mod compliance_repository;
 
 pub use connection::*;
 pub use models::*;
@@ -21,6 +23,8 @@ pub use error::*;
 pub use audit::*;
 pub use authorization::*;
 pub use tde::*;
+pub use geographic_repository::*;
+pub use compliance_repository::*;
 
 /// Enterprise database layer with Row Level Security and encryption
 /// 
