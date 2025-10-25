@@ -3,7 +3,7 @@ use axum::{
     Router,
 };
 use crate::{
-    handlers::{health, auth, workflow, sync, permissions, geographic, compliance, organizations}, // websocket temporarily disabled
+    handlers::{health, auth, workflow, sync, permissions, geographic, compliance, organizations, devices}, // websocket temporarily disabled
     server::RustCareServer,
     openapi,
 };
@@ -105,6 +105,34 @@ pub fn organization_routes() -> Router<RustCareServer> {
         .route("/organizations/:org_id/patients", post(organizations::create_organization_patient))
 }
 
+/// Create device management routes
+pub fn device_routes() -> Router<RustCareServer> {
+    Router::new()
+        // Device CRUD
+        .route("/devices", get(devices::list_devices))
+        .route("/devices", post(devices::register_device))
+        .route("/devices/:device_id", get(devices::get_device))
+        .route("/devices/:device_id", put(devices::update_device))
+        .route("/devices/:device_id", delete(devices::delete_device))
+        
+        // Connection management
+        .route("/devices/:device_id/connect", post(devices::connect_device))
+        .route("/devices/:device_id/disconnect", post(devices::disconnect_device))
+        
+        // Data operations
+        .route("/devices/:device_id/data", get(devices::get_device_data_history))
+        .route("/devices/:device_id/data/read", post(devices::read_device_data))
+        
+        // Command execution
+        .route("/devices/:device_id/commands", get(devices::get_device_commands))
+        .route("/devices/:device_id/commands", post(devices::send_device_command))
+        
+        // Configuration endpoints
+        .route("/devices/types", get(devices::list_device_types))
+        .route("/devices/connection-types", get(devices::list_connection_types))
+        .route("/devices/formats", get(devices::list_data_formats))
+}
+
 /// Create API v1 routes
 pub fn api_v1_routes() -> Router<RustCareServer> {
     Router::new()
@@ -115,6 +143,7 @@ pub fn api_v1_routes() -> Router<RustCareServer> {
         .merge(geographic_routes())
         .merge(compliance_routes())
         .merge(organization_routes())
+        .merge(device_routes())
         // TODO: Add more API routes here:
         // .nest("/plugins", plugin_routes())
         // .nest("/audit", audit_routes())

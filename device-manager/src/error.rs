@@ -26,8 +26,8 @@ pub enum DeviceError {
     #[error("Timeout error: {0}")]
     Timeout(String),
     
-    #[error("Device busy")]
-    Busy,
+        #[error("Device is busy: {0}")]
+    Busy(String),
     
     #[error("Permission denied: {0}")]
     PermissionDenied(String),

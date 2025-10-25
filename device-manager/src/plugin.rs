@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 use uuid::Uuid;
-use crate::types::*;
-use crate::error::DeviceError;
+use crate::error::{DeviceError, Result};
+use serde::{Deserialize, Serialize};
+use chrono::{DateTime, Utc};
 
 // ============================================================================
 // DEVICE PLUGIN TRAIT
@@ -13,34 +14,29 @@ pub trait DevicePlugin: Send + Sync {
     /// Plugin name
     fn name(&self) -> &str;
     
-    /// Supported device types
-    fn supported_types(&self) -> Vec<DeviceType>;
+    /// Supported device types (as string codes)
+    fn supported_types(&self) -> Vec<String>;
     
     /// Connect to the device
-    async fn connect(&mut self, config: &DeviceConfig) -> Result<(), DeviceError>;
+    async fn connect(&self, device_id: &str, config: serde_json::Value) -> Result<()>;
     
     /// Disconnect from the device
-    async fn disconnect(&mut self) -> Result<(), DeviceError>;
+    async fn disconnect(&self, device_id: &str) -> Result<()>;
     
     /// Check device status
-    fn status(&self) -> DeviceStatus;
+    async fn status(&self, device_id: &str) -> Result<String>;
     
     /// Read data from device
-    async fn read(&mut self) -> Result<DeviceData, DeviceError>;
+    async fn read(&self, device_id: &str) -> Result<serde_json::Value>;
     
     /// Write command to device
-    async fn write(&mut self, command: &DeviceCommand) -> Result<serde_json::Value, DeviceError>;
-    
-    /// Subscribe to real-time data stream
-    async fn subscribe<F>(&mut self, callback: F) -> Result<(), DeviceError>
-    where
-        F: Fn(DeviceData) -> () + Send + Sync + 'static;
+    async fn write(&self, device_id: &str, command: serde_json::Value) -> Result<serde_json::Value>;
     
     /// Validate device configuration
-    fn validate_config(&self, config: &DeviceConfig) -> Result<(), DeviceError>;
+    fn validate_config(&self, config: &serde_json::Value) -> Result<ValidationResult>;
     
     /// Test connection without actually connecting
-    async fn test_connection(&self, config: &DeviceConfig) -> Result<bool, DeviceError>;
+    async fn test_connection(&self, config: &serde_json::Value) -> Result<bool>;
 }
 
 // ============================================================================
@@ -53,23 +49,23 @@ pub trait FormatPlugin: Send + Sync {
     /// Plugin name
     fn name(&self) -> &str;
     
-    /// Supported data formats
-    fn supported_formats(&self) -> Vec<DataFormat>;
+    /// Supported data formats (as string codes)
+    fn supported_formats(&self) -> Vec<String>;
     
     /// Parse raw data into structured format
-    fn parse(&self, raw: &[u8], format: DataFormat) -> Result<serde_json::Value, DeviceError>;
+    fn parse(&self, raw: &[u8], format: &str) -> Result<serde_json::Value>;
     
     /// Generate format from structured data
-    fn generate(&self, data: &serde_json::Value, format: DataFormat) -> Result<Vec<u8>, DeviceError>;
+    fn generate(&self, data: &serde_json::Value, format: &str) -> Result<Vec<u8>>;
     
     /// Validate format compliance
-    fn validate(&self, data: &[u8], format: DataFormat) -> Result<ValidationResult, DeviceError>;
+    fn validate(&self, data: &[u8], format: &str) -> Result<ValidationResult>;
     
     /// Auto-detect format
-    fn detect_format(&self, data: &[u8]) -> Option<DataFormat>;
+    fn detect_format(&self, data: &[u8]) -> Option<String>;
     
     /// Normalize to standard format (FHIR R4)
-    fn normalize(&self, data: &serde_json::Value, from_format: DataFormat) -> Result<serde_json::Value, DeviceError>;
+    fn normalize(&self, data: &serde_json::Value, from_format: &str) -> Result<serde_json::Value>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,19 +85,19 @@ pub trait StoragePlugin: Send + Sync {
     fn name(&self) -> &str;
     
     /// Save device data
-    async fn save(&self, data: &DeviceData) -> Result<Uuid, DeviceError>;
+    async fn save(&self, data: &serde_json::Value) -> Result<Uuid>;
     
     /// Retrieve device data
-    async fn retrieve(&self, id: &Uuid) -> Result<DeviceData, DeviceError>;
+    async fn retrieve(&self, id: &Uuid) -> Result<serde_json::Value>;
     
     /// Query device data
-    async fn query(&self, device_id: &Uuid, limit: Option<i64>) -> Result<Vec<DeviceData>, DeviceError>;
+    async fn query(&self, device_id: &Uuid, limit: Option<i64>) -> Result<Vec<serde_json::Value>>;
     
     /// Delete device data
-    async fn delete(&self, id: &Uuid) -> Result<(), DeviceError>;
+    async fn delete(&self, id: &Uuid) -> Result<()>;
     
     /// Bulk save
-    async fn bulk_save(&self, data: Vec<DeviceData>) -> Result<Vec<Uuid>, DeviceError>;
+    async fn bulk_save(&self, data: Vec<serde_json::Value>) -> Result<Vec<Uuid>>;
 }
 
 // ============================================================================
@@ -117,13 +113,13 @@ pub trait TransferPlugin: Send + Sync {
     fn protocol(&self) -> TransferProtocol;
     
     /// Send data to destination
-    async fn send(&self, data: &[u8], destination: &Destination) -> Result<TransferReceipt, DeviceError>;
+    async fn send(&self, data: &[u8], destination: &Destination) -> Result<TransferReceipt>;
     
     /// Receive data from source
-    async fn receive(&self, source: &Source) -> Result<Vec<u8>, DeviceError>;
+    async fn receive(&self, source: &Source) -> Result<Vec<u8>>;
     
     /// Check transfer status
-    async fn status(&self, receipt: &TransferReceipt) -> Result<TransferStatus, DeviceError>;
+    async fn status(&self, receipt: &TransferReceipt) -> Result<TransferStatus>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -168,5 +164,3 @@ pub enum TransferStatus {
     Failed(String),
 }
 
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};

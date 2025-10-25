@@ -232,7 +232,7 @@ pub struct DeviceData {
 // DEVICE COMMAND - EXTENSIBLE
 // ============================================================================
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct DeviceCommand {
     pub id: Uuid,
     pub device_id: Uuid,

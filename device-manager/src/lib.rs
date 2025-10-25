@@ -1,14 +1,15 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+// Core modules
+pub mod types;
+pub mod plugin;
+pub mod error;
+pub mod repository;
+pub mod manager;
+pub mod registry;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+// Re-exports
+pub use types::*;
+pub use plugin::*;
+pub use error::*;
+pub use repository::*;
+pub use manager::*;
+pub use registry::*;
