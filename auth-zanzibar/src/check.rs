@@ -65,17 +65,23 @@ impl PermissionChecker {
         }
         
         // 2. Check for inherited permissions
-        if let Some(perm_def) = self.schema.get_permission(&object.object_type, &relation.name) {
-            if let Some(ref parent_relation) = perm_def.inherits_from {
-                debug!("Checking inherited permission: {}", parent_relation);
-                if self.check_recursive(
-                    subject.clone(),
-                    Relation::new(parent_relation),
-                    object.clone(),
-                    visited,
-                    depth + 1,
-                ).await? {
-                    return Ok(true);
+        // If someone has 'editor', they should also have 'viewer' (if editor inherits from viewer)
+        // We need to check if any higher-level relation grants this permission
+        if let Some(namespace) = self.schema.namespaces.get(&object.object_type) {
+            for rel_def in &namespace.relations {
+                // Check if this relation inherits from the relation we're checking
+                if rel_def.inherits_from.as_ref() == Some(&relation.name) {
+                    // Check if subject has the higher-level relation
+                    debug!("Checking if subject has higher permission: {}", rel_def.name);
+                    if self.check_recursive(
+                        subject.clone(),
+                        Relation::new(&rel_def.name),
+                        object.clone(),
+                        visited,
+                        depth + 1,
+                    ).await? {
+                        return Ok(true);
+                    }
                 }
             }
         }

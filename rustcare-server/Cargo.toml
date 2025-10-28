@@ -11,6 +11,10 @@ keywords.workspace = true
 categories.workspace = true
 description = "RustCare Engine HTTP Server - HIPAA-compliant healthcare platform API"
 
+[lib]
+name = "rustcare_server"
+path = "src/lib.rs"
+
 [[bin]]
 name = "rustcare-server"
 path = "src/main.rs"

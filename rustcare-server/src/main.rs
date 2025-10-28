@@ -19,22 +19,8 @@ use tracing_subscriber::{
 };
 use tracing_subscriber::fmt::FormatFields;
 
-mod auth;
-mod error;
-mod handlers;
-mod middleware;
-mod routes;
-mod server;
-mod openapi;
-mod security_state;
-// mod grpc; // Disabled temporarily
-
-use middleware as app_middleware;
-use security_state::SecurityState;
-
-use crate::server::RustCareServer;
+use rustcare_server::{create_app, RustCareServer, SecurityState};
 use error_common::{RustCareError, Result};
-// use logger_redacted::RedactedLogger;
 
 /// RustCare Engine HTTP Server
 #[derive(Parser, Debug)]
@@ -104,7 +90,7 @@ async fn main() -> Result<()> {
     let server = RustCareServer::new(&args.config).await?;
     
     // Create the router with all routes
-    let app = create_app(server).await?;
+    let app = create_app(server);
 
     // Start gRPC server if enabled (disabled temporarily)
     let grpc_handle: Option<tokio::task::JoinHandle<()>> = None;
@@ -141,23 +127,6 @@ async fn main() -> Result<()> {
     http_result?;
     Ok(())
 }
-
-async fn create_app(server: RustCareServer) -> Result<Router> {
-    let app = routes::create_routes()
-        // Add middleware layers
-        .layer(
-            ServiceBuilder::new()
-                .layer(TraceLayer::new_for_http())
-                .layer(app_middleware::create_cors_layer())
-                .layer(from_fn(app_middleware::request_timing_middleware))
-                .layer(from_fn(app_middleware::audit_logging_middleware))
-        )
-        .with_state(server);
-
-    Ok(app)
-}
-
-
 
 async fn init_tracing(verbose: bool) -> Result<()> {
     let level = if verbose {

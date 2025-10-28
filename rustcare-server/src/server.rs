@@ -66,6 +66,18 @@ impl RustCareServer {
             .connect(&database_url)
             .await?;
 
+        Self::new_with_pool_and_config(db_pool, config).await
+    }
+
+    /// Create a new RustCare server instance with a provided database pool
+    /// This is useful for testing
+    pub async fn new_with_pool(db_pool: Pool<Postgres>) -> Result<Self> {
+        let config = ServerConfig::default();
+        Self::new_with_pool_and_config(db_pool, config).await
+    }
+
+    /// Create a new RustCare server instance with a provided database pool and config
+    async fn new_with_pool_and_config(db_pool: Pool<Postgres>, config: ServerConfig) -> Result<Self> {
         // Initialize geographic repository
         let geographic_repo = GeographicRepository::new(db_pool.clone());
 

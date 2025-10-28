@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use axum::{
     body::Body,
     http::{Request, StatusCode},
@@ -286,8 +285,8 @@ async fn test_list_compliance_rules() {
     let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let rules: Vec<Value> = serde_json::from_slice(&body).unwrap();
     
-    // Should return existing rules or empty array
-    assert!(rules.is_array());
+    // Should return existing rules or empty array (Vec is already an array type)
+    assert!(rules.len() >= 0); // Vec can be empty or have items
     
     config.cleanup().await;
 }

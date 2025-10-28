@@ -138,10 +138,11 @@ impl SubjectExpander {
     fn flatten_tree(&self, tree: &SubjectTree) -> Vec<Subject> {
         let mut subjects = Vec::new();
         
-        // Don't include root/cycle/max_depth markers
+        // Only include actual user/userset subjects, not the root object or markers
         if tree.subject.namespace != "root" 
             && tree.subject.namespace != "cycle" 
-            && tree.subject.namespace != "max_depth" {
+            && tree.subject.namespace != "max_depth" 
+            && tree.subject.object_type == "user" { // Only include user subjects
             subjects.push(tree.subject.clone());
         }
         

@@ -1,0 +1,331 @@
+name: Rust Tests & Coverage with GitHub Pages
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  CARGO_TERM_COLOR: always
+  SQLX_OFFLINE: true
+
+jobs:
+  test-and-coverage:
+    name: Rust Backend Tests & Coverage
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+      
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-git-
+      
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-build-
+      
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      
+      - name: Run tests with coverage
+        run: |
+          cargo llvm-cov \
+            --workspace \
+            --all-features \
+            --html \
+            --lcov \
+            --output-dir target/llvm-cov \
+            --ignore-filename-regex "migrations|target|tests" \
+            -- --test-threads=1
+        env:
+          SQLX_OFFLINE: true
+      
+      - name: Generate coverage summary
+        run: |
+          cargo llvm-cov report --summary-only > target/llvm-cov/summary.txt
+          cat target/llvm-cov/summary.txt
+      
+      - name: Generate coverage report index
+        if: always()
+        run: |
+          mkdir -p gh-pages
+          cp -r target/llvm-cov/html gh-pages/coverage
+          
+          # Extract coverage percentage
+          COVERAGE=$(cargo llvm-cov report --summary-only | grep 'TOTAL' | awk '{print $10}')
+          
+          cat > gh-pages/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>RustCare Engine - Coverage Report</title>
+              <style>
+                  * {
+                      margin: 0;
+                      padding: 0;
+                      box-sizing: border-box;
+                  }
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      min-height: 100vh;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      padding: 2rem;
+                  }
+                  .container {
+                      background: white;
+                      border-radius: 16px;
+                      padding: 3rem;
+                      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                      max-width: 800px;
+                      width: 100%;
+                  }
+                  h1 {
+                      color: #2d3748;
+                      font-size: 2.5rem;
+                      margin-bottom: 0.5rem;
+                      text-align: center;
+                  }
+                  .subtitle {
+                      color: #718096;
+                      text-align: center;
+                      margin-bottom: 2rem;
+                      font-size: 1.1rem;
+                  }
+                  .coverage-badge {
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      gap: 1rem;
+                      margin: 2rem 0;
+                      padding: 2rem;
+                      background: linear-gradient(135deg, #f6f8fb 0%, #e9ecef 100%);
+                      border-radius: 12px;
+                  }
+                  .badge {
+                      background: #48bb78;
+                      color: white;
+                      padding: 0.75rem 1.5rem;
+                      border-radius: 8px;
+                      font-weight: bold;
+                      font-size: 1.5rem;
+                  }
+                  .report-card {
+                      background: #f7fafc;
+                      border: 2px solid #e2e8f0;
+                      border-radius: 12px;
+                      padding: 2rem;
+                      margin: 1.5rem 0;
+                      transition: all 0.3s ease;
+                  }
+                  .report-card:hover {
+                      transform: translateY(-4px);
+                      box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+                      border-color: #667eea;
+                  }
+                  .report-card h2 {
+                      color: #667eea;
+                      font-size: 1.5rem;
+                      margin-bottom: 0.75rem;
+                  }
+                  .report-card p {
+                      color: #4a5568;
+                      line-height: 1.6;
+                      margin-bottom: 1.5rem;
+                  }
+                  .btn {
+                      display: inline-block;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      color: white;
+                      padding: 1rem 2rem;
+                      border-radius: 8px;
+                      text-decoration: none;
+                      font-weight: 600;
+                      transition: all 0.3s ease;
+                      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+                  }
+                  .btn:hover {
+                      transform: translateY(-2px);
+                      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+                  }
+                  .metadata {
+                      margin-top: 2rem;
+                      padding: 1.5rem;
+                      background: #edf2f7;
+                      border-left: 4px solid #667eea;
+                      border-radius: 4px;
+                      font-size: 0.9rem;
+                      color: #4a5568;
+                  }
+                  .metadata strong {
+                      color: #2d3748;
+                  }
+                  .tech-stack {
+                      display: flex;
+                      flex-wrap: wrap;
+                      gap: 0.5rem;
+                      margin-top: 1rem;
+                  }
+                  .tech-badge {
+                      background: #667eea;
+                      color: white;
+                      padding: 0.4rem 0.8rem;
+                      border-radius: 6px;
+                      font-size: 0.85rem;
+                      font-weight: 500;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <h1>🦀 RustCare Engine</h1>
+                  <p class="subtitle">HIPAA-Compliant Healthcare Platform - Test Coverage Report</p>
+                  
+                  <div class="coverage-badge">
+                      <span style="font-size: 1.2rem; color: #4a5568;">Total Coverage:</span>
+                      <span class="badge">EOF
+          echo -n "$COVERAGE" >> gh-pages/index.html
+          cat >> gh-pages/index.html << 'EOF'
+          </span>
+                  </div>
+                  
+                  <div class="report-card">
+                      <h2>📊 Detailed Coverage Report</h2>
+                      <p>
+                          Explore line-by-line coverage metrics for the entire RustCare Engine workspace.
+                          Includes coverage for all modules: auth-gateway, database-layer, crypto, workflow-engine, and more.
+                      </p>
+                      <a href="coverage/index.html" class="btn">View Full Coverage Report →</a>
+                  </div>
+                  
+                  <div class="tech-stack">
+                      <span class="tech-badge">🦀 Rust</span>
+                      <span class="tech-badge">🧪 cargo-llvm-cov</span>
+                      <span class="tech-badge">🔒 HIPAA Compliant</span>
+                      <span class="tech-badge">⚡ Axum Framework</span>
+                      <span class="tech-badge">🗄️ PostgreSQL</span>
+                      <span class="tech-badge">🔐 JWT Auth</span>
+                  </div>
+                  
+                  <div class="metadata">
+                      <strong>Branch:</strong> ${{ github.ref_name }}<br>
+                      <strong>Commit:</strong> ${{ github.sha }}<br>
+                      <strong>Workflow:</strong> ${{ github.workflow }}<br>
+                      <strong>Generated:</strong> $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+                  </div>
+              </div>
+          </body>
+          </html>
+          EOF
+      
+      - name: Upload coverage to artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: target/llvm-cov/
+          retention-days: 30
+      
+      - name: Upload LCOV to artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lcov-report
+          path: target/llvm-cov/lcov.info
+          retention-days: 30
+      
+      - name: Setup Pages
+        if: always() && github.ref == 'refs/heads/main'
+        uses: actions/configure-pages@v4
+      
+      - name: Upload to GitHub Pages
+        if: always() && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: gh-pages
+      
+      - name: Deploy to GitHub Pages
+        if: always() && github.ref == 'refs/heads/main'
+        id: deployment
+        uses: actions/deploy-pages@v4
+      
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('target/llvm-cov/summary.txt', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 📊 Coverage Report\n\n\`\`\`\n${summary}\n\`\`\``
+            });
+
+  lint:
+    name: Clippy Lints
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+        env:
+          SQLX_OFFLINE: true
+
+  format:
+    name: Rustfmt Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      
+      - name: Check formatting
+        run: cargo fmt --all -- --check
