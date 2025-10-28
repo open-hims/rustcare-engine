@@ -43,6 +43,9 @@ impl TupleRepository for PostgresTupleRepository {
     async fn write_tuple(&self, tuple: Tuple) -> Result<(), ZanzibarError> {
         debug!("Writing tuple to PostgreSQL: {}", tuple);
 
+        // Use a default organization ID if none is set (for tests and single-tenant setups)
+        let org_id = Some(Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap());
+
         sqlx::query(
             r#"
             INSERT INTO zanzibar_tuples (
@@ -61,7 +64,7 @@ impl TupleRepository for PostgresTupleRepository {
             ) DO NOTHING
             "#,
         )
-        .bind(None::<Uuid>) // organization_id - set via RLS context
+        .bind(org_id) // organization_id - use default for tests/single-tenant
         .bind(&tuple.subject.namespace)
         .bind(&tuple.subject.object_type)
         .bind(&tuple.subject.object_id)
@@ -115,6 +118,9 @@ impl TupleRepository for PostgresTupleRepository {
     async fn batch_write(&self, request: WriteRequest) -> Result<(), ZanzibarError> {
         debug!("Batch write: {} writes, {} deletes", request.writes.len(), request.deletes.len());
 
+        // Use a default organization ID if none is set (for tests and single-tenant setups)
+        let org_id = Some(Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap());
+
         // Start transaction for atomicity
         let mut tx = self.pool
             .begin()
@@ -132,10 +138,15 @@ impl TupleRepository for PostgresTupleRepository {
                     object_namespace, object_type, object_id,
                     created_at
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                ON CONFLICT DO NOTHING
+                ON CONFLICT (
+                    organization_id, 
+                    subject_namespace, subject_type, subject_id, subject_relation,
+                    relation_name,
+                    object_namespace, object_type, object_id
+                ) DO NOTHING
                 "#,
             )
-            .bind(None::<Uuid>)
+            .bind(org_id)
             .bind(&tuple.subject.namespace)
             .bind(&tuple.subject.object_type)
             .bind(&tuple.subject.object_id)

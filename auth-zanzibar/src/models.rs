@@ -18,7 +18,7 @@ impl Subject {
             namespace: "user".to_string(),
             object_type: "user".to_string(),
             object_id: user_id.to_string(),
-            relation: None,
+            relation: Some("".to_string()), // Use empty string instead of None for unique constraint
         }
     }
 
@@ -27,7 +27,7 @@ impl Subject {
             namespace: "group".to_string(),
             object_type: "group".to_string(),
             object_id: group_id.to_string(),
-            relation: None,
+            relation: Some("".to_string()), // Use empty string instead of None for unique constraint
         }
     }
 
@@ -36,7 +36,7 @@ impl Subject {
             namespace: "service".to_string(),
             object_type: "service".to_string(),
             object_id: service_id.to_string(),
-            relation: None,
+            relation: Some("".to_string()), // Use empty string instead of None for unique constraint
         }
     }
 
