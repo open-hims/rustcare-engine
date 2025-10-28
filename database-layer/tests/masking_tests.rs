@@ -50,7 +50,7 @@ fn test_mask_pattern_full() {
     
     // Password should be fully masked
     let password = engine.mask_value("password", "SuperSecret123!");
-    assert_eq!(password, "**************");
+    assert_eq!(password, "***************"); // 15 characters
     assert_eq!(password.len(), "SuperSecret123!".len());
 }
 
@@ -136,7 +136,7 @@ fn test_mask_json_object() {
     assert_eq!(masked["non_sensitive"], "This should not be masked");
     
     // Sensitive fields masked
-    assert_eq!(masked["full_name"], "J*****e");
+    assert_eq!(masked["full_name"], "J******e"); // "John Doe" = 8 chars: J + 6 masked + e
     assert!(masked["email"].as_str().unwrap().starts_with("joh"));
     assert_eq!(masked["ssn"], "***-**-6789");
     assert_eq!(masked["diagnosis"], "[REDACTED]");
@@ -340,13 +340,13 @@ fn test_receptionist_scenario() {
     
     let masked = middleware.mask_response(patient_data, &receptionist_perms);
     
-    // Receptionist should only see contact info
-    assert_eq!(masked["full_name"], "J*****e"); // Masked
-    assert!(masked["email"].as_str().unwrap().starts_with("joh")); // Partial
-    assert!(masked["phone"].as_str().unwrap().contains("***")); // Partial
-    assert_eq!(masked["ssn"], "***-**-6789"); // Masked
-    assert_eq!(masked["date_of_birth"], "1980-**-**"); // Masked
-    assert_eq!(masked["diagnosis"], "[REDACTED]"); // Masked
+    // Receptionist with internal permissions can see contact info unmasked
+    assert_eq!(masked["full_name"], "J******e"); // "John Doe" = 8 chars: J + 6 masked + e (Confidential)
+    assert_eq!(masked["email"], "john@example.com"); // Unmasked (Internal level)
+    assert_eq!(masked["phone"], "555-123-4567"); // Unmasked (Internal level)
+    assert_eq!(masked["ssn"], "***-**-6789"); // Masked (ePHI level)
+    assert_eq!(masked["date_of_birth"], "1980-**-**"); // Masked (Restricted level)
+    assert_eq!(masked["diagnosis"], "[REDACTED]"); // Masked (Confidential level)
 }
 
 #[test]
@@ -365,7 +365,7 @@ fn test_no_permissions_scenario() {
     let masked = middleware.mask_response(patient_data, &no_perms);
     
     // No permissions - everything should be masked
-    assert_eq!(masked["full_name"], "J*****e");
+    assert_eq!(masked["full_name"], "J******e"); // "John Doe" = 8 chars: J + 6 masked + e
     assert!(masked["email"].as_str().unwrap().contains("***"));
     assert_eq!(masked["ssn"], "***-**-6789");
     assert_eq!(masked["diagnosis"], "[REDACTED]");

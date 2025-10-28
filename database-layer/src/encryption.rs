@@ -190,7 +190,7 @@ impl SensitiveField {
                 .with_audit(false),
             
             Self::new("state", SensitivityLevel::Internal)
-                .with_pattern(MaskPattern::Partial { show_first: 2, show_last: 0 })
+                .with_pattern(MaskPattern::Partial { show_first: 1, show_last: 0 }) // MA -> M*
                 .with_encryption(false)
                 .with_audit(false),
             
@@ -344,19 +344,43 @@ impl MaskingEngine {
         match pattern {
             MaskPattern::Partial { show_first, show_last } => {
                 let len = value.chars().count();
+                
+                // Edge case: single character - can't meaningfully mask
+                if len == 1 {
+                    return value.to_string();
+                }
+                
+                // If the pattern would show all characters anyway, just return the value
                 if len <= show_first + show_last {
-                    return "*".repeat(len);
+                    return value.to_string();
                 }
                 
                 let chars: Vec<char> = value.chars().collect();
                 let first: String = chars.iter().take(*show_first).collect();
                 let last: String = chars.iter().skip(len - show_last).collect();
-                let masked_middle = "*".repeat(len - show_first - show_last);
                 
-                format!("{}{}{}", first, masked_middle, last)
+                // For special formatted strings like SSN (with dashes/dots but not spaces), preserve formatting
+                if (value.contains('-') || value.contains('.')) && !value.contains(' ') {
+                    // Mask character by character, preserving non-alphanumeric like - and .
+                    let mut result = String::new();
+                    for (i, ch) in chars.iter().enumerate() {
+                        if i < *show_first || i >= len - show_last {
+                            result.push(*ch);
+                        } else if ch.is_alphanumeric() {
+                            result.push('*');
+                        } else {
+                            result.push(*ch); // Preserve - . etc
+                        }
+                    }
+                    result
+                } else {
+                    // For names, emails, etc - mask everything in the middle including spaces
+                    let masked_middle = "*".repeat(len - show_first - show_last);
+                    format!("{}{}{}", first, masked_middle, last)
+                }
             }
             
-            MaskPattern::Full => "*".repeat(value.len().min(10)),
+            MaskPattern::Full => "*".repeat(value.chars().count()),
             
             MaskPattern::Redacted => "[REDACTED]".to_string(),
             
@@ -374,7 +398,9 @@ impl MaskingEngine {
                 let mut hasher = Sha256::new();
                 hasher.update(value.as_bytes());
                 let hash = hasher.finalize();
-                format!("TOK_{}", hex::encode(&hash[0..8]))
+                // Format first 4 bytes as hex = 8 hex chars, total TOK_ + 8 = 12 chars
+                let hex_str = format!("{:02x}{:02x}{:02x}{:02x}", hash[0], hash[1], hash[2], hash[3]);
+                format!("TOK_{}", hex_str)
             }
             
             MaskPattern::Custom(_regex) => {
@@ -384,20 +410,33 @@ impl MaskingEngine {
         }
     }
     
-    /// Mask a JSON object (for API responses)
-    pub fn mask_json(&self, mut json: serde_json::Value) -> serde_json::Value {
-        if let Some(obj) = json.as_object_mut() {
-            for (key, value) in obj.iter_mut() {
-                if let Some(_config) = self.field_configs.get(key.as_str()) {
-                    if let Some(str_value) = value.as_str() {
-                        *value = serde_json::Value::String(
-                            self.mask_value(key, str_value)
-                        );
+    /// Mask a JSON object (for API responses) - recursively handles nested objects and arrays
+    pub fn mask_json(&self, json: serde_json::Value) -> serde_json::Value {
+        match json {
+            serde_json::Value::Object(mut obj) => {
+                for (key, value) in obj.iter_mut() {
+                    // Check if this field should be masked
+                    if let Some(_config) = self.field_configs.get(key.as_str()) {
+                        if let Some(str_value) = value.as_str() {
+                            *value = serde_json::Value::String(
+                                self.mask_value(key, str_value)
+                            );
+                            continue; // Don't recurse if we already masked the string
+                        }
                     }
+                    // Recursively mask nested objects and arrays (whether or not the key matched)
+                    *value = self.mask_json(value.clone());
                 }
+                serde_json::Value::Object(obj)
             }
+            serde_json::Value::Array(arr) => {
+                // Recursively mask array elements
+                serde_json::Value::Array(
+                    arr.into_iter().map(|v| self.mask_json(v)).collect()
+                )
+            }
+            _ => json, // Return primitive values as-is
         }
-        json
     }
     
     /// Check if user has permission to see unmasked value
@@ -458,28 +497,46 @@ impl MaskingMiddleware {
         }
     }
     
-    /// Mask response data based on user permissions
+    /// Mask response data based on user permissions (recursively handles nested structures)
     pub fn mask_response(
         &self,
         data: serde_json::Value,
         user_permissions: &[String],
     ) -> serde_json::Value {
-        let mut masked = data.clone();
-        
-        if let Some(obj) = masked.as_object_mut() {
-            for (key, value) in obj.iter_mut() {
-                if !self.engine.can_view_unmasked(key, user_permissions) {
-                    // Mask the value
-                    if let Some(str_value) = value.as_str() {
-                        *value = serde_json::Value::String(
-                            self.engine.mask_value(key, str_value)
-                        );
+        self.mask_response_recursive(data, user_permissions)
+    }
+    
+    fn mask_response_recursive(
+        &self,
+        data: serde_json::Value,
+        user_permissions: &[String],
+    ) -> serde_json::Value {
+        match data {
+            serde_json::Value::Object(mut obj) => {
+                for (key, value) in obj.iter_mut() {
+                    if !self.engine.can_view_unmasked(key, user_permissions) {
+                        // Mask the value if user doesn't have permission
+                        if let Some(str_value) = value.as_str() {
+                            *value = serde_json::Value::String(
+                                self.engine.mask_value(key, str_value)
+                            );
+                            continue; // Don't recurse if we masked the string
+                        }
                     }
+                    // Recursively mask nested structures
+                    *value = self.mask_response_recursive(value.clone(), user_permissions);
                 }
+                serde_json::Value::Object(obj)
             }
+            serde_json::Value::Array(arr) => {
+                serde_json::Value::Array(
+                    arr.into_iter()
+                        .map(|v| self.mask_response_recursive(v, user_permissions))
+                        .collect()
+                )
+            }
+            _ => data, // Return primitives as-is
         }
-        
-        masked
     }
 }
 
