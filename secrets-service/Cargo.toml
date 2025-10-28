@@ -1,0 +1,49 @@
+[package]
+name = "secrets-service"
+version = "0.1.0"
+edition = "2021"
+description = "Multi-provider secrets management service for RustCare"
+
+[dependencies]
+# Core
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.35", features = ["full"] }
+async-trait = "0.1"
+thiserror = "1.0"
+anyhow = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+
+# Secrets Providers
+vaultrs = "0.7"  # HashiCorp Vault
+aws-sdk-secretsmanager = "1.0"
+aws-config = "1.0"
+azure_security_keyvault = "0.18"
+azure_identity = "0.18"
+google-secretmanager1 = "5.0"
+kube = { version = "0.87", features = ["runtime", "derive"] }
+k8s-openapi = { version = "0.20", features = ["v1_28"] }
+
+# HTTP/REST
+reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
+hyper = { version = "1.0", features = ["full"] }
+
+# Encryption
+aes-gcm = "0.10"
+sha2 = "0.10"
+base64 = "0.21"
+
+# Caching
+moka = { version = "0.12", features = ["future"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Configuration
+config = "0.14"
+toml = "0.8"
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockito = "1.2"
