@@ -1,17 +1,38 @@
 # Cargo configuration for coverage and testing
+# ---------------------------------------------
+# Applies globally to all cargo commands inside this workspace
 
+[env]
+# ✅ Ensure all coverage data is written into the correct target directory
+LLVM_PROFILE_FILE = "target/llvm-cov-target/cargo-test-%p-%m.profraw"
+
+# ✅ Disable incremental builds for consistent coverage data
+CARGO_INCREMENTAL = "0"
+
+# ✅ Force debug info to be included (needed for coverage)
+RUSTFLAGS = "-C instrument-coverage -C link-dead-code"
+
+# (Optional) If you want to include dependencies in coverage:
+# CARGO_LLVM_COV_FLAGS = "--include-deps"
+
+# -----------------------------------------------------------------------------
+# Platform-specific flags
 [target.x86_64-apple-darwin]
-rustflags = ["-C", "instrument-coverage"]
+rustflags = ["-C", "instrument-coverage", "-C", "link-dead-code"]
 
 [target.aarch64-apple-darwin]
-rustflags = ["-C", "instrument-coverage"]
+rustflags = ["-C", "instrument-coverage", "-C", "link-dead-code"]
 
 [target.x86_64-unknown-linux-gnu]
-rustflags = ["-C", "instrument-coverage"]
+rustflags = ["-C", "instrument-coverage", "-C", "link-dead-code"]
 
+# -----------------------------------------------------------------------------
 [build]
-# Enable parallel compilation
+# Enable parallel compilation for faster builds
 jobs = 4
 
+# -----------------------------------------------------------------------------
 [test]
-# Test configuration
+# Example: you can add default test args if needed
+# (e.g., run single-threaded or skip integration tests)
+# args = ["--test-threads=1"]
