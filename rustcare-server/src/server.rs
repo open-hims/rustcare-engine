@@ -3,9 +3,11 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use sqlx::{Pool, Postgres};
 use database_layer::{GeographicRepository, ComplianceRepository};
+use secrets_service::SecretsManager;
+use crypto::kms::KeyManagementService;
 
 /// Main RustCare server state
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RustCareServer {
     /// Server configuration
     pub config: ServerConfig,
@@ -15,6 +17,10 @@ pub struct RustCareServer {
     pub geographic_repo: GeographicRepository,
     /// Compliance repository
     pub compliance_repo: ComplianceRepository,
+    /// Secrets manager
+    pub secrets_manager: Option<Arc<SecretsManager>>,
+    /// KMS provider for encryption operations
+    pub kms_provider: Option<Arc<dyn KeyManagementService>>,
     /// Authentication gateway instance (placeholder)
     pub auth_gateway: Arc<()>,
     /// Plugin runtime instance (placeholder)
@@ -99,11 +105,19 @@ impl RustCareServer {
         // Initialize email service (placeholder)
         let email_service = Arc::new(());
 
+        // Initialize secrets manager (optional - requires provider configuration)
+        let secrets_manager = Self::initialize_secrets_manager().await.ok();
+
+        // Initialize KMS provider (optional - requires provider configuration)
+        let kms_provider = Self::initialize_kms_provider().await.ok();
+
         Ok(Self {
             config,
             db_pool,
             geographic_repo,
             compliance_repo,
+            secrets_manager,
+            kms_provider,
             auth_gateway,
             plugin_runtime,
             audit_engine,
@@ -130,6 +144,187 @@ impl RustCareServer {
     /// Get mutable plugin runtime instance (placeholder)
     pub async fn get_plugin_runtime_mut(&self) -> tokio::sync::RwLockWriteGuard<'_, ()> {
         self.plugin_runtime.write().await
+    }
+
+    /// Initialize secrets manager from environment configuration
+    async fn initialize_secrets_manager() -> Result<Arc<SecretsManager>> {
+        use secrets_service::{
+            config::{ProviderConfig, CacheConfig, AuditConfig, VaultConfig},
+        };
+
+        // Check if secrets service is enabled
+        let enabled = std::env::var("SECRETS_SERVICE_ENABLED")
+            .unwrap_or_else(|_| "false".to_string())
+            .parse::<bool>()
+            .unwrap_or(false);
+
+        if !enabled {
+            tracing::info!("Secrets service is disabled. Set SECRETS_SERVICE_ENABLED=true to enable.");
+            return Err(anyhow::anyhow!("Secrets service is disabled"));
+        }
+
+        // Configure providers from environment
+        let mut providers = Vec::new();
+
+        // HashiCorp Vault configuration
+        if let Ok(vault_addr) = std::env::var("VAULT_ADDR") {
+            let vault_config = VaultConfig {
+                address: vault_addr,
+                token: std::env::var("VAULT_TOKEN").ok(),
+                app_role: None, // TODO: Add AppRole support
+                kubernetes_auth: None, // TODO: Add K8s auth support
+                mount_path: std::env::var("VAULT_MOUNT_PATH").unwrap_or_else(|_| "secret".to_string()),
+                namespace: std::env::var("VAULT_NAMESPACE").ok(),
+                tls_ca_cert: std::env::var("VAULT_CA_CERT").ok(),
+                tls_client_cert: std::env::var("VAULT_CLIENT_CERT").ok(),
+                tls_client_key: std::env::var("VAULT_CLIENT_KEY").ok(),
+                timeout_seconds: std::env::var("VAULT_TIMEOUT")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(30),
+            };
+            providers.push(ProviderConfig::Vault(vault_config));
+        }
+
+        // AWS Secrets Manager configuration
+        // TODO: Add AWS configuration from environment
+
+        if providers.is_empty() {
+            tracing::warn!("No secrets providers configured. Set VAULT_ADDR or AWS credentials.");
+            return Err(anyhow::anyhow!("No secrets providers configured"));
+        }
+
+        // Cache configuration
+        let cache_config = CacheConfig {
+            enabled: std::env::var("SECRETS_CACHE_ENABLED")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(true),
+            ttl_seconds: std::env::var("SECRETS_CACHE_TTL")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(300),
+            max_entries: std::env::var("SECRETS_CACHE_MAX_ENTRIES")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(1000),
+        };
+
+        // Audit configuration
+        let audit_config = AuditConfig {
+            enabled: std::env::var("SECRETS_AUDIT_ENABLED")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(true),
+            log_all_access: std::env::var("SECRETS_AUDIT_LOG_ALL")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(true),
+            log_rotation_events: std::env::var("SECRETS_AUDIT_LOG_ROTATION")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(true),
+        };
+
+        // Create secrets manager
+        let manager = SecretsManager::new(
+            providers,
+            Some(cache_config),
+            audit_config,
+        ).await?;
+
+        tracing::info!("Secrets manager initialized successfully");
+        Ok(Arc::new(manager))
+    }
+
+    /// Get secrets manager if available
+    pub fn secrets_manager(&self) -> Option<&Arc<SecretsManager>> {
+        self.secrets_manager.as_ref()
+    }
+
+    /// Initialize KMS provider from environment configuration
+    async fn initialize_kms_provider() -> Result<Arc<dyn KeyManagementService>> {
+        // Check if KMS is enabled
+        let enabled = std::env::var("KMS_ENABLED")
+            .unwrap_or_else(|_| "false".to_string())
+            .parse::<bool>()
+            .unwrap_or(false);
+
+        if !enabled {
+            tracing::info!("KMS provider is disabled. Set KMS_ENABLED=true to enable.");
+            return Err(anyhow::anyhow!("KMS provider is disabled"));
+        }
+
+        let provider_type = std::env::var("KMS_PROVIDER")
+            .unwrap_or_else(|_| "vault".to_string())
+            .to_lowercase();
+
+        match provider_type.as_str() {
+            "vault" => {
+                #[cfg(feature = "vault-kms")]
+                {
+                    use crypto::kms::VaultKmsProvider;
+                    
+                    let vault_addr = std::env::var("KMS_VAULT_ADDR")
+                        .or_else(|_| std::env::var("VAULT_ADDR"))
+                        .map_err(|_| anyhow::anyhow!("KMS_VAULT_ADDR or VAULT_ADDR must be set"))?;
+                    
+                    let vault_token = std::env::var("KMS_VAULT_TOKEN")
+                        .or_else(|_| std::env::var("VAULT_TOKEN"))
+                        .map_err(|_| anyhow::anyhow!("KMS_VAULT_TOKEN or VAULT_TOKEN must be set"))?;
+                    
+                    let mount_path = std::env::var("KMS_VAULT_MOUNT_PATH")
+                        .ok()
+                        .or_else(|| std::env::var("VAULT_TRANSIT_MOUNT").ok());
+                    
+                    let provider = VaultKmsProvider::new(vault_addr, vault_token, mount_path);
+                    
+                    tracing::info!("Vault KMS provider initialized successfully");
+                    Ok(Arc::new(provider) as Arc<dyn KeyManagementService>)
+                }
+                #[cfg(not(feature = "vault-kms"))]
+                {
+                    Err(anyhow::anyhow!("Vault KMS support not compiled in. Enable 'vault-kms' feature."))
+                }
+            }
+            "aws" => {
+                #[cfg(feature = "aws-kms")]
+                {
+                    use crypto::kms::AwsKmsProvider;
+                    
+                    let region = std::env::var("KMS_AWS_REGION")
+                        .or_else(|_| std::env::var("AWS_REGION"))
+                        .unwrap_or_else(|_| "us-east-1".to_string());
+                    
+                    let provider = AwsKmsProvider::from_config(&region).await
+                        .map_err(|e| anyhow::anyhow!("Failed to initialize AWS KMS: {}", e))?;
+                    
+                    tracing::info!("AWS KMS provider initialized for region: {}", region);
+                    Ok(Arc::new(provider) as Arc<dyn KeyManagementService>)
+                }
+                #[cfg(not(feature = "aws-kms"))]
+                {
+                    Err(anyhow::anyhow!("AWS KMS support not compiled in. Enable 'aws-kms' feature."))
+                }
+            }
+            _ => {
+                Err(anyhow::anyhow!("Unknown KMS provider: {}. Supported: vault, aws", provider_type))
+            }
+        }
+    }
+
+    /// Get KMS provider if available
+    pub fn kms_provider(&self) -> Option<&Arc<dyn KeyManagementService>> {
+        self.kms_provider.as_ref()
+    }
+}
+
+impl std::fmt::Debug for RustCareServer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RustCareServer")
+            .field("config", &self.config)
+            .field("secrets_manager_enabled", &self.secrets_manager.is_some())
+            .finish()
     }
 }
 

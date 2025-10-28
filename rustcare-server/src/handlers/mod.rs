@@ -7,6 +7,8 @@ pub mod geographic;
 pub mod compliance;
 pub mod organizations;
 pub mod devices;
+pub mod secrets;
+pub mod kms;
 // pub mod websocket; // Temporarily disabled
 
 // Re-export all handler modules for easy access

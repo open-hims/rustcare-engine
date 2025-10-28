@@ -3,7 +3,7 @@ use axum::{
     Router,
 };
 use crate::{
-    handlers::{health, auth, workflow, sync, permissions, geographic, compliance, organizations, devices}, // websocket temporarily disabled
+    handlers::{health, auth, workflow, sync, permissions, geographic, compliance, organizations, devices, secrets, kms}, // websocket temporarily disabled
     server::RustCareServer,
     openapi,
 };
@@ -133,6 +133,63 @@ pub fn device_routes() -> Router<RustCareServer> {
         .route("/devices/formats", get(devices::list_data_formats))
 }
 
+/// Create secrets management routes
+pub fn secrets_routes() -> Router<RustCareServer> {
+    Router::new()
+        // Health check
+        .route("/secrets/health", get(secrets::secrets_health_check))
+        // Secret CRUD
+        .route("/secrets", get(secrets::list_secrets))
+        .route("/secrets", post(secrets::create_secret))
+        .route("/secrets/:key", get(secrets::get_secret))
+        .route("/secrets/:key", put(secrets::update_secret))
+        .route("/secrets/:key", delete(secrets::delete_secret))
+        // Version management
+        .route("/secrets/:key/versions", get(secrets::list_secret_versions))
+        .route("/secrets/:key/versions/:version", get(secrets::get_secret_version))
+        // Rotation
+        .route("/secrets/:key/rotate", post(secrets::rotate_secret))
+}
+
+/// Create KMS (Key Management Service) routes
+/// 
+/// Provides cryptographic operations following enterprise KMS patterns:
+/// - Envelope encryption (generate/decrypt data keys)
+/// - Direct encryption/decryption (small data)
+/// - Key rotation and re-encryption
+/// - Key lifecycle management
+pub fn kms_routes() -> Router<RustCareServer> {
+    Router::new()
+        // Testing endpoint (all operations on backend)
+        .route("/kms/test", post(kms::test_kms_integration))
+        
+        // Data key operations (envelope encryption pattern)
+        .route("/kms/datakey/generate", post(kms::generate_data_key))
+        .route("/kms/datakey/decrypt", post(kms::decrypt_data_key))
+        
+        // Direct encryption operations (small data < 4KB)
+        .route("/kms/encrypt", post(kms::encrypt))
+        .route("/kms/decrypt", post(kms::decrypt))
+        .route("/kms/re-encrypt", post(kms::re_encrypt))
+        
+        // Key management
+        .route("/kms/keys", get(kms::list_keys))
+        .route("/kms/keys", post(kms::create_key))
+        .route("/kms/keys/:key_id", get(kms::describe_key))
+        .route("/kms/keys/:key_id/enable", post(kms::enable_key))
+        .route("/kms/keys/:key_id/disable", post(kms::disable_key))
+        
+        // Key rotation
+        .route("/kms/keys/:key_id/rotation/enable", post(kms::enable_key_rotation))
+        .route("/kms/keys/:key_id/rotation/disable", post(kms::disable_key_rotation))
+        .route("/kms/keys/:key_id/rotation/status", get(kms::get_key_rotation_status))
+        .route("/kms/keys/:key_id/rotate", post(kms::rotate_key))
+        
+        // Key lifecycle
+        .route("/kms/keys/:key_id/schedule-deletion", post(kms::schedule_key_deletion))
+        .route("/kms/keys/:key_id/cancel-deletion", post(kms::cancel_key_deletion))
+}
+
 /// Create API v1 routes
 pub fn api_v1_routes() -> Router<RustCareServer> {
     Router::new()
@@ -144,6 +201,8 @@ pub fn api_v1_routes() -> Router<RustCareServer> {
         .merge(compliance_routes())
         .merge(organization_routes())
         .merge(device_routes())
+        .merge(secrets_routes())
+        .merge(kms_routes())
         // TODO: Add more API routes here:
         // .nest("/plugins", plugin_routes())
         // .nest("/audit", audit_routes())

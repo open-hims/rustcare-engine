@@ -57,6 +57,7 @@ plugins-registry-api = { path = "../plugins-registry-api" }
 logger-redacted = { path = "../logger-redacted" }
 email-service = { path = "../email-service" }
 database-layer = { path = "../database-layer" }
+secrets-service = { path = "../secrets-service" }
 
 # Database
 sqlx = { workspace = true }
