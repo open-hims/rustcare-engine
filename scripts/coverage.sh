@@ -5,6 +5,19 @@ set -e
 
 echo "🧪 Generating code coverage for RustCare Engine..."
 
+# Get DATABASE_URL from Docker container logs
+echo "🔍 Getting database credentials..."
+RUSTCARE_PASSWORD=$(docker logs rustcare-postgres 2>&1 | grep "RUSTCARE_PASSWORD=" | tail -1 | cut -d= -f2)
+
+if [ -z "$RUSTCARE_PASSWORD" ]; then
+    echo "⚠️  Warning: Could not extract password from Docker logs, using fallback"
+    RUSTCARE_PASSWORD="We4rpJVJ0PUUWBj21q1FDIWgXT7mCz"
+fi
+
+# Export DATABASE_URL for tests
+export DATABASE_URL="postgresql://rustcare:${RUSTCARE_PASSWORD}@localhost:5433/rustcare_dev"
+echo "✓ Database configured: postgresql://rustcare:***@localhost:5433/rustcare_dev"
+
 # Install cargo-llvm-cov if not already installed
 if ! command -v cargo-llvm-cov &> /dev/null; then
     echo "📦 Installing cargo-llvm-cov..."

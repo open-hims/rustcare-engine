@@ -41,7 +41,7 @@ fn test_mask_pattern_partial() {
     
     // Name with first and last character visible
     let name = engine.mask_value("full_name", "John Doe");
-    assert_eq!(name, "J*****e");
+    assert_eq!(name, "J******e"); // 8 chars total: J + 6 masked + e
 }
 
 #[test]
