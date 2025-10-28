@@ -20,7 +20,6 @@ pub use security_state::SecurityState;
 use axum::{middleware::from_fn, Router};
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
-use error_common::Result;
 
 /// Create the main application router with all routes and middleware
 pub fn create_app(server: RustCareServer) -> Router {

@@ -5,7 +5,6 @@
 use crate::auth::models::RateLimit;
 use super::{DbPool, DbResult, RlsContext};
 use database_layer::AuditLogger;
-use sqlx::types::{chrono::{DateTime, Utc}, Uuid};
 use std::sync::Arc;
 
 pub struct RateLimitRepository {

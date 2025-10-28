@@ -214,7 +214,7 @@ impl CredentialRepository {
         // First, get current backup codes
         let cred = self.find_by_user_id(user_id).await?;
         
-        if let Some(mut credential) = cred {
+        if let Some(credential) = cred {
             if let Some(codes) = credential.mfa_backup_codes {
                 // Check if code exists
                 if !codes.contains(&used_code.to_string()) {

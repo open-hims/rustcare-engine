@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use sqlx::types::chrono::{DateTime, Utc};
 use ipnetwork::IpNetwork;
 use sqlx::types::Uuid;
-use std::net::IpAddr;
 
 // =============================================================================
 // ORGANIZATION MODEL

@@ -8,7 +8,7 @@ use axum::{
     middleware::Next,
     response::{Response, IntoResponse},
     http::StatusCode,
-    body::{Body, Bytes},
+    body::Body,
 };
 use http_body_util::BodyExt;
 use database_layer::encryption::{MaskingEngine, MaskingMiddleware};

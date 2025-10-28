@@ -11,7 +11,7 @@
 use super::{AuthResult, Credentials, Provider};
 use crate::auth::config::OAuthProviderConfig;
 use crate::auth::db::{OAuthRepository, UserRepository};
-use crate::auth::models::{OAuthAccount, User, UserStatus};
+use crate::auth::models::{User, UserStatus};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use chrono::Utc;
@@ -21,7 +21,6 @@ use oauth2::{
     TokenResponse as OAuth2TokenResponse, TokenUrl,
 };
 use reqwest::Client as HttpClient;
-use rsa::rand_core::le;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;

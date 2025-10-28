@@ -4,10 +4,7 @@ use axum::{
     Json,
     response::{IntoResponse, Json as ResponseJson},
 };
-use database_layer::GeographicRepository;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::Arc;
 use uuid::Uuid;
 use utoipa::{ToSchema, IntoParams};
 use crate::server::RustCareServer;

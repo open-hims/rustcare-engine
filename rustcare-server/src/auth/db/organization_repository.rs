@@ -3,7 +3,6 @@ use crate::auth::models::{
 };
 use super::{DbPool, DbResult, RlsContext};
 use database_layer::AuditLogger;
-use sqlx::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;
 
