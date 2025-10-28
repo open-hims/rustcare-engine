@@ -554,20 +554,28 @@ impl EmailPasswordProvider {
 mod tests {
     use super::*;
     
-    #[test]
-    fn test_password_strength_validation() {
-        // This test doesn't require database connection
+    // Common test configuration - creates test provider with proper DB connection from env
+    async fn create_test_provider() -> EmailPasswordProvider {
         let params = Params::new(19456, 2, 1, Some(32)).unwrap();
         let argon2 = Argon2::new(argon2::Algorithm::Argon2id, Version::V0x13, params);
         
-        let pool = PgPool::connect_lazy("").unwrap();
-        let provider = EmailPasswordProvider {
+        // Use DATABASE_URL from environment if set, otherwise use a dummy connection string
+        let db_url = std::env::var("DATABASE_URL")
+            .unwrap_or_else(|_| "postgresql://user:pass@localhost/db".to_string());
+        let pool = PgPool::connect_lazy(&db_url).unwrap();
+        
+        EmailPasswordProvider {
             user_repo: Arc::new(UserRepository::new(DbPool::new(pool.clone()))),
             credential_repo: Arc::new(CredentialRepository::new(DbPool::new(pool.clone()))),
             rate_limit_repo: Arc::new(RateLimitRepository::new(DbPool::new(pool))),
             argon2,
             enforce_password_expiration: true,
-        };
+        }
+    }
+    
+    #[tokio::test]
+    async fn test_password_strength_validation() {
+        let provider = create_test_provider().await;
         
         // Too short
         assert!(provider.validate_password_strength("Short1!").is_err());
