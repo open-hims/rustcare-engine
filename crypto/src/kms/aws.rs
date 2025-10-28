@@ -270,14 +270,14 @@ impl KeyManagementService for AwsKmsProvider {
             .ok_or_else(|| CryptoError::InvalidKey("No metadata in response".to_string()))?;
 
         Ok(KeyMetadata {
-            key_id: key_metadata.key_id().unwrap_or_default().to_string(),
+            key_id: key_metadata.key_id().to_string(),
             alias: None,
             created_at: key_metadata
                 .creation_date()
                 .map(|d| DateTime::from_timestamp(d.secs(), 0).unwrap_or_else(Utc::now))
                 .unwrap_or_else(Utc::now),
-            state: Self::convert_key_state(key_metadata.key_state()),
-            usage: Self::convert_key_usage(key_metadata.key_usage()),
+            state: Self::convert_key_state(key_metadata.key_state().ok_or_else(|| CryptoError::InvalidKey("No key state in response".to_string()))?),
+            usage: Self::convert_key_usage(key_metadata.key_usage().ok_or_else(|| CryptoError::InvalidKey("No key usage in response".to_string()))?),
             algorithm: format!("{:?}", key_metadata.key_spec()),
             origin: KeyOrigin::Kms,
             last_rotated: None,
@@ -301,14 +301,14 @@ impl KeyManagementService for AwsKmsProvider {
             .ok_or_else(|| CryptoError::InvalidKey("No metadata in response".to_string()))?;
 
         Ok(KeyMetadata {
-            key_id: key_metadata.key_id().unwrap_or_default().to_string(),
+            key_id: key_metadata.key_id().to_string(),
             alias: None,
             created_at: key_metadata
                 .creation_date()
                 .map(|d| DateTime::from_timestamp(d.secs(), 0).unwrap_or_else(Utc::now))
                 .unwrap_or_else(Utc::now),
-            state: Self::convert_key_state(key_metadata.key_state()),
-            usage: Self::convert_key_usage(key_metadata.key_usage()),
+            state: Self::convert_key_state(key_metadata.key_state().ok_or_else(|| CryptoError::InvalidKey("No key state in response".to_string()))?),
+            usage: Self::convert_key_usage(key_metadata.key_usage().ok_or_else(|| CryptoError::InvalidKey("No key usage in response".to_string()))?),
             algorithm: format!("{:?}", key_metadata.key_spec()),
             origin: KeyOrigin::Kms,
             last_rotated: None,
@@ -316,6 +316,24 @@ impl KeyManagementService for AwsKmsProvider {
             description: key_metadata.description().map(|s| s.to_string()),
             tags: HashMap::new(),
         })
+    }
+
+    async fn schedule_key_deletion(&self, key_id: &str, pending_window_days: u32) -> KmsResult<DateTime<Utc>> {
+        let response = self.client
+            .schedule_key_deletion()
+            .key_id(key_id)
+            .pending_window_in_days(pending_window_days as i32)
+            .send()
+            .await
+            .map_err(|e| CryptoError::InvalidKey(format!("AWS KMS schedule deletion error: {}", e)))?;
+
+        // Return the deletion date if available, otherwise calculate it
+        let deletion_date = response
+            .deletion_date()
+            .and_then(|d| DateTime::from_timestamp(d.secs(), 0))
+            .unwrap_or_else(|| Utc::now() + chrono::Duration::days(pending_window_days as i64));
+
+        Ok(deletion_date)
     }
 
     async fn list_keys(&self, max_results: Option<u32>) -> KmsResult<Vec<KeyMetadata>> {
@@ -332,13 +350,11 @@ impl KeyManagementService for AwsKmsProvider {
 
         let mut keys = Vec::new();
 
-        if let Some(key_list) = response.keys() {
-            for key_entry in key_list {
-                if let Some(key_id) = key_entry.key_id() {
-                    match self.describe_key(key_id).await {
-                        Ok(metadata) => keys.push(metadata),
-                        Err(_) => continue, // Skip keys we can't access
-                    }
+        for key_entry in response.keys() {
+            if let Some(key_id) = key_entry.key_id() {
+                match self.describe_key(key_id).await {
+                    Ok(metadata) => keys.push(metadata),
+                    Err(_) => continue, // Skip keys we can't access
                 }
             }
         }
@@ -424,28 +440,6 @@ impl KeyManagementService for AwsKmsProvider {
         Ok(())
     }
 
-    async fn schedule_key_deletion(
-        &self,
-        key_id: &str,
-        pending_window_days: u32,
-    ) -> KmsResult<DateTime<Utc>> {
-        let response = self
-            .client
-            .schedule_key_deletion()
-            .key_id(key_id)
-            .pending_window_in_days(pending_window_days as i32)
-            .send()
-            .await
-            .map_err(|e| CryptoError::InvalidKey(format!("AWS KMS schedule deletion error: {}", e)))?;
-
-        let deletion_date = response
-            .deletion_date()
-            .map(|d| DateTime::from_timestamp(d.secs(), 0).unwrap_or_else(Utc::now))
-            .unwrap_or_else(|| Utc::now() + chrono::Duration::days(pending_window_days as i64));
-
-        Ok(deletion_date)
-    }
-
     async fn cancel_key_deletion(&self, key_id: &str) -> KmsResult<()> {
         self.client
             .cancel_key_deletion()
@@ -521,11 +515,9 @@ impl KeyManagementService for AwsKmsProvider {
 
         let mut aliases = Vec::new();
 
-        if let Some(alias_list) = response.aliases() {
-            for alias in alias_list {
-                if let Some(name) = alias.alias_name() {
-                    aliases.push(name.to_string());
-                }
+        for alias in response.aliases() {
+            if let Some(name) = alias.alias_name() {
+                aliases.push(name.to_string());
             }
         }
 

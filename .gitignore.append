@@ -1,0 +1,11 @@
+
+# Code coverage
+coverage/
+cobertura.xml
+tarpaulin-report.html
+*.profraw
+*.profdata
+
+# SonarQube
+.sonar/
+.scannerwork/

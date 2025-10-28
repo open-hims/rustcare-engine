@@ -2,17 +2,17 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum CryptoError {
-    #[error("Encryption failed")]
-    EncryptionFailed,
+    #[error("Encryption failed: {0}")]
+    EncryptionFailed(String),
     
-    #[error("Decryption failed")]
-    DecryptionFailed,
+    #[error("Decryption failed: {0}")]
+    DecryptionFailed(String),
     
     #[error("Key generation failed: {0}")]
     KeyGenerationFailed(String),
     
-    #[error("Invalid key")]
-    InvalidKey,
+    #[error("Invalid key: {0}")]
+    InvalidKey(String),
     
     #[error("Invalid key length: expected {expected}, got {got}")]
     InvalidKeyLength { expected: usize, got: usize },
@@ -20,17 +20,17 @@ pub enum CryptoError {
     #[error("Unsupported key version {version}, only version {supported} is supported")]
     UnsupportedKeyVersion { version: u32, supported: u32 },
     
-    #[error("Invalid encrypted data format")]
-    InvalidFormat,
+    #[error("Invalid encrypted data format: {0}")]
+    InvalidFormat(String),
     
-    #[error("Invalid nonce length")]
-    InvalidNonce,
+    #[error("Invalid nonce length: {0}")]
+    InvalidNonce(String),
     
-    #[error("Invalid UTF-8 in decrypted data")]
-    InvalidUtf8,
+    #[error("Invalid UTF-8 in decrypted data: {0}")]
+    InvalidUtf8(String),
     
-    #[error("Signature verification failed")]
-    SignatureVerificationFailed,
+    #[error("Signature verification failed: {0}")]
+    SignatureVerificationFailed(String),
     
     #[error("Hash computation failed: {0}")]
     HashFailed(String),

@@ -1,0 +1,17 @@
+# Cargo configuration for coverage and testing
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "instrument-coverage"]
+
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "instrument-coverage"]
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "instrument-coverage"]
+
+[build]
+# Enable parallel compilation
+jobs = 4
+
+[test]
+# Test configuration

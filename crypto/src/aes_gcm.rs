@@ -30,7 +30,7 @@ impl Aes256GcmEncryptor {
     /// Create a new encryptor with a 32-byte key
     pub fn new(key: [u8; 32]) -> EncryptionResult<Self> {
         let cipher = Aes256Gcm::new_from_slice(&key)
-            .map_err(|_| CryptoError::InvalidKey)?;
+            .map_err(|e| CryptoError::InvalidKey(format!("Failed to create cipher: {}", e)))?;
 
         Ok(Self {
             cipher,
@@ -43,7 +43,7 @@ impl Aes256GcmEncryptor {
     pub fn from_base64(key_b64: &str) -> EncryptionResult<Self> {
         let key_bytes = BASE64
             .decode(key_b64)
-            .map_err(|_| CryptoError::InvalidKey)?;
+            .map_err(|e| CryptoError::InvalidKey(format!("Base64 decode error: {}", e)))?;
 
         if key_bytes.len() != 32 {
             return Err(CryptoError::InvalidKeyLength {
@@ -81,13 +81,13 @@ impl Aes256GcmEncryptor {
         // Generate random 96-bit nonce (12 bytes - optimal for GCM)
         let mut nonce_bytes = [0u8; 12];
         OsRng.fill_bytes(&mut nonce_bytes);
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce = Nonce::from(nonce_bytes);
 
         // Encrypt with authentication
         let ciphertext = self
             .cipher
-            .encrypt(nonce, plaintext)
-            .map_err(|_| CryptoError::EncryptionFailed)?;
+            .encrypt(&nonce, plaintext)
+            .map_err(|_| CryptoError::EncryptionFailed("Encryption failed".to_string()))?;
 
         // Format: v{version}:{nonce_b64}:{ciphertext_b64}
         let nonce_b64 = BASE64.encode(nonce_bytes);
@@ -104,14 +104,14 @@ impl Aes256GcmEncryptor {
         // Parse format: v{version}:{nonce}:{ciphertext}
         let parts: Vec<&str> = encrypted.split(':').collect();
         if parts.len() != 3 {
-            return Err(CryptoError::InvalidFormat);
+            return Err(CryptoError::InvalidFormat("Expected format v{version}:{nonce}:{ciphertext}".to_string()));
         }
 
         // Extract and validate version
         let version = parts[0]
             .strip_prefix('v')
             .and_then(|v| v.parse::<u32>().ok())
-            .ok_or(CryptoError::InvalidFormat)?;
+            .ok_or(CryptoError::InvalidFormat("Invalid version format".to_string()))?;
 
         // Check version compatibility (for now, only support current version)
         // In production with key rotation, you'd look up the correct key
@@ -125,23 +125,25 @@ impl Aes256GcmEncryptor {
         // Decode nonce
         let nonce_bytes = BASE64
             .decode(parts[1])
-            .map_err(|_| CryptoError::InvalidFormat)?;
+            .map_err(|e| CryptoError::InvalidFormat(format!("Nonce decode error: {}", e)))?;
 
         if nonce_bytes.len() != 12 {
-            return Err(CryptoError::InvalidNonce);
+            return Err(CryptoError::InvalidNonce("Expected 12-byte nonce".to_string()));
         }
 
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let mut nonce_array = [0u8; 12];
+        nonce_array.copy_from_slice(&nonce_bytes);
+        let nonce = Nonce::from(nonce_array);
 
         // Decode ciphertext
         let ciphertext = BASE64
             .decode(parts[2])
-            .map_err(|_| CryptoError::InvalidFormat)?;
+            .map_err(|e| CryptoError::InvalidFormat(format!("Ciphertext decode error: {}", e)))?;
 
         // Decrypt and verify authentication tag
         self.cipher
-            .decrypt(nonce, ciphertext.as_ref())
-            .map_err(|_| CryptoError::DecryptionFailed)
+            .decrypt(&nonce, ciphertext.as_ref())
+            .map_err(|e| CryptoError::DecryptionFailed(format!("Decryption failed: {}", e)))
     }
 }
 
@@ -155,7 +157,7 @@ impl Encryptor for Aes256GcmEncryptor {
     fn decrypt(&self, ciphertext: &[u8]) -> EncryptionResult<Vec<u8>> {
         // Convert bytes to string and decrypt
         let encrypted_str = String::from_utf8(ciphertext.to_vec())
-            .map_err(|_| CryptoError::InvalidUtf8)?;
+            .map_err(|e| CryptoError::InvalidUtf8(format!("Invalid UTF-8: {}", e)))?;
         self.decrypt_versioned(&encrypted_str)
     }
 
@@ -174,7 +176,7 @@ impl Aes256GcmEncryptor {
     /// Decrypt a versioned string
     pub fn decrypt_string(&self, encrypted: &str) -> EncryptionResult<String> {
         let plaintext_bytes = self.decrypt_versioned(encrypted)?;
-        String::from_utf8(plaintext_bytes).map_err(|_| CryptoError::InvalidUtf8)
+        String::from_utf8(plaintext_bytes).map_err(|e| CryptoError::InvalidUtf8(format!("Invalid UTF-8: {}", e)))
     }
 }
 

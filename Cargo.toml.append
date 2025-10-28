@@ -1,0 +1,8 @@
+# Add to [workspace.dependencies] section:
+# For code coverage with tarpaulin
+cargo-tarpaulin = "0.31"
+
+# Add to end of file for test profile:
+[profile.test]
+opt-level = 0
+debug = true

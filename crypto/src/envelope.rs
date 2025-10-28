@@ -102,7 +102,7 @@ impl EnvelopeEncryption {
             &base64::engine::general_purpose::STANDARD,
             dek_b64.as_bytes(),
         )
-        .map_err(|_| CryptoError::InvalidFormat)?;
+        .map_err(|e| CryptoError::InvalidFormat(format!("Base64 decode error: {}", e)))?;
 
         if dek_bytes.len() != 32 {
             return Err(CryptoError::InvalidKeyLength {
@@ -170,7 +170,7 @@ impl EnvelopeEncryption {
             &base64::engine::general_purpose::STANDARD,
             dek_b64.as_bytes(),
         )
-        .map_err(|_| CryptoError::InvalidFormat)?;
+        .map_err(|e| CryptoError::InvalidFormat(format!("Base64 decode error: {}", e)))?;
 
         if dek_bytes.len() != 32 {
             return Err(CryptoError::InvalidKeyLength {
@@ -263,7 +263,7 @@ impl StreamingEnvelopeEncryption {
             &base64::engine::general_purpose::STANDARD,
             dek_b64.as_bytes(),
         )
-        .map_err(|_| CryptoError::InvalidFormat)?;
+        .map_err(|e| CryptoError::InvalidFormat(format!("Base64 decode error: {}", e)))?;
 
         if dek_bytes.len() != 32 {
             return Err(CryptoError::InvalidKeyLength {
