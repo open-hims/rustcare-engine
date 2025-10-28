@@ -81,6 +81,10 @@ cargo llvm-cov report || echo "⚠️  Could not print coverage summary."
 # 7️⃣ Auto-open report ---------------------------------------------------------
 HTML_REPORT="$OUTPUT_DIR/html/index.html"
 if [[ -f "$HTML_REPORT" ]]; then
+    # Copy HTML report to a non-ignored directory for GitHub Pages
+    mkdir -p coverage/backend-html
+    cp -r "$OUTPUT_DIR/html/"* coverage/backend-html/
+    echo "📤 Copied backend coverage report to coverage/backend-html/ for GitHub Pages publishing."
   echo ""
   echo "🌐 Opening coverage report..."
   if [[ "$OSTYPE" == "darwin"* ]]; then
