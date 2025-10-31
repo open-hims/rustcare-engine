@@ -3,7 +3,7 @@ use axum::{
     Router,
 };
 use crate::{
-    handlers::{health, auth, workflow, sync, permissions, geographic, compliance, organizations, devices, secrets, kms, healthcare, pharmacy, vendors, notifications}, // websocket temporarily disabled
+    handlers::{health, auth, workflow, sync, permissions, geographic, compliance, organizations, devices, secrets, kms, healthcare, pharmacy, vendors, notifications, onboarding}, // websocket temporarily disabled
     server::RustCareServer,
     openapi,
 };
@@ -274,6 +274,22 @@ pub fn notification_routes() -> Router<RustCareServer> {
         .route("/notifications/:id/audit-logs", get(notifications::list_audit_logs))
 }
 
+/// Create onboarding routes
+/// 
+/// Hospital onboarding and user creation:
+/// - Create organization users with credentials
+/// - Send welcome emails with temporary passwords
+/// - Resend credentials
+pub fn onboarding_routes() -> Router<RustCareServer> {
+    Router::new()
+        // User management
+        .route("/organizations/:org_id/users", get(onboarding::list_organization_users))
+        .route("/organizations/:org_id/users", post(onboarding::create_organization_user))
+        .route("/users/:user_id/resend-credentials", post(onboarding::resend_user_credentials))
+        // Email verification
+        .route("/email/verify", post(onboarding::verify_email_config))
+}
+
 /// Create API v1 routes
 pub fn api_v1_routes() -> Router<RustCareServer> {
     Router::new()
@@ -291,6 +307,7 @@ pub fn api_v1_routes() -> Router<RustCareServer> {
         .merge(pharmacy_routes())
         .merge(vendor_routes())
         .merge(notification_routes())
+        .merge(onboarding_routes())
         // TODO: Add more API routes here:
         // .nest("/plugins", plugin_routes())
         // .nest("/audit", audit_routes())

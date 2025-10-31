@@ -13,6 +13,7 @@ pub mod healthcare;
 pub mod pharmacy;
 pub mod vendors;
 pub mod notifications;
+pub mod onboarding;
 // pub mod websocket; // Temporarily disabled
 
 // Re-export all handler modules for easy access

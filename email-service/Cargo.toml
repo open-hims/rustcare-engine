@@ -41,3 +41,6 @@ handlebars = "4.4"
 html2text = "0.6"
 mime = "0.3"
 base64 = "0.21"
+
+# Email verification dependencies
+trust-dns-resolver = "0.23"
