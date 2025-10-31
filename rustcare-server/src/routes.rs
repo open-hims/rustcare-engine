@@ -1,9 +1,9 @@
 use axum::{
-    routing::{get, post, put, delete},
+    routing::{get, post, put, delete, patch},
     Router,
 };
 use crate::{
-    handlers::{health, auth, workflow, sync, permissions, geographic, compliance, organizations, devices, secrets, kms, healthcare, pharmacy, vendors}, // websocket temporarily disabled
+    handlers::{health, auth, workflow, sync, permissions, geographic, compliance, organizations, devices, secrets, kms, healthcare, pharmacy, vendors, notifications}, // websocket temporarily disabled
     server::RustCareServer,
     openapi,
 };
@@ -196,6 +196,8 @@ pub fn kms_routes() -> Router<RustCareServer> {
 /// - Medical records CRUD
 /// - Provider management
 /// - Service types (dynamic catalog)
+/// - Appointments & Visits
+/// - Clinical Orders
 /// - Audit logging
 /// - Access control
 pub fn healthcare_routes() -> Router<RustCareServer> {
@@ -217,6 +219,11 @@ pub fn healthcare_routes() -> Router<RustCareServer> {
         .route("/healthcare/service-types/:service_type_id", get(healthcare::get_service_type))
         .route("/healthcare/service-types/:service_type_id", put(healthcare::update_service_type))
         .route("/healthcare/service-types/:service_type_id", delete(healthcare::delete_service_type))
+        
+        // Appointments
+        .route("/healthcare/appointments", get(healthcare::list_appointments))
+        .route("/healthcare/appointments", post(healthcare::create_appointment))
+        .route("/healthcare/appointments/:appointment_id/status", put(healthcare::update_appointment_status))
 }
 
 /// Create pharmacy routes
@@ -246,6 +253,27 @@ pub fn vendor_routes() -> Router<RustCareServer> {
         .route("/vendors/:vendor_id/services", get(vendors::get_vendor_services))
 }
 
+/// Create notification routes
+/// 
+/// Real-time notifications with audit logging:
+/// - List and filter notifications
+/// - Mark as read/unread (individual & bulk)
+/// - Unread count
+/// - Complete audit trail
+pub fn notification_routes() -> Router<RustCareServer> {
+    Router::new()
+        // Notifications
+        .route("/notifications", get(notifications::list_notifications))
+        .route("/notifications", post(notifications::create_notification))
+        .route("/notifications/:id", get(notifications::get_notification))
+        .route("/notifications/:id/read", patch(notifications::mark_notification_read))
+        .route("/notifications/bulk-read", patch(notifications::bulk_mark_read))
+        .route("/notifications/unread/count", get(notifications::get_unread_count))
+        
+        // Audit Logs
+        .route("/notifications/:id/audit-logs", get(notifications::list_audit_logs))
+}
+
 /// Create API v1 routes
 pub fn api_v1_routes() -> Router<RustCareServer> {
     Router::new()
@@ -262,6 +290,7 @@ pub fn api_v1_routes() -> Router<RustCareServer> {
         .merge(healthcare_routes())
         .merge(pharmacy_routes())
         .merge(vendor_routes())
+        .merge(notification_routes())
         // TODO: Add more API routes here:
         // .nest("/plugins", plugin_routes())
         // .nest("/audit", audit_routes())
