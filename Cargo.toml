@@ -22,6 +22,7 @@ members = [
     "rustcare-server",
     "rustcare-sync", "device-manager", "secrets-service",
     "voice-recognition-service",
+    "mcp-server",
 ]
 
 [workspace.package]
