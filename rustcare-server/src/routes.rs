@@ -3,7 +3,7 @@ use axum::{
     Router,
 };
 use crate::{
-    handlers::{health, auth, workflow, sync, permissions, geographic, compliance, organizations, devices, secrets, kms}, // websocket temporarily disabled
+    handlers::{health, auth, workflow, sync, permissions, geographic, compliance, organizations, devices, secrets, kms, healthcare, pharmacy, vendors}, // websocket temporarily disabled
     server::RustCareServer,
     openapi,
 };
@@ -190,6 +190,62 @@ pub fn kms_routes() -> Router<RustCareServer> {
         .route("/kms/keys/:key_id/cancel-deletion", post(kms::cancel_key_deletion))
 }
 
+/// Create healthcare routes
+/// 
+/// HIPAA-compliant medical records management:
+/// - Medical records CRUD
+/// - Provider management
+/// - Service types (dynamic catalog)
+/// - Audit logging
+/// - Access control
+pub fn healthcare_routes() -> Router<RustCareServer> {
+    Router::new()
+        // Medical Records
+        .route("/healthcare/medical-records", get(healthcare::list_medical_records))
+        .route("/healthcare/medical-records", post(healthcare::create_medical_record))
+        .route("/healthcare/medical-records/:record_id", get(healthcare::get_medical_record))
+        .route("/healthcare/medical-records/:record_id", put(healthcare::update_medical_record))
+        .route("/healthcare/medical-records/:record_id", delete(healthcare::delete_medical_record))
+        .route("/healthcare/medical-records/:record_id/audit", get(healthcare::get_medical_record_audit))
+        
+        // Providers
+        .route("/healthcare/providers", get(healthcare::list_providers))
+        
+        // Service Types (Dynamic Catalog)
+        .route("/healthcare/service-types", get(healthcare::list_service_types))
+        .route("/healthcare/service-types", post(healthcare::create_service_type))
+        .route("/healthcare/service-types/:service_type_id", get(healthcare::get_service_type))
+        .route("/healthcare/service-types/:service_type_id", put(healthcare::update_service_type))
+        .route("/healthcare/service-types/:service_type_id", delete(healthcare::delete_service_type))
+}
+
+/// Create pharmacy routes
+pub fn pharmacy_routes() -> Router<RustCareServer> {
+    Router::new()
+        // Pharmacies
+        .route("/pharmacy/pharmacies", get(pharmacy::list_pharmacies))
+        
+        // Inventory
+        .route("/pharmacy/inventory", get(pharmacy::list_inventory))
+        
+        // Prescriptions
+        .route("/pharmacy/prescriptions", get(pharmacy::list_prescriptions))
+}
+
+/// Create vendor routes
+pub fn vendor_routes() -> Router<RustCareServer> {
+    Router::new()
+        // Vendor Types
+        .route("/vendors/types", get(vendors::list_vendor_types))
+        
+        // Vendors
+        .route("/vendors", get(vendors::list_vendors))
+        
+        // Vendor Catalog
+        .route("/vendors/:vendor_id/inventory", get(vendors::get_vendor_inventory))
+        .route("/vendors/:vendor_id/services", get(vendors::get_vendor_services))
+}
+
 /// Create API v1 routes
 pub fn api_v1_routes() -> Router<RustCareServer> {
     Router::new()
@@ -203,6 +259,9 @@ pub fn api_v1_routes() -> Router<RustCareServer> {
         .merge(device_routes())
         .merge(secrets_routes())
         .merge(kms_routes())
+        .merge(healthcare_routes())
+        .merge(pharmacy_routes())
+        .merge(vendor_routes())
         // TODO: Add more API routes here:
         // .nest("/plugins", plugin_routes())
         // .nest("/audit", audit_routes())
