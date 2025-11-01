@@ -1,0 +1,37 @@
+[package]
+name = "mcp-server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage = { workspace = true }
+documentation = { workspace = true }
+description = "Model Context Protocol server for RustCare, enabling AI agent integration"
+keywords = ["healthcare", "mcp", "ai", "agents", "plugins", "emr"]
+categories = ["web-programming", "api-bindings"]
+
+[dependencies]
+tokio = { workspace = true, features = ["full"] }
+async-trait = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = "1.0"
+uuid = { workspace = true, features = ["v4", "serde"] }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+tracing = { workspace = true }
+
+# Internal dependencies
+error-common = { path = "../error-common" }
+logger-redacted = { path = "../logger-redacted" }
+plugin-runtime-core = { path = "../plugin-runtime-core" }
+
+# HTTP server for MCP transport
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+
+# MCP protocol
+async-channel = "2.2"
+

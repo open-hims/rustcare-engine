@@ -5,7 +5,7 @@
 use crate::auth::models::{User, UserStatus, UserWithAuthMethods};
 use super::{DbPool, DbResult, RlsContext};
 use database_layer::AuditLogger;
-use sqlx::types::{chrono::{DateTime, Utc}, Uuid};
+use sqlx::types::Uuid;
 use ipnetwork::IpNetwork;
 use std::sync::Arc;
 

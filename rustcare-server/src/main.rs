@@ -1,14 +1,6 @@
-use axum::{
-    middleware::from_fn,
-    Router,
-};
 use clap::Parser;
 use colored::*;
-use std::{io, net::SocketAddr, env};
-use tower::ServiceBuilder;
-use tower_http::{
-    trace::TraceLayer,
-};
+use std::{net::SocketAddr, env};
 use tracing::{info, Level};
 use tracing_subscriber::{
     fmt::{self, time::ChronoUtc},

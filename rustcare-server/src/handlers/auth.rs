@@ -1,12 +1,10 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::State,
     http::StatusCode,
     Json,
     response::Json as ResponseJson,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use std::collections::HashMap;
 use crate::server::RustCareServer;
 use utoipa::ToSchema;
 use anyhow::Result;

@@ -1,10 +1,10 @@
 use axum::{
-    extract::{Path, State},
+    extract::State,
     http::StatusCode,
     Json,
     response::Json as ResponseJson,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
 use crate::server::RustCareServer;
 use anyhow::Result;

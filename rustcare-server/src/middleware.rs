@@ -1,5 +1,5 @@
 use axum::{
-    http::{header, HeaderMap, HeaderValue, Method, StatusCode},
+    http::{header, HeaderMap, Method, StatusCode},
     middleware::Next,
     response::Response,
     extract::Request,

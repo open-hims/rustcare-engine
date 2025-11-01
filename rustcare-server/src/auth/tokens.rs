@@ -4,7 +4,6 @@
 
 use crate::auth::config::TokenConfig;
 use crate::auth::db::{JwtKeyRepository, RefreshTokenRepository, DbPool};
-use crate::auth::models::JwtSigningKey;
 use anyhow::{anyhow, Context, Result};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use chrono::{DateTime, Duration, Utc};

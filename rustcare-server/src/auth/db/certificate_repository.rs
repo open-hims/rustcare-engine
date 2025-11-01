@@ -2,7 +2,7 @@
 ///
 /// Now supports RLS context for multi-tenant isolation and audit logging
 
-use crate::auth::models::{ClientCertificate, CertificateStatus};
+use crate::auth::models::ClientCertificate;
 use super::{DbPool, DbResult, RlsContext};
 use database_layer::AuditLogger;
 use sqlx::types::{chrono::{DateTime, Utc}, Uuid};
