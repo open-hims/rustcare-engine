@@ -1,0 +1,37 @@
+[package]
+name = "billing-service"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage = { workspace = true }
+documentation = { workspace = true }
+description = "Healthcare billing, charge capture, and claims management"
+keywords = ["healthcare", "billing", "claims", "charges", "emr"]
+categories = ["web-programming", "authentication"]
+
+[dependencies]
+tokio = { workspace = true, features = ["full"] }
+async-trait = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = "1.0"
+uuid = { workspace = true, features = ["v4", "serde"] }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+tracing = { workspace = true }
+rust_decimal = { version = "1.35", features = ["serde-with-str"] }
+
+# Internal dependencies
+error-common = { path = "../error-common" }
+logger-redacted = { path = "../logger-redacted" }
+database-layer = { path = "../database-layer" }
+
+# HTTP server
+axum = { workspace = true }
+utoipa = { version = "5.1", features = ["axum_extras"] }
+
+[dev-dependencies]
+tokio-test = "0.4"
+

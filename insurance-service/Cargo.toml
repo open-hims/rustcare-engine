@@ -1,0 +1,36 @@
+[package]
+name = "insurance-service"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage = { workspace = true }
+documentation = { workspace = true }
+description = "Insurance eligibility verification and prior authorization management"
+keywords = ["healthcare", "insurance", "eligibility", "authorization", "emr"]
+categories = ["web-programming"]
+
+[dependencies]
+tokio = { workspace = true, features = ["full"] }
+async-trait = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = "1.0"
+uuid = { workspace = true, features = ["v4", "serde"] }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+tracing = { workspace = true }
+
+# Internal dependencies
+error-common = { path = "../error-common" }
+logger-redacted = { path = "../logger-redacted" }
+database-layer = { path = "../database-layer" }
+
+# HTTP
+axum = { workspace = true }
+reqwest = { workspace = true }
+
+[dev-dependencies]
+tokio-test = "0.4"
+

@@ -23,8 +23,10 @@ members = [
     "rustcare-sync", "device-manager", "secrets-service",
     "voice-recognition-service",
     "mcp-server",
+    "billing-service",
+    "insurance-service",
+    "accounting-service",
 ]
-
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
@@ -35,7 +37,6 @@ homepage = "https://rustcare.dev"
 documentation = "https://docs.rustcare.dev"
 keywords = ["healthcare", "engine", "rust", "microservices"]
 categories = ["web-programming", "authentication", "development-tools"]
-
 [workspace.dependencies]
 # Async runtime
 tokio = { version = "1.0", features = ["full"] }
