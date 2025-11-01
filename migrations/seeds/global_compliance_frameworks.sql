@@ -505,3 +505,4 @@ COMMENT ON COLUMN compliance_frameworks.metadata IS 'JSONB field containing fram
 -- Note: This seed data uses organization_id '00000000-0000-0000-0000-000000000000' for global frameworks
 -- Individual organizations should clone or reference these frameworks for their specific compliance needs
 
+

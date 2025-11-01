@@ -536,3 +536,4 @@ END $$;
 
 COMMENT ON TABLE compliance_rules IS 'HIPAA compliance rules based on CFR 45 Part 164';
 
+
