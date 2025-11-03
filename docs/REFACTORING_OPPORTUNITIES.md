@@ -1311,6 +1311,37 @@ pub fn default_json_value() -> impl Fn() -> serde_json::Value {
 
 ---
 
+### 14. Centralize API Route Constants (runtime) and Align With OpenAPI
+
+**Problem**: Path strings are duplicated across routers and documentation, causing drift.
+
+**Constraints**: `#[utoipa::path(path = "...")]` expects string literals; using `const` or `concat!` is unreliable in attribute macros, so complete single-sourcing is not feasible.
+
+**Solution**:
+- Create a central routes module (e.g., `src/routes/paths.rs`) with constants for runtime routing only.
+- Use these constants when composing Axum routes to avoid runtime drift.
+- Keep `utoipa` paths as string literals in attributes (required by the macro system).
+- Add a lightweight test that asserts the route constants match a curated list of documented paths to detect mismatches early.
+
+**Example**:
+```rust
+// src/routes/paths.rs
+pub const API_V1: &str = "/api/v1";
+pub mod devices {
+    use super::API_V1;
+    pub const ROOT: &str = "/devices";                 // "/api/v1" + ROOT when mounting
+    pub const BY_ID: &str = "/devices/:device_id";
+    pub const CONNECT: &str = "/devices/:device_id/connect";
+}
+```
+
+**Impact**: Reduces accidental route drift; improves maintainability without fighting attribute macro limitations.
+
+**Effort**: 0.5–1 day  
+**Risk**: Low
+
+---
+
 ## 📊 Metrics & Impact Summary
 
 | Refactoring | Priority | Effort | Code Reduction | Bug Risk Reduction | Security Impact |

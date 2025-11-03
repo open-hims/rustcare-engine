@@ -7,6 +7,10 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use crate::server::RustCareServer;
+use crate::middleware::AuthContext;
+use crate::error::{ApiError, ApiResponse, api_success};
+use crate::types::pagination::PaginationParams;
+use utoipa::IntoParams;
 use anyhow::Result;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -158,9 +162,30 @@ pub struct WorkflowExecutionStatus {
 }
 
 /// List all workflows
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct ListWorkflowsParams {
+    pub search: Option<String>,
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/workflows",
+    params(ListWorkflowsParams),
+    responses(
+        (status = 200, description = "Workflows retrieved successfully", body = WorkflowListResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "workflow",
+    security(("bearer_auth" = []))
+)]
 pub async fn list_workflows(
-    State(server): State<RustCareServer>
-) -> Result<ResponseJson<Vec<WorkflowDefinition>>, StatusCode> {
+    State(server): State<RustCareServer>,
+    Query(_params): axum::extract::Query<ListWorkflowsParams>,
+    _auth: AuthContext,
+) -> Result<Json<ApiResponse<WorkflowListResponse>>, ApiError> {
     // TODO: Integrate with workflow-engine module
     // This is a placeholder implementation
     
@@ -197,14 +222,28 @@ pub async fn list_workflows(
         }
     ];
 
-    Ok(Json(sample_workflows))
+    let total = sample_workflows.len();
+    Ok(Json(api_success(WorkflowListResponse { workflows: sample_workflows.into_iter().map(|wf| WorkflowSummary { id: wf.id, name: wf.name, description: wf.description, version: wf.version, active: true }).collect(), total })))
 }
 
 /// Get workflow by ID
+#[utoipa::path(
+    get,
+    path = "/api/v1/workflows/{workflow_id}",
+    params(("workflow_id" = String, Path, description = "Workflow ID")),
+    responses(
+        (status = 200, description = "Workflow retrieved successfully", body = WorkflowDefinition),
+        (status = 404, description = "Workflow not found"),
+        (status = 401, description = "Unauthorized")
+    ),
+    tag = "workflow",
+    security(("bearer_auth" = []))
+)]
 pub async fn get_workflow(
     State(server): State<RustCareServer>,
-    Path(workflow_id): Path<String>
-) -> Result<ResponseJson<WorkflowDefinition>, StatusCode> {
+    Path(workflow_id): Path<String>,
+    _auth: AuthContext,
+) -> Result<Json<ApiResponse<WorkflowDefinition>>, ApiError> {
     // TODO: Integrate with workflow-engine module
     // This is a placeholder implementation
     
@@ -220,17 +259,30 @@ pub async fn get_workflow(
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         };
-        Ok(Json(workflow))
+        Ok(Json(api_success(workflow)))
     } else {
-        Err(StatusCode::NOT_FOUND)
+        Err(ApiError::not_found("workflow"))
     }
 }
 
 /// Execute workflow
+#[utoipa::path(
+    post,
+    path = "/api/v1/workflows/execute",
+    request_body = WorkflowExecutionRequest,
+    responses(
+        (status = 200, description = "Workflow execution started", body = WorkflowExecutionResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "workflow",
+    security(("bearer_auth" = []))
+)]
 pub async fn execute_workflow(
     State(server): State<RustCareServer>,
-    Json(execution_request): Json<WorkflowExecutionRequest>
-) -> Result<ResponseJson<WorkflowExecutionResponse>, StatusCode> {
+    Json(execution_request): Json<WorkflowExecutionRequest>,
+    _auth: AuthContext,
+) -> Result<Json<ApiResponse<WorkflowExecutionResponse>>, ApiError> {
     // TODO: Integrate with workflow-engine module
     // This is a placeholder implementation
     
@@ -245,14 +297,27 @@ pub async fn execute_workflow(
         progress_percent: 0.0,
     };
 
-    Ok(Json(response))
+    Ok(Json(api_success(response)))
 }
 
 /// Get workflow execution status
+#[utoipa::path(
+    get,
+    path = "/api/v1/workflows/executions/{execution_id}",
+    params(("execution_id" = String, Path, description = "Execution ID")),
+    responses(
+        (status = 200, description = "Execution status", body = WorkflowExecutionStatus),
+        (status = 404, description = "Execution not found"),
+        (status = 401, description = "Unauthorized")
+    ),
+    tag = "workflow",
+    security(("bearer_auth" = []))
+)]
 pub async fn get_execution_status(
     State(server): State<RustCareServer>,
-    Path(execution_id): Path<String>
-) -> Result<ResponseJson<WorkflowExecutionStatus>, StatusCode> {
+    Path(execution_id): Path<String>,
+    _auth: AuthContext,
+) -> Result<Json<ApiResponse<WorkflowExecutionStatus>>, ApiError> {
     // TODO: Integrate with workflow-engine module
     // This is a placeholder implementation
     
@@ -270,14 +335,27 @@ pub async fn get_execution_status(
         error_message: None,
     };
 
-    Ok(Json(status))
+    Ok(Json(api_success(status)))
 }
 
 /// Cancel workflow execution
+#[utoipa::path(
+    delete,
+    path = "/api/v1/workflows/executions/{execution_id}",
+    params(("execution_id" = String, Path, description = "Execution ID")),
+    responses(
+        (status = 204, description = "Execution cancelled"),
+        (status = 404, description = "Execution not found"),
+        (status = 401, description = "Unauthorized")
+    ),
+    tag = "workflow",
+    security(("bearer_auth" = []))
+)]
 pub async fn cancel_execution(
     State(server): State<RustCareServer>,
-    Path(execution_id): Path<String>
-) -> Result<StatusCode, StatusCode> {
+    Path(execution_id): Path<String>,
+    _auth: AuthContext,
+) -> Result<StatusCode, ApiError> {
     // TODO: Integrate with workflow-engine module
     // This is a placeholder implementation
     
