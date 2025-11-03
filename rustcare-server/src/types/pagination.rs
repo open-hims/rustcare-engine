@@ -89,9 +89,29 @@ mod tests {
     }
 
     #[test]
+    fn test_pagination_with_values() {
+        let params = PaginationParams { page: Some(2), page_size: Some(50) };
+        assert_eq!(params.page(), 2);
+        assert_eq!(params.page_size(), 50);
+    }
+
+    #[test]
     fn test_pagination_offset() {
         let params = PaginationParams { page: Some(3), page_size: Some(10) };
         assert_eq!(params.offset(), 20);
+    }
+
+    #[test]
+    fn test_pagination_offset_first_page() {
+        let params = PaginationParams { page: Some(1), page_size: Some(20) };
+        assert_eq!(params.offset(), 0);
+    }
+
+    #[test]
+    fn test_pagination_limit() {
+        let params = PaginationParams { page: Some(2), page_size: Some(25) };
+        assert_eq!(params.limit(), 25);
+        assert_eq!(params.limit(), params.page_size());
     }
 
     #[test]
@@ -100,6 +120,116 @@ mod tests {
         assert_eq!(params.total_pages(100), 5);
         assert_eq!(params.total_pages(101), 6);
         assert_eq!(params.total_pages(0), 1);
+    }
+
+    #[test]
+    fn test_total_pages_exact_divisor() {
+        let params = PaginationParams { page: Some(1), page_size: Some(10) };
+        assert_eq!(params.total_pages(100), 10);
+    }
+
+    #[test]
+    fn test_total_pages_less_than_page_size() {
+        let params = PaginationParams { page: Some(1), page_size: Some(20) };
+        assert_eq!(params.total_pages(15), 1);
+    }
+
+    #[test]
+    fn test_total_pages_one_more() {
+        let params = PaginationParams { page: Some(1), page_size: Some(20) };
+        assert_eq!(params.total_pages(21), 2);
+    }
+
+    #[test]
+    fn test_to_metadata() {
+        let params = PaginationParams { page: Some(2), page_size: Some(20) };
+        let metadata = params.to_metadata(100);
+        
+        assert!(metadata.pagination.is_some());
+        let pagination = metadata.pagination.unwrap();
+        assert_eq!(pagination.page, 2);
+        assert_eq!(pagination.page_size, 20);
+        assert_eq!(pagination.total_pages, 5);
+        assert!(pagination.has_next);
+        assert!(pagination.has_previous);
+        assert_eq!(metadata.total_count, Some(100));
+    }
+
+    #[test]
+    fn test_to_metadata_first_page() {
+        let params = PaginationParams { page: Some(1), page_size: Some(20) };
+        let metadata = params.to_metadata(100);
+        
+        let pagination = metadata.pagination.unwrap();
+        assert!(!pagination.has_previous);
+        assert!(pagination.has_next);
+    }
+
+    #[test]
+    fn test_to_metadata_last_page() {
+        let params = PaginationParams { page: Some(5), page_size: Some(20) };
+        let metadata = params.to_metadata(100);
+        
+        let pagination = metadata.pagination.unwrap();
+        assert!(pagination.has_previous);
+        assert!(!pagination.has_next);
+    }
+
+    #[test]
+    fn test_to_metadata_single_page() {
+        let params = PaginationParams { page: Some(1), page_size: Some(20) };
+        let metadata = params.to_metadata(15);
+        
+        let pagination = metadata.pagination.unwrap();
+        assert_eq!(pagination.total_pages, 1);
+        assert!(!pagination.has_previous);
+        assert!(!pagination.has_next);
+    }
+
+    #[test]
+    fn test_to_metadata_empty_results() {
+        let params = PaginationParams { page: Some(1), page_size: Some(20) };
+        let metadata = params.to_metadata(0);
+        
+        let pagination = metadata.pagination.unwrap();
+        assert_eq!(pagination.total_pages, 1);
+        assert_eq!(metadata.total_count, Some(0));
+    }
+
+    #[test]
+    fn test_wrap_response() {
+        let params = PaginationParams { page: Some(1), page_size: Some(20) };
+        let data = vec!["item1", "item2"];
+        let response = params.wrap_response(data.clone(), 2);
+        
+        assert!(response.metadata.is_some());
+        let metadata = response.metadata.unwrap();
+        assert_eq!(metadata.total_count, Some(2));
+    }
+
+    #[test]
+    fn test_default() {
+        let params = PaginationParams::default();
+        assert_eq!(params.page, Some(1));
+        assert_eq!(params.page_size, Some(20));
+    }
+
+    #[test]
+    fn test_page_min_clamp() {
+        let params = PaginationParams { page: Some(0), page_size: Some(20) };
+        assert_eq!(params.page(), 1); // Should clamp to 1
+    }
+
+    #[test]
+    fn test_page_size_max_clamp() {
+        let params = PaginationParams { page: Some(1), page_size: Some(200) };
+        assert_eq!(params.page_size(), 100); // Should clamp to 100
+    }
+
+    #[test]
+    fn test_page_size_min_clamp() {
+        let params = PaginationParams { page: Some(1), page_size: Some(0) };
+        assert_eq!(params.page_size(), 1); // Should clamp to 1
     }
 }
 

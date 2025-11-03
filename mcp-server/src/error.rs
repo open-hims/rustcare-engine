@@ -22,6 +22,12 @@ pub enum McpError {
 
     #[error("Unknown error: {0}")]
     Unknown(String),
+
+    #[error("Registry error: {0}")]
+    Registry(String),
+
+    #[error("Permission error: {0}")]
+    Permission(String),
 }
 
 pub type McpResult<T> = Result<T, McpError>;

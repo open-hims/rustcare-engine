@@ -58,6 +58,7 @@ logger-redacted = { path = "../logger-redacted" }
 email-service = { path = "../email-service" }
 database-layer = { path = "../database-layer" }
 secrets-service = { path = "../secrets-service" }
+mcp-macros = { path = "../mcp-macros", optional = true }
 
 # Database
 sqlx = { workspace = true }

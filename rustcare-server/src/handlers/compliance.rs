@@ -234,7 +234,7 @@ pub struct ComplianceAssignmentResponse {
 /// List compliance frameworks
 #[utoipa::path(
     get,
-    path = "/api/v1/compliance/frameworks",
+    path = crate::routes::paths::api_v1::COMPLIANCE_FRAMEWORKS,
     responses(
         (status = 200, description = "Compliance frameworks retrieved successfully", body = Vec<ComplianceFramework>),
         (status = 401, description = "Unauthorized"),
@@ -266,7 +266,7 @@ pub async fn list_compliance_frameworks(
 /// Create compliance framework
 #[utoipa::path(
     post,
-    path = "/api/v1/compliance/frameworks",
+    path = crate::routes::paths::api_v1::COMPLIANCE_FRAMEWORKS,
     request_body = CreateComplianceFrameworkRequest,
     responses(
         (status = 201, description = "Compliance framework created successfully", body = ComplianceFramework),
@@ -347,7 +347,7 @@ pub struct ListComplianceRulesParams {
 /// List compliance rules for a framework
 #[utoipa::path(
     get,
-    path = "/api/v1/compliance/frameworks/{framework_id}/rules",
+    path = crate::routes::paths::api_v1::COMPLIANCE_FRAMEWORK_RULES,
     params(
         ("framework_id" = Uuid, Path, description = "Compliance framework ID"),
         ListComplianceRulesParams
@@ -391,7 +391,7 @@ pub async fn list_compliance_rules(
 /// Create compliance rule
 #[utoipa::path(
     post,
-    path = "/api/v1/compliance/rules",
+    path = crate::routes::paths::api_v1::COMPLIANCE_RULES,
     request_body = CreateComplianceRuleRequest,
     responses(
         (status = 201, description = "Compliance rule created successfully", body = ComplianceRule),
@@ -460,7 +460,7 @@ pub async fn create_compliance_rule(
 /// Auto-assign compliance frameworks based on geographic location
 #[utoipa::path(
     post,
-    path = "/api/v1/compliance/auto-assign",
+    path = crate::routes::paths::api_v1::COMPLIANCE_AUTO_ASSIGN,
     request_body = AssignComplianceRequest,
     responses(
         (status = 200, description = "Compliance frameworks auto-assigned", body = ComplianceAssignmentResponse),
@@ -508,7 +508,7 @@ pub async fn auto_assign_compliance(
 /// Get entity compliance status
 #[utoipa::path(
     get,
-    path = "/api/v1/compliance/entities/{entity_type}/{entity_id}",
+    path = crate::routes::paths::api_v1::COMPLIANCE_ENTITY_COMPLIANCE,
     params(
         ("entity_type" = String, Path, description = "Entity type"),
         ("entity_id" = Uuid, Path, description = "Entity ID")
@@ -536,7 +536,7 @@ pub async fn get_entity_compliance(
 /// Update entity compliance assessment
 #[utoipa::path(
     put,
-    path = "/api/v1/compliance/entities/{entity_type}/{entity_id}/assess",
+    path = crate::routes::paths::api_v1::COMPLIANCE_ENTITY_ASSESS,
     params(
         ("entity_type" = String, Path, description = "Entity type"),
         ("entity_id" = Uuid, Path, description = "Entity ID")
@@ -573,7 +573,7 @@ pub struct ListFrameworksParams {
 /// List all compliance frameworks
 #[utoipa::path(
     get,
-    path = "/api/v1/compliance/frameworks",
+    path = crate::routes::paths::api_v1::COMPLIANCE_FRAMEWORKS,
     params(ListFrameworksParams),
     responses(
         (status = 200, description = "Frameworks retrieved successfully", body = Vec<ComplianceFramework>),
@@ -615,7 +615,7 @@ pub async fn list_frameworks(
 /// Create compliance framework
 #[utoipa::path(
     post,
-    path = "/api/v1/compliance/frameworks",
+    path = crate::routes::paths::api_v1::COMPLIANCE_FRAMEWORKS,
     responses(
         (status = 201, description = "Framework created successfully", body = ComplianceFramework),
         (status = 400, description = "Invalid request"),
@@ -666,7 +666,7 @@ pub async fn create_framework(
 /// Get compliance framework by ID
 #[utoipa::path(
     get,
-    path = "/api/v1/compliance/frameworks/{id}",
+    path = crate::routes::paths::api_v1::COMPLIANCE_FRAMEWORK_BY_ID,
     params(
         ("id" = Uuid, Path, description = "Framework ID")
     ),
@@ -699,7 +699,7 @@ pub async fn get_framework(
 /// Update compliance framework
 #[utoipa::path(
     put,
-    path = "/api/v1/compliance/frameworks/{id}",
+    path = crate::routes::paths::api_v1::COMPLIANCE_FRAMEWORK_BY_ID,
     params(
         ("id" = Uuid, Path, description = "Framework ID")
     ),
@@ -722,7 +722,7 @@ pub async fn update_framework(
 /// Delete compliance framework
 #[utoipa::path(
     delete,
-    path = "/api/v1/compliance/frameworks/{id}",
+    path = crate::routes::paths::api_v1::COMPLIANCE_FRAMEWORK_BY_ID,
     params(
         ("id" = Uuid, Path, description = "Framework ID")
     ),
@@ -806,7 +806,7 @@ pub struct ListFrameworkRulesParams {
 /// List rules for a framework
 #[utoipa::path(
     get,
-    path = "/api/v1/compliance/frameworks/{id}/rules",
+    path = crate::routes::paths::api_v1::COMPLIANCE_FRAMEWORK_RULES,
     params(
         ("id" = Uuid, Path, description = "Framework ID"),
         ListFrameworkRulesParams
@@ -858,7 +858,7 @@ pub struct ListRulesParams {
 /// List all compliance rules
 #[utoipa::path(
     get,
-    path = "/api/v1/compliance/rules",
+    path = crate::routes::paths::api_v1::COMPLIANCE_RULES,
     params(ListRulesParams),
     responses(
         (status = 200, description = "Rules retrieved successfully", body = Vec<ComplianceRule>),
@@ -896,7 +896,7 @@ pub async fn list_rules(
 /// Create compliance rule
 #[utoipa::path(
     post,
-    path = "/api/v1/compliance/rules",
+    path = crate::routes::paths::api_v1::COMPLIANCE_RULES,
     responses(
         (status = 201, description = "Rule created successfully", body = ComplianceRule),
         (status = 400, description = "Invalid request"),
@@ -915,7 +915,7 @@ pub async fn create_rule(
 /// Get compliance rule by ID
 #[utoipa::path(
     get,
-    path = "/api/v1/compliance/rules/{id}",
+    path = crate::routes::paths::api_v1::COMPLIANCE_RULE_BY_ID,
     params(
         ("id" = Uuid, Path, description = "Rule ID")
     ),
@@ -937,7 +937,7 @@ pub async fn get_rule(
 /// Update compliance rule
 #[utoipa::path(
     put,
-    path = "/api/v1/compliance/rules/{id}",
+    path = crate::routes::paths::api_v1::COMPLIANCE_RULE_BY_ID,
     params(
         ("id" = Uuid, Path, description = "Rule ID")
     ),
@@ -1046,7 +1046,7 @@ pub async fn update_rule(
 /// Delete compliance rule
 #[utoipa::path(
     delete,
-    path = "/api/v1/compliance/rules/{id}",
+    path = crate::routes::paths::api_v1::COMPLIANCE_RULE_BY_ID,
     params(
         ("id" = Uuid, Path, description = "Rule ID")
     ),

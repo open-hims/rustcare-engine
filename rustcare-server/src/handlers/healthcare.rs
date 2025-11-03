@@ -239,7 +239,7 @@ pub struct HealthcareProvider {
 /// Create a new medical record
 #[utoipa::path(
     post,
-    path = "/api/v1/healthcare/medical-records",
+    path = crate::routes::paths::api_v1::HEALTHCARE_MEDICAL_RECORDS,
     request_body = CreateMedicalRecordRequest,
     responses(
         (status = 201, description = "Medical record created successfully", body = MedicalRecord),
@@ -313,7 +313,7 @@ pub async fn create_medical_record(
 /// Get a specific medical record
 #[utoipa::path(
     get,
-    path = "/api/v1/healthcare/medical-records/{record_id}",
+    path = crate::routes::paths::api_v1::HEALTHCARE_MEDICAL_RECORD_BY_ID,
     params(
         ("record_id" = Uuid, Path, description = "Medical Record ID")
     ),
@@ -387,7 +387,7 @@ pub async fn get_medical_record(
 /// List medical records with optional filters
 #[utoipa::path(
     get,
-    path = "/api/v1/healthcare/medical-records",
+    path = crate::routes::paths::api_v1::HEALTHCARE_MEDICAL_RECORDS,
     params(
         ("patient_id" = Option<Uuid>, Query, description = "Filter by patient ID"),
         ("provider_id" = Option<Uuid>, Query, description = "Filter by provider ID"),
@@ -474,7 +474,7 @@ pub async fn list_medical_records(
 /// Update a medical record
 #[utoipa::path(
     put,
-    path = "/api/v1/healthcare/medical-records/{record_id}",
+    path = crate::routes::paths::api_v1::HEALTHCARE_MEDICAL_RECORD_BY_ID,
     params(
         ("record_id" = Uuid, Path, description = "Medical Record ID")
     ),
@@ -564,7 +564,7 @@ pub async fn update_medical_record(
 /// Delete a medical record (soft delete)
 #[utoipa::path(
     delete,
-    path = "/api/v1/healthcare/medical-records/{record_id}",
+    path = crate::routes::paths::api_v1::HEALTHCARE_MEDICAL_RECORD_BY_ID,
     params(
         ("record_id" = Uuid, Path, description = "Medical Record ID")
     ),
@@ -608,7 +608,7 @@ pub async fn delete_medical_record(
 /// Get audit log for a medical record
 #[utoipa::path(
     get,
-    path = "/api/v1/healthcare/medical-records/{record_id}/audit",
+    path = crate::routes::paths::api_v1::HEALTHCARE_MEDICAL_RECORD_AUDIT,
     params(
         ("record_id" = Uuid, Path, description = "Medical Record ID")
     ),
@@ -658,7 +658,7 @@ pub async fn get_medical_record_audit(
 /// List healthcare providers
 #[utoipa::path(
     get,
-    path = "/api/v1/healthcare/providers",
+    path = crate::routes::paths::api_v1::HEALTHCARE_PROVIDERS,
     responses(
         (status = 200, description = "Healthcare providers retrieved successfully", body = Vec<HealthcareProvider>),
         (status = 401, description = "Unauthorized"),
@@ -687,7 +687,7 @@ pub async fn list_providers(
 /// List service types
 #[utoipa::path(
     get,
-    path = "/api/v1/healthcare/service-types",
+    path = crate::routes::paths::api_v1::HEALTHCARE_SERVICE_TYPES,
     params(
         ("category" = Option<String>, Query, description = "Filter by category"),
         ("is_active" = Option<bool>, Query, description = "Filter by active status")
@@ -721,7 +721,7 @@ pub async fn list_service_types(
 /// Create service type
 #[utoipa::path(
     post,
-    path = "/api/v1/healthcare/service-types",
+    path = crate::routes::paths::api_v1::HEALTHCARE_SERVICE_TYPES,
     request_body = ServiceType,
     responses(
         (status = 201, description = "Service type created successfully", body = ServiceType),
@@ -769,7 +769,7 @@ pub async fn create_service_type(
 /// Get service type by ID
 #[utoipa::path(
     get,
-    path = "/api/v1/healthcare/service-types/{service_type_id}",
+    path = crate::routes::paths::api_v1::HEALTHCARE_SERVICE_TYPE_BY_ID,
     params(("service_type_id" = Uuid, Path, description = "Service Type ID")),
     responses(
         (status = 200, description = "Service type retrieved successfully", body = ServiceType),
@@ -817,7 +817,7 @@ pub async fn get_service_type(
 /// Update service type
 #[utoipa::path(
     put,
-    path = "/api/v1/healthcare/service-types/{service_type_id}",
+    path = crate::routes::paths::api_v1::HEALTHCARE_SERVICE_TYPE_BY_ID,
     params(("service_type_id" = Uuid, Path, description = "Service Type ID")),
     request_body = ServiceType,
     responses(
@@ -867,7 +867,7 @@ pub async fn update_service_type(
 /// Delete service type
 #[utoipa::path(
     delete,
-    path = "/api/v1/healthcare/service-types/{service_type_id}",
+    path = crate::routes::paths::api_v1::HEALTHCARE_SERVICE_TYPE_BY_ID,
     params(("service_type_id" = Uuid, Path, description = "Service Type ID")),
     responses(
         (status = 204, description = "Service type deleted successfully"),
@@ -1012,7 +1012,7 @@ pub struct ClinicalOrder {
 /// List appointments with filters
 #[utoipa::path(
     get,
-    path = "/api/v1/healthcare/appointments",
+    path = crate::routes::paths::api_v1::HEALTHCARE_APPOINTMENTS,
     params(
         ("patient_id" = Option<Uuid>, Query, description = "Filter by patient ID"),
         ("provider_id" = Option<Uuid>, Query, description = "Filter by provider ID"),
@@ -1099,7 +1099,7 @@ pub async fn list_appointments(
 /// Create appointment
 #[utoipa::path(
     post,
-    path = "/api/v1/healthcare/appointments",
+    path = crate::routes::paths::api_v1::HEALTHCARE_APPOINTMENTS,
     request_body = CreateAppointmentRequest,
     responses(
         (status = 201, description = "Appointment created successfully", body = Appointment),
@@ -1149,7 +1149,7 @@ pub async fn create_appointment(
 /// Update appointment status
 #[utoipa::path(
     put,
-    path = "/api/v1/healthcare/appointments/{appointment_id}/status",
+    path = crate::routes::paths::api_v1::HEALTHCARE_APPOINTMENT_STATUS,
     params(("appointment_id" = Uuid, Path, description = "Appointment ID")),
     request_body = serde_json::Value,
     responses(

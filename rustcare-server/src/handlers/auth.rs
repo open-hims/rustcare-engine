@@ -142,7 +142,7 @@ pub struct TokenValidationResponse {
 /// User login handler
 #[utoipa::path(
     post,
-    path = "/api/v1/auth/login",
+    path = crate::routes::paths::api_v1::AUTH_LOGIN,
     tag = "authentication",
     request_body(
         content = AuthRequest,

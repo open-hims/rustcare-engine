@@ -43,6 +43,7 @@ pub mod error;
 pub mod tool_wrapper;
 pub mod sensitive_filter;
 pub mod render;
+pub mod registry;
 
 pub use server::*;
 pub use protocol::*;

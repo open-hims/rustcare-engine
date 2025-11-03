@@ -107,6 +107,7 @@ pub fn parse_rfc3339(s: &str) -> Result<DateTime<Utc>, ApiError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
 
     #[test]
     fn test_api_timestamp_serialization() {
@@ -117,10 +118,82 @@ mod tests {
     }
 
     #[test]
+    fn test_api_timestamp_from_datetime() {
+        let dt = Utc.with_ymd_and_hms(2024, 1, 15, 10, 30, 0).unwrap();
+        let ts = ApiTimestamp::from_datetime(dt);
+        assert_eq!(ts.to_rfc3339(), "2024-01-15T10:30:00+00:00");
+    }
+
+    #[test]
+    fn test_api_timestamp_from_rfc3339() {
+        let s = "2024-01-15T10:30:00Z";
+        let result = ApiTimestamp::from_rfc3339(s);
+        assert!(result.is_ok());
+        let ts = result.unwrap();
+        assert_eq!(ts.to_rfc3339(), "2024-01-15T10:30:00+00:00");
+    }
+
+    #[test]
+    fn test_api_timestamp_from_rfc3339_invalid() {
+        let s = "invalid-date";
+        let result = ApiTimestamp::from_rfc3339(s);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_api_timestamp_from_rfc3339_with_timezone() {
+        let s = "2024-01-15T10:30:00+05:00";
+        let result = ApiTimestamp::from_rfc3339(s);
+        assert!(result.is_ok());
+        // Should convert to UTC
+        let ts = result.unwrap();
+        assert!(ts.to_rfc3339().contains("+00:00") || ts.to_rfc3339().ends_with('Z'));
+    }
+
+    #[test]
+    fn test_api_timestamp_to_datetime() {
+        let dt = Utc.with_ymd_and_hms(2024, 1, 15, 10, 30, 0).unwrap();
+        let ts = ApiTimestamp::from_datetime(dt);
+        let converted = ts.to_datetime();
+        assert_eq!(converted, dt);
+    }
+
+    #[test]
+    fn test_api_timestamp_from_trait() {
+        let dt = Utc.with_ymd_and_hms(2024, 1, 15, 10, 30, 0).unwrap();
+        let ts: ApiTimestamp = dt.into();
+        assert_eq!(ts.to_rfc3339(), "2024-01-15T10:30:00+00:00");
+    }
+
+    #[test]
+    fn test_api_timestamp_into_datetime() {
+        let dt = Utc.with_ymd_and_hms(2024, 1, 15, 10, 30, 0).unwrap();
+        let ts = ApiTimestamp::from_datetime(dt);
+        let converted: DateTime<Utc> = ts.into();
+        assert_eq!(converted, dt);
+    }
+
+    #[test]
+    fn test_api_timestamp_default() {
+        let ts = ApiTimestamp::default();
+        // Default should be current time, so we just verify it's created
+        assert!(!ts.to_rfc3339().is_empty());
+    }
+
+    #[test]
     fn test_parse_rfc3339() {
         let s = "2024-01-15T10:30:00Z";
         let result = parse_rfc3339(s);
         assert!(result.is_ok());
+        let dt = result.unwrap();
+        assert_eq!(dt.format("%Y-%m-%d %H:%M:%S").to_string(), "2024-01-15 10:30:00");
+    }
+
+    #[test]
+    fn test_parse_rfc3339_invalid() {
+        let s = "invalid-date";
+        let result = parse_rfc3339(s);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -129,6 +202,51 @@ mod tests {
         let result = parse_rfc3339_to_naive_date(s);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().format("%Y-%m-%d").to_string(), "2024-01-15");
+    }
+
+    #[test]
+    fn test_parse_rfc3339_to_naive_date_invalid() {
+        let s = "invalid-date";
+        let result = parse_rfc3339_to_naive_date(s);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_naive_date_to_rfc3339() {
+        let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
+        let result = naive_date_to_rfc3339(date);
+        assert!(result.contains("2024-01-15"));
+        assert!(result.contains("T00:00:00") || result.contains("T00:00:00Z"));
+    }
+
+    #[test]
+    fn test_date_to_rfc3339() {
+        let dt = Utc.with_ymd_and_hms(2024, 1, 15, 10, 30, 0).unwrap();
+        let result = date_to_rfc3339(dt);
+        assert_eq!(result, "2024-01-15T10:30:00+00:00");
+    }
+
+    #[test]
+    fn test_now_rfc3339() {
+        let result = now_rfc3339();
+        assert!(!result.is_empty());
+        assert!(result.contains('T'));
+    }
+
+    #[test]
+    fn test_api_timestamp_equality() {
+        let dt = Utc.with_ymd_and_hms(2024, 1, 15, 10, 30, 0).unwrap();
+        let ts1 = ApiTimestamp::from_datetime(dt);
+        let ts2 = ApiTimestamp::from_datetime(dt);
+        assert_eq!(ts1, ts2);
+    }
+
+    #[test]
+    fn test_api_timestamp_clone() {
+        let dt = Utc.with_ymd_and_hms(2024, 1, 15, 10, 30, 0).unwrap();
+        let ts1 = ApiTimestamp::from_datetime(dt);
+        let ts2 = ts1.clone();
+        assert_eq!(ts1, ts2);
     }
 }
 

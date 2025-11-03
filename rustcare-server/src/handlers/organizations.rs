@@ -222,7 +222,7 @@ pub struct ListOrganizationsParams {
 /// List organizations
 #[utoipa::path(
     get,
-    path = "/api/v1/organizations",
+    path = crate::routes::paths::api_v1::ORGANIZATIONS,
     responses(
         (status = 200, description = "Organizations retrieved successfully", body = Vec<Organization>),
         (status = 401, description = "Unauthorized"),
@@ -309,7 +309,7 @@ pub async fn list_organizations(
 /// Create organization with setup wizard
 #[utoipa::path(
     post,
-    path = "/api/v1/organizations",
+    path = crate::routes::paths::api_v1::ORGANIZATIONS,
     request_body = OrganizationSetupRequest,
     responses(
         (status = 201, description = "Organization created successfully", body = Organization),
@@ -487,7 +487,7 @@ pub async fn create_organization(
 /// List roles for organization
 #[utoipa::path(
     get,
-    path = "/api/v1/organizations/{org_id}/roles",
+    path = crate::routes::paths::api_v1::ORGANIZATION_ROLES,
     params(
         ("org_id" = Uuid, Path, description = "Organization ID")
     ),
@@ -566,7 +566,7 @@ pub async fn list_organization_roles(
 /// Create role with Zanzibar integration
 #[utoipa::path(
     post,
-    path = "/api/v1/organizations/{org_id}/roles",
+    path = crate::routes::paths::api_v1::ORGANIZATION_ROLES,
     params(
         ("org_id" = Uuid, Path, description = "Organization ID")
     ),
@@ -705,7 +705,7 @@ pub async fn create_organization_role(
 /// Get role templates for healthcare organizations
 #[utoipa::path(
     get,
-    path = "/api/v1/role-templates",
+    path = crate::routes::paths::api_v1::ROLE_TEMPLATES,
     responses(
         (status = 200, description = "Role templates retrieved successfully", body = Vec<serde_json::Value>),
         (status = 500, description = "Internal server error")
@@ -782,7 +782,7 @@ pub async fn get_role_templates(
 /// List employees for organization
 #[utoipa::path(
     get,
-    path = "/api/v1/organizations/{org_id}/employees",
+    path = crate::routes::paths::api_v1::ORGANIZATION_EMPLOYEES,
     params(
         ("org_id" = Uuid, Path, description = "Organization ID")
     ),
@@ -829,7 +829,7 @@ pub async fn list_organization_employees(
 /// Assign role to employee with Zanzibar tuple creation
 #[utoipa::path(
     post,
-    path = "/api/v1/organizations/{org_id}/employees/{employee_id}/roles",
+    path = crate::routes::paths::api_v1::ORGANIZATION_EMPLOYEE_ROLES,
     params(
         ("org_id" = Uuid, Path, description = "Organization ID"),
         ("employee_id" = Uuid, Path, description = "Employee ID")
@@ -955,7 +955,7 @@ pub async fn assign_employee_role(
 /// List patients for organization
 #[utoipa::path(
     get,
-    path = "/api/v1/organizations/{org_id}/patients",
+    path = crate::routes::paths::api_v1::ORGANIZATION_PATIENTS,
     params(
         ("org_id" = Uuid, Path, description = "Organization ID")
     ),
@@ -1003,7 +1003,7 @@ pub async fn list_organization_patients(
 /// Create patient with access control
 #[utoipa::path(
     post,
-    path = "/api/v1/organizations/{org_id}/patients",
+    path = crate::routes::paths::api_v1::ORGANIZATION_PATIENTS,
     params(
         ("org_id" = Uuid, Path, description = "Organization ID")
     ),

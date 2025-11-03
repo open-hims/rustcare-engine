@@ -158,7 +158,7 @@ pub struct CommandResponse {
 /// List all devices with optional filters
 #[utoipa::path(
     get,
-    path = "/api/v1/devices",
+    path = crate::routes::paths::api_v1::DEVICES,
     params(ListDevicesQuery),
     responses(
         (status = 200, description = "Devices retrieved successfully", body = Vec<DeviceResponse>),
@@ -212,7 +212,7 @@ pub async fn list_devices(
 /// Register a new device
 #[utoipa::path(
     post,
-    path = "/api/v1/devices",
+    path = crate::routes::paths::api_v1::DEVICES,
     request_body = RegisterDeviceRequest,
     responses(
         (status = 201, description = "Device registered successfully", body = DeviceResponse),
@@ -332,7 +332,7 @@ pub async fn register_device(
 /// Get device by ID
 #[utoipa::path(
     get,
-    path = "/api/v1/devices/{device_id}",
+    path = crate::routes::paths::api_v1::DEVICE_BY_ID,
     params(
         ("device_id" = Uuid, Path, description = "Device ID")
     ),
@@ -371,7 +371,7 @@ pub async fn get_device(
 /// Update device
 #[utoipa::path(
     put,
-    path = "/api/v1/devices/{device_id}",
+    path = crate::routes::paths::api_v1::DEVICE_BY_ID,
     params(
         ("device_id" = Uuid, Path, description = "Device ID")
     ),
@@ -420,7 +420,7 @@ pub async fn update_device(
 /// Delete device
 #[utoipa::path(
     delete,
-    path = "/api/v1/devices/{device_id}",
+    path = crate::routes::paths::api_v1::DEVICE_BY_ID,
     params(
         ("device_id" = Uuid, Path, description = "Device ID")
     ),
@@ -461,7 +461,7 @@ pub async fn delete_device(
 /// Connect to device
 #[utoipa::path(
     post,
-    path = "/api/v1/devices/{device_id}/connect",
+    path = crate::routes::paths::api_v1::DEVICE_CONNECT,
     params(
         ("device_id" = Uuid, Path, description = "Device ID")
     ),
@@ -507,7 +507,7 @@ pub async fn connect_device(
 /// Disconnect from device
 #[utoipa::path(
     post,
-    path = "/api/v1/devices/{device_id}/disconnect",
+    path = crate::routes::paths::api_v1::DEVICE_DISCONNECT,
     params(
         ("device_id" = Uuid, Path, description = "Device ID")
     ),
@@ -553,7 +553,7 @@ pub async fn disconnect_device(
 /// Read data from device
 #[utoipa::path(
     get,
-    path = "/api/v1/devices/{device_id}/data",
+    path = crate::routes::paths::api_v1::DEVICE_DATA,
     params(
         ("device_id" = Uuid, Path, description = "Device ID")
     ),
@@ -596,7 +596,7 @@ pub async fn read_device_data(
 /// Get device data history
 #[utoipa::path(
     get,
-    path = "/api/v1/devices/{device_id}/data/history",
+    path = crate::routes::paths::api_v1::DEVICE_DATA,
     params(
         ("device_id" = Uuid, Path, description = "Device ID"),
         GetDataQuery
@@ -641,7 +641,7 @@ pub async fn get_device_data_history(
 /// Send command to device
 #[utoipa::path(
     post,
-    path = "/api/v1/devices/{device_id}/commands",
+    path = crate::routes::paths::api_v1::DEVICE_COMMANDS,
     params(
         ("device_id" = Uuid, Path, description = "Device ID")
     ),
@@ -699,7 +699,7 @@ pub async fn send_device_command(
 /// Get device commands
 #[utoipa::path(
     get,
-    path = "/api/v1/devices/{device_id}/commands",
+    path = crate::routes::paths::api_v1::DEVICE_COMMANDS,
     params(
         ("device_id" = Uuid, Path, description = "Device ID"),
         GetDataQuery
@@ -744,7 +744,7 @@ pub async fn get_device_commands(
 /// Get device types (configuration)
 #[utoipa::path(
     get,
-    path = "/api/v1/devices/types",
+    path = crate::routes::paths::api_v1::DEVICE_TYPES,
     responses(
         (status = 200, description = "Device types retrieved successfully", body = Vec<serde_json::Value>),
         (status = 401, description = "Unauthorized"),
@@ -777,7 +777,7 @@ pub async fn list_device_types(
 /// Get connection types (configuration)
 #[utoipa::path(
     get,
-    path = "/api/v1/devices/connection-types",
+    path = crate::routes::paths::api_v1::DEVICE_CONNECTION_TYPES,
     responses(
         (status = 200, description = "Connection types retrieved successfully", body = Vec<serde_json::Value>),
         (status = 401, description = "Unauthorized"),
@@ -811,7 +811,7 @@ pub async fn list_connection_types(
 /// Get data formats (configuration)
 #[utoipa::path(
     get,
-    path = "/api/v1/devices/data-formats",
+    path = crate::routes::paths::api_v1::DEVICE_DATA_FORMATS,
     responses(
         (status = 200, description = "Data formats retrieved successfully", body = Vec<serde_json::Value>),
         (status = 401, description = "Unauthorized"),

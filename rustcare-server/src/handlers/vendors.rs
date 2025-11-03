@@ -148,7 +148,7 @@ pub struct ListVendorsParams {
 /// List vendor types
 #[utoipa::path(
     get,
-    path = "/api/v1/vendors/types",
+    path = crate::routes::paths::api_v1::VENDORS_TYPES,
     responses(
         (status = 200, description = "Vendor types retrieved successfully", body = Vec<VendorType>),
         (status = 401, description = "Unauthorized"),
@@ -197,7 +197,7 @@ pub async fn list_vendor_types(
 /// List vendors
 #[utoipa::path(
     get,
-    path = "/api/v1/vendors",
+    path = crate::routes::paths::api_v1::VENDORS,
     responses(
         (status = 200, description = "Vendors retrieved successfully", body = Vec<Vendor>),
         (status = 401, description = "Unauthorized"),
@@ -261,7 +261,7 @@ pub async fn list_vendors(
 /// Get vendor inventory
 #[utoipa::path(
     get,
-    path = "/api/v1/vendors/{vendor_id}/inventory",
+    path = crate::routes::paths::api_v1::VENDOR_INVENTORY,
     params(
         ("vendor_id" = Uuid, Path, description = "Vendor ID"),
         ("is_active" = Option<bool>, Query, description = "Filter by active status"),
@@ -339,7 +339,7 @@ pub async fn get_vendor_inventory(
 /// Get vendor services
 #[utoipa::path(
     get,
-    path = "/api/v1/vendors/{vendor_id}/services",
+    path = crate::routes::paths::api_v1::VENDOR_SERVICES,
     params(
         ("vendor_id" = Uuid, Path, description = "Vendor ID"),
         ("is_available" = Option<bool>, Query, description = "Filter by availability"),

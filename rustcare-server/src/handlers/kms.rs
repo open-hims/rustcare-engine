@@ -461,7 +461,7 @@ pub struct ListKeysParams {
 /// Returns metadata for all keys the caller has permission to view.
 #[utoipa::path(
     get,
-    path = "/api/v1/kms/keys",
+    path = crate::routes::paths::api_v1::KMS_KEYS,
     params(ListKeysParams),
     responses(
         (status = 200, description = "Keys retrieved successfully", body = Vec<KeyMetadataResponse>),

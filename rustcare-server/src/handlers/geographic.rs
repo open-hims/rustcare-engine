@@ -99,7 +99,7 @@ pub struct PostalCodeMapping {
 /// Get all geographic regions with optional filtering
 #[utoipa::path(
     get,
-    path = "/api/v1/geographic/regions",
+    path = crate::routes::paths::api_v1::GEOGRAPHIC_REGIONS,
     params(GeographicQuery),
     responses(
         (status = 200, description = "Geographic regions retrieved successfully", body = Vec<GeographicRegion>),
@@ -175,7 +175,7 @@ pub async fn list_geographic_regions(
 /// Create a new geographic region
 #[utoipa::path(
     post,
-    path = "/api/v1/geographic/regions",
+    path = crate::routes::paths::api_v1::GEOGRAPHIC_REGIONS,
     request_body = CreateGeographicRegionRequest,
     responses(
         (status = 201, description = "Geographic region created successfully", body = GeographicRegion),
@@ -254,7 +254,7 @@ pub async fn create_geographic_region(
 /// Get geographic region by ID
 #[utoipa::path(
     get,
-    path = "/api/v1/geographic/regions/{id}",
+    path = crate::routes::paths::api_v1::GEOGRAPHIC_REGION_BY_ID,
     params(
         ("id" = Uuid, Path, description = "Geographic region ID")
     ),
@@ -299,7 +299,7 @@ pub async fn get_geographic_region(
 /// Update geographic region
 #[utoipa::path(
     put,
-    path = "/api/v1/geographic/regions/{id}",
+    path = crate::routes::paths::api_v1::GEOGRAPHIC_REGION_BY_ID,
     params(
         ("id" = Uuid, Path, description = "Geographic region ID")
     ),
@@ -345,7 +345,7 @@ pub async fn update_geographic_region(
 /// Delete geographic region
 #[utoipa::path(
     delete,
-    path = "/api/v1/geographic/regions/{id}",
+    path = crate::routes::paths::api_v1::GEOGRAPHIC_REGION_BY_ID,
     params(
         ("id" = Uuid, Path, description = "Geographic region ID")
     ),
@@ -373,7 +373,7 @@ pub async fn delete_geographic_region(
 /// Get postal code compliance mapping
 #[utoipa::path(
     get,
-    path = "/api/v1/geographic/postal-codes/{postal_code}/compliance",
+    path = crate::routes::paths::api_v1::GEOGRAPHIC_POSTAL_CODE_COMPLIANCE,
     params(
         ("postal_code" = String, Path, description = "Postal code")
     ),
@@ -405,7 +405,7 @@ pub async fn get_postal_code_compliance(
 /// Get geographic hierarchy for a region
 #[utoipa::path(
     get,
-    path = "/api/v1/geographic/regions/{id}/hierarchy",
+    path = crate::routes::paths::api_v1::GEOGRAPHIC_REGION_HIERARCHY,
     params(
         ("id" = Uuid, Path, description = "Geographic region ID")
     ),

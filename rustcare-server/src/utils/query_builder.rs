@@ -142,6 +142,7 @@ impl<'a> PaginatedQuery<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use uuid::Uuid;
 
     #[test]
     fn test_paginated_query_builder() {
@@ -162,6 +163,148 @@ mod tests {
         query.filter_eq("status", None::<String>);
         // Should not add filter when value is None
         // This is verified by the query builder not panicking
+        assert_eq!(query.page(), 1);
+        assert_eq!(query.page_size(), 20);
+    }
+
+    #[test]
+    fn test_filter_eq_with_some() {
+        let mut query = PaginatedQuery::new("SELECT * FROM test_table WHERE 1=1");
+        query.filter_eq("name", Some("test"));
+        assert_eq!(query.page(), 1);
+    }
+
+    #[test]
+    fn test_filter_ne() {
+        let mut query = PaginatedQuery::new("SELECT * FROM test_table WHERE 1=1");
+        query.filter_ne("status", Some("deleted"));
+        assert_eq!(query.page(), 1);
+    }
+
+    #[test]
+    fn test_filter_ne_with_none() {
+        let mut query = PaginatedQuery::new("SELECT * FROM test_table WHERE 1=1");
+        query.filter_ne("status", None::<String>);
+        // Should not add filter when value is None
+        assert_eq!(query.page(), 1);
+    }
+
+    #[test]
+    fn test_filter_in_with_values() {
+        let mut query = PaginatedQuery::new("SELECT * FROM test_table WHERE 1=1");
+        query.filter_in("id", Some(vec![Uuid::new_v4(), Uuid::new_v4()]));
+        assert_eq!(query.page(), 1);
+    }
+
+    #[test]
+    fn test_filter_in_with_empty_vec() {
+        let mut query = PaginatedQuery::new("SELECT * FROM test_table WHERE 1=1");
+        query.filter_in("id", Some(Vec::<Uuid>::new()));
+        // Should not add filter when vec is empty
+        assert_eq!(query.page(), 1);
+    }
+
+    #[test]
+    fn test_filter_in_with_none() {
+        let mut query = PaginatedQuery::new("SELECT * FROM test_table WHERE 1=1");
+        query.filter_in("id", None::<Vec<Uuid>>);
+        // Should not add filter when value is None
+        assert_eq!(query.page(), 1);
+    }
+
+    #[test]
+    fn test_filter_organization() {
+        let org_id = Uuid::new_v4();
+        let mut query = PaginatedQuery::new("SELECT * FROM test_table WHERE 1=1");
+        query.filter_organization(Some(org_id));
+        assert_eq!(query.page(), 1);
+    }
+
+    #[test]
+    fn test_filter_organization_with_none() {
+        let mut query = PaginatedQuery::new("SELECT * FROM test_table WHERE 1=1");
+        query.filter_organization(None);
+        assert_eq!(query.page(), 1);
+    }
+
+    #[test]
+    fn test_filter_active() {
+        let mut query = PaginatedQuery::new("SELECT * FROM test_table WHERE 1=1");
+        query.filter_active();
+        assert_eq!(query.page(), 1);
+    }
+
+    #[test]
+    fn test_filter_not_deleted() {
+        let mut query = PaginatedQuery::new("SELECT * FROM test_table WHERE 1=1");
+        query.filter_not_deleted();
+        assert_eq!(query.page(), 1);
+    }
+
+    #[test]
+    fn test_order_by() {
+        let mut query = PaginatedQuery::new("SELECT * FROM test_table WHERE 1=1");
+        query.order_by("name", "ASC");
+        assert_eq!(query.page(), 1);
+    }
+
+    #[test]
+    fn test_order_by_created_desc() {
+        let mut query = PaginatedQuery::new("SELECT * FROM test_table WHERE 1=1");
+        query.order_by_created_desc();
+        assert_eq!(query.page(), 1);
+    }
+
+    #[test]
+    fn test_paginate_defaults() {
+        let mut query = PaginatedQuery::new("SELECT * FROM test_table WHERE 1=1");
+        query.paginate(None, None);
+        assert_eq!(query.page(), 1);
+        assert_eq!(query.page_size(), 20);
+    }
+
+    #[test]
+    fn test_paginate_custom() {
+        let mut query = PaginatedQuery::new("SELECT * FROM test_table WHERE 1=1");
+        query.paginate(Some(3), Some(50));
+        assert_eq!(query.page(), 3);
+        assert_eq!(query.page_size(), 50);
+    }
+
+    #[test]
+    fn test_paginate_page_min() {
+        let mut query = PaginatedQuery::new("SELECT * FROM test_table WHERE 1=1");
+        query.paginate(Some(0), Some(20));
+        assert_eq!(query.page(), 1); // Should clamp to minimum 1
+    }
+
+    #[test]
+    fn test_paginate_page_size_max() {
+        let mut query = PaginatedQuery::new("SELECT * FROM test_table WHERE 1=1");
+        query.paginate(Some(1), Some(200));
+        assert_eq!(query.page_size(), 100); // Should clamp to maximum 100
+    }
+
+    #[test]
+    fn test_paginate_page_size_min() {
+        let mut query = PaginatedQuery::new("SELECT * FROM test_table WHERE 1=1");
+        query.paginate(Some(1), Some(0));
+        assert_eq!(query.page_size(), 1); // Should clamp to minimum 1
+    }
+
+    #[test]
+    fn test_chaining_filters() {
+        let org_id = Uuid::new_v4();
+        let mut query = PaginatedQuery::new("SELECT * FROM test_table WHERE 1=1");
+        query
+            .filter_active()
+            .filter_organization(Some(org_id))
+            .filter_eq("status", Some("active"))
+            .order_by_created_desc()
+            .paginate(Some(2), Some(25));
+        
+        assert_eq!(query.page(), 2);
+        assert_eq!(query.page_size(), 25);
     }
 }
 

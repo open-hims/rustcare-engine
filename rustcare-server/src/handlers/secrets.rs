@@ -136,7 +136,7 @@ pub struct ListSecretsParams {
 /// Returns a list of all secret keys (values are not included)
 #[utoipa::path(
     get,
-    path = "/api/v1/secrets",
+    path = crate::routes::paths::api_v1::SECRETS,
     params(ListSecretsParams),
     responses(
         (status = 200, description = "Secrets retrieved successfully", body = Vec<String>),
@@ -179,7 +179,7 @@ pub async fn list_secrets(
 /// Retrieves the current version of a secret
 #[utoipa::path(
     get,
-    path = "/api/v1/secrets/{key}",
+    path = crate::routes::paths::api_v1::SECRET_BY_KEY,
     params(("key" = String, Path, description = "Secret key")),
     responses(
         (status = 200, description = "Secret metadata retrieved", body = SecretResponse),
@@ -229,7 +229,7 @@ pub async fn get_secret(
 /// Stores a new secret with optional rotation and expiration settings
 #[utoipa::path(
     post,
-    path = "/api/v1/secrets",
+    path = crate::routes::paths::api_v1::SECRETS,
     request_body = CreateSecretRequest,
     responses(
         (status = 201, description = "Secret created", body = SecretResponse),
@@ -281,7 +281,7 @@ pub async fn create_secret(
 /// Updates the value and/or settings of an existing secret
 #[utoipa::path(
     put,
-    path = "/api/v1/secrets/{key}",
+    path = crate::routes::paths::api_v1::SECRET_BY_KEY,
     params(("key" = String, Path, description = "Secret key")),
     request_body = UpdateSecretRequest,
     responses(
@@ -322,7 +322,7 @@ pub async fn update_secret(
 /// Permanently removes a secret and all its versions
 #[utoipa::path(
     delete,
-    path = "/api/v1/secrets/{key}",
+    path = crate::routes::paths::api_v1::SECRET_BY_KEY,
     params(("key" = String, Path, description = "Secret key")),
     responses(
         (status = 204, description = "Secret deleted"),
@@ -360,7 +360,7 @@ pub struct ListSecretVersionsParams {
 /// Returns all available versions for a specific secret
 #[utoipa::path(
     get,
-    path = "/api/v1/secrets/{key}/versions",
+    path = crate::routes::paths::api_v1::SECRET_VERSIONS,
     params(
         ("key" = String, Path, description = "Secret key"),
         ListSecretVersionsParams
@@ -404,7 +404,7 @@ pub async fn list_secret_versions(
 /// Retrieves a historical version of a secret
 #[utoipa::path(
     get,
-    path = "/api/v1/secrets/{key}/versions/{version}",
+    path = crate::routes::paths::api_v1::SECRET_VERSION,
     params(
         ("key" = String, Path, description = "Secret key"),
         ("version" = String, Path, description = "Secret version"),
@@ -445,7 +445,7 @@ pub async fn get_secret_version(
 /// Generates a new value for the secret and creates a new version
 #[utoipa::path(
     post,
-    path = "/api/v1/secrets/{key}/rotate",
+    path = crate::routes::paths::api_v1::SECRET_ROTATE,
     params(("key" = String, Path, description = "Secret key")),
     responses(
         (status = 200, description = "Secret rotated", body = RotateSecretResponse),
@@ -483,7 +483,7 @@ pub async fn rotate_secret(
 /// Verifies connectivity to all configured secret providers
 #[utoipa::path(
     get,
-    path = "/api/v1/secrets/health",
+    path = crate::routes::paths::api_v1::SECRETS_HEALTH,
     responses(
         (status = 200, description = "Secrets health", body = HealthCheckResponse),
         (status = 503, description = "Service unavailable"),

@@ -109,8 +109,8 @@ Notes:
    - ✅ Geographic handler migrated to use `RequestValidation` trait and `AuditService`
    - ✅ Permissions handler migrated to use `RequestValidation` trait and `AuditService`
    - ✅ Auth handler migrated to use `RequestValidation` trait
-   - ⏳ Add OpenAPI helper macros for common path patterns (next)
-   - ⏳ Backfill tests for utilities and refactored modules (next)
+   - ✅ **Phase 3 Complete**: OpenAPI helper macros created (`macros.rs`) - list_endpoint, get_endpoint, create_endpoint, update_endpoint, delete_endpoint, custom_endpoint
+   - ✅ **Phase 3 Complete**: Comprehensive tests added for utilities - query_builder (15+ tests), timestamps (18+ tests), pagination (15+ tests)
 
 Owner: Platform Team  
 Status: Phase 2 complete - Ready for Phase 3

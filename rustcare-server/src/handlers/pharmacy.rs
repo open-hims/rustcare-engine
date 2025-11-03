@@ -18,6 +18,9 @@ use sqlx::FromRow;
 use std::collections::HashMap;
 use async_trait::async_trait;
 
+#[cfg(feature = "mcp")]
+use mcp_macros::mcp_tool;
+
 // ============================================================================
 // DATA STRUCTURES
 // ============================================================================
@@ -287,9 +290,18 @@ impl AuthCrudHandler<Pharmacy, CreatePharmacyRequest, UpdatePharmacyRequest, Lis
 // ============================================================================
 
 /// List all pharmacies
+#[cfg_attr(feature = "mcp", mcp_macros::mcp_tool(
+    name = "list_pharmacies",
+    description = "List all pharmacies for the organization with optional filtering by city, state, and status",
+    category = "pharmacy",
+    requires_permission = "pharmacy:read",
+    sensitive = false,
+    response_type = "Vec<Pharmacy>",
+    render_type = "table"
+))]
 #[utoipa::path(
     get,
-    path = "/api/v1/pharmacy/pharmacies",
+    path = crate::routes::paths::api_v1::PHARMACY_PHARMACIES,
     responses(
         (status = 200, description = "Pharmacies retrieved successfully", body = Vec<Pharmacy>),
         (status = 401, description = "Unauthorized"),
@@ -331,9 +343,18 @@ pub async fn list_pharmacies(
 }
 
 /// Get a specific pharmacy by ID
+#[cfg_attr(feature = "mcp", mcp_macros::mcp_tool(
+    name = "get_pharmacy",
+    description = "Retrieve detailed information about a specific pharmacy by ID",
+    category = "pharmacy",
+    requires_permission = "pharmacy:read",
+    sensitive = false,
+    response_type = "Pharmacy",
+    render_type = "markdown"
+))]
 #[utoipa::path(
     get,
-    path = "/api/v1/pharmacy/pharmacies/{pharmacy_id}",
+    path = crate::routes::paths::api_v1::PHARMACY_PHARMACY_BY_ID,
     responses(
         (status = 200, description = "Pharmacy retrieved successfully", body = Pharmacy),
         (status = 404, description = "Pharmacy not found"),
@@ -358,7 +379,7 @@ pub async fn get_pharmacy(
 /// Create a new pharmacy
 #[utoipa::path(
     post,
-    path = "/api/v1/pharmacy/pharmacies",
+    path = crate::routes::paths::api_v1::PHARMACY_PHARMACIES,
     request_body = CreatePharmacyRequest,
     responses(
         (status = 201, description = "Pharmacy created successfully", body = Pharmacy),
@@ -430,7 +451,7 @@ pub async fn create_pharmacy(
 /// Update a pharmacy
 #[utoipa::path(
     put,
-    path = "/api/v1/pharmacy/pharmacies/{pharmacy_id}",
+    path = crate::routes::paths::api_v1::PHARMACY_PHARMACY_BY_ID,
     request_body = UpdatePharmacyRequest,
     responses(
         (status = 200, description = "Pharmacy updated successfully", body = Pharmacy),
@@ -543,7 +564,7 @@ pub async fn update_pharmacy(
 /// Delete a pharmacy (soft delete)
 #[utoipa::path(
     delete,
-    path = "/api/v1/pharmacy/pharmacies/{pharmacy_id}",
+    path = crate::routes::paths::api_v1::PHARMACY_PHARMACY_BY_ID,
     responses(
         (status = 204, description = "Pharmacy deleted successfully"),
         (status = 404, description = "Pharmacy not found"),
@@ -568,7 +589,7 @@ pub async fn delete_pharmacy(
 /// Get pharmacy inventory
 #[utoipa::path(
     get,
-    path = "/api/v1/pharmacy/inventory",
+    path = crate::routes::paths::api_v1::PHARMACY_INVENTORY,
     responses(
         (status = 200, description = "Inventory retrieved successfully", body = Vec<PharmacyInventory>),
         (status = 401, description = "Unauthorized"),
@@ -631,7 +652,7 @@ pub async fn list_inventory(
 /// List prescriptions
 #[utoipa::path(
     get,
-    path = "/api/v1/pharmacy/prescriptions",
+    path = crate::routes::paths::api_v1::PHARMACY_PRESCRIPTIONS,
     responses(
         (status = 200, description = "Prescriptions retrieved successfully", body = Vec<Prescription>),
         (status = 401, description = "Unauthorized"),

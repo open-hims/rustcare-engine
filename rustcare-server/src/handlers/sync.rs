@@ -85,7 +85,7 @@ pub struct ConflictInfo {
 /// Server returns operations ordered by timestamp for replay.
 #[utoipa::path(
     post,
-    path = "/api/v1/sync/pull",
+    path = crate::routes::paths::api_v1::SYNC_PULL,
     request_body = PullRequest,
     responses(
         (status = 200, description = "Operations pulled successfully", body = PullResponse),
@@ -129,7 +129,7 @@ pub async fn pull(
 /// Server performs CRDT merge for conflicts and returns status.
 #[utoipa::path(
     post,
-    path = "/api/v1/sync/push",
+    path = crate::routes::paths::api_v1::SYNC_PUSH,
     request_body = PushRequest,
     responses(
         (status = 200, description = "Operations pushed successfully", body = PushResponse),

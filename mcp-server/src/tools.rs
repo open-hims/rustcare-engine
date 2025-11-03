@@ -54,6 +54,12 @@ pub trait McpTool: Send + Sync {
     /// Check if tool is sensitive
     fn is_sensitive(&self) -> bool;
     
+    /// Get handler function name (for registration)
+    fn handler_function(&self) -> &str;
+    
+    /// Get handler file path (for registration)
+    fn handler_file(&self) -> &str;
+    
     /// Execute the tool with auth and Zanzibar context
     async fn execute(
         &self,
@@ -87,10 +93,11 @@ pub trait ZanzibarClient: Send + Sync {
     ) -> Result<bool, String>;
 }
 
-/// Registry of available tools with auto-discovery
+/// Registry of available tools with auto-discovery and DB registration
 pub struct ToolsRegistry {
     tools: HashMap<String, Box<dyn McpTool>>,
     sensitive_tools: Vec<String>,
+    registry_service: Option<crate::registry::McpToolRegistryService>,
 }
 
 impl ToolsRegistry {
@@ -99,9 +106,25 @@ impl ToolsRegistry {
         let mut registry = Self {
             tools: HashMap::new(),
             sensitive_tools: Vec::new(),
+            registry_service: None,
         };
         
         // Auto-discover and register tools marked with #[mcp_tool]
+        registry.discover_tools();
+        
+        registry
+    }
+
+    /// Create with database registry service
+    pub fn with_registry_service(
+        registry_service: crate::registry::McpToolRegistryService,
+    ) -> Self {
+        let mut registry = Self {
+            tools: HashMap::new(),
+            sensitive_tools: Vec::new(),
+            registry_service: Some(registry_service),
+        };
+        
         registry.discover_tools();
         
         registry
@@ -117,12 +140,39 @@ impl ToolsRegistry {
         // This would be auto-generated from proc macro scanning
     }
 
-    /// Register a new tool
-    pub fn register(&mut self, tool: Box<dyn McpTool>) {
+    /// Register a new tool (automatically stores in DB if registry_service is set)
+    pub async fn register(
+        &mut self,
+        tool: Box<dyn McpTool>,
+        organization_id: Uuid,
+        registered_by: Option<Uuid>,
+    ) -> McpResult<()> {
+        // Store in memory
         if tool.is_sensitive() {
             self.sensitive_tools.push(tool.name().to_string());
         }
         self.tools.insert(tool.name().to_string(), tool);
+        
+        // Auto-register to database if registry service is available
+        if let Some(ref registry_service) = self.registry_service {
+            let tool_registry = crate::registry::McpToolRegistry {
+                tool_name: tool.name().to_string(),
+                handler_function: tool.handler_function().to_string(),
+                handler_file: tool.handler_file().to_string(),
+                description: tool.description().to_string(),
+                category: tool.category().to_string(),
+                response_type: tool.response_type_name().map(|s| s.to_string()),
+                render_type: tool.render_type(),
+                requires_permission: tool.required_permission().map(|s| s.to_string()),
+                sensitive: tool.is_sensitive(),
+                input_schema: Some(tool.input_schema()),
+                output_schema: tool.output_schema(),
+            };
+            
+            registry_service.register_tool(&tool_registry, organization_id, registered_by).await?;
+        }
+        
+        Ok(())
     }
 
     /// List all available tools (excluding sensitive ones for public access)
@@ -186,12 +236,4 @@ impl Default for ToolsRegistry {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Macro helper to register tools (called by build.rs)
-#[macro_export]
-macro_rules! register_mcp_tool {
-    ($tool_type:ty, $handler_fn:path) => {
-        // This will be expanded by build.rs to register tools
-    };
 }

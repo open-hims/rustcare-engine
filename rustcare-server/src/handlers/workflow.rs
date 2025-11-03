@@ -168,7 +168,7 @@ pub struct ListWorkflowsParams {
 
 #[utoipa::path(
     get,
-    path = "/api/v1/workflows",
+    path = crate::routes::paths::api_v1::WORKFLOWS,
     params(ListWorkflowsParams),
     responses(
         (status = 200, description = "Workflows retrieved successfully", body = Vec<WorkflowSummary>),
@@ -248,7 +248,7 @@ pub async fn list_workflows(
 /// Get workflow by ID
 #[utoipa::path(
     get,
-    path = "/api/v1/workflows/{workflow_id}",
+    path = crate::routes::paths::api_v1::WORKFLOW_BY_ID,
     params(("workflow_id" = String, Path, description = "Workflow ID")),
     responses(
         (status = 200, description = "Workflow retrieved successfully", body = WorkflowDefinition),
@@ -287,7 +287,7 @@ pub async fn get_workflow(
 /// Execute workflow
 #[utoipa::path(
     post,
-    path = "/api/v1/workflows/execute",
+    path = crate::routes::paths::api_v1::WORKFLOW_EXECUTE,
     request_body = WorkflowExecutionRequest,
     responses(
         (status = 200, description = "Workflow execution started", body = WorkflowExecutionResponse),
@@ -322,7 +322,7 @@ pub async fn execute_workflow(
 /// Get workflow execution status
 #[utoipa::path(
     get,
-    path = "/api/v1/workflows/executions/{execution_id}",
+    path = crate::routes::paths::api_v1::WORKFLOW_EXECUTION_BY_ID,
     params(("execution_id" = String, Path, description = "Execution ID")),
     responses(
         (status = 200, description = "Execution status", body = WorkflowExecutionStatus),
@@ -360,7 +360,7 @@ pub async fn get_execution_status(
 /// Cancel workflow execution
 #[utoipa::path(
     delete,
-    path = "/api/v1/workflows/executions/{execution_id}",
+    path = crate::routes::paths::api_v1::WORKFLOW_EXECUTION_BY_ID,
     params(("execution_id" = String, Path, description = "Execution ID")),
     responses(
         (status = 204, description = "Execution cancelled"),

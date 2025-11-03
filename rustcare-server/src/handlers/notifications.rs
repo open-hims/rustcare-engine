@@ -166,7 +166,7 @@ pub struct BulkMarkReadRequest {
 /// List notifications for the current user
 #[utoipa::path(
     get,
-    path = "/api/v1/notifications",
+    path = crate::routes::paths::api_v1::NOTIFICATIONS,
     responses(
         (status = 200, description = "List of notifications", body = Vec<Notification>)
     ),
@@ -281,7 +281,7 @@ pub async fn list_notifications(
 /// Get notification by ID
 #[utoipa::path(
     get,
-    path = "/api/v1/notifications/{id}",
+    path = crate::routes::paths::api_v1::NOTIFICATION_BY_ID,
     responses(
         (status = 200, description = "Notification details", body = Notification)
     ),
@@ -334,7 +334,7 @@ pub async fn get_notification(
 /// Create a new notification
 #[utoipa::path(
     post,
-    path = "/api/v1/notifications",
+    path = crate::routes::paths::api_v1::NOTIFICATIONS,
     request_body = CreateNotificationRequest,
     responses(
         (status = 201, description = "Notification created", body = Notification)
@@ -419,7 +419,7 @@ pub async fn create_notification(
 /// Mark notification as read/unread
 #[utoipa::path(
     patch,
-    path = "/api/v1/notifications/{id}/read",
+    path = crate::routes::paths::api_v1::NOTIFICATION_MARK_READ,
     request_body = MarkReadRequest,
     responses(
         (status = 200, description = "Notification updated", body = Notification)
@@ -490,7 +490,7 @@ pub async fn mark_notification_read(
 /// Bulk mark notifications as read/unread
 #[utoipa::path(
     patch,
-    path = "/api/v1/notifications/bulk-read",
+    path = crate::routes::paths::api_v1::NOTIFICATION_BULK_READ,
     request_body = BulkMarkReadRequest,
     responses(
         (status = 200, description = "Notifications updated")
@@ -544,7 +544,7 @@ pub async fn bulk_mark_read(
 /// Get unread notification count
 #[utoipa::path(
     get,
-    path = "/api/v1/notifications/unread/count",
+    path = crate::routes::paths::api_v1::NOTIFICATION_UNREAD_COUNT,
     responses(
         (status = 200, description = "Unread count")
     )
@@ -575,7 +575,7 @@ pub async fn get_unread_count(
 /// List notification audit logs
 #[utoipa::path(
     get,
-    path = "/api/v1/notifications/{id}/audit-logs",
+    path = crate::routes::paths::api_v1::NOTIFICATION_AUDIT_LOGS,
     responses(
         (status = 200, description = "Audit logs", body = Vec<NotificationAuditLog>)
     ),

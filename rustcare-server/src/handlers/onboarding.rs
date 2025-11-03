@@ -54,7 +54,7 @@ pub struct CreateUserResponse {
 /// Create hospital admin user with credentials
 #[utoipa::path(
     post,
-    path = "/api/v1/organizations/{org_id}/users",
+    path = crate::routes::paths::api_v1::ORGANIZATION_USERS,
     request_body = CreateUserRequest,
     responses(
         (status = 201, description = "User created with credentials", body = CreateUserResponse)
@@ -177,7 +177,7 @@ pub async fn create_organization_user(
 /// List organization users
 #[utoipa::path(
     get,
-    path = "/api/v1/organizations/{org_id}/users",
+    path = crate::routes::paths::api_v1::ORGANIZATION_USERS,
     responses(
         (status = 200, description = "List of users", body = Vec<User>)
     ),
@@ -210,7 +210,7 @@ pub async fn list_organization_users(
 /// Resend user credentials
 #[utoipa::path(
     post,
-    path = "/api/v1/users/{user_id}/resend-credentials",
+    path = crate::routes::paths::api_v1::RESEND_CREDENTIALS,
     responses(
         (status = 200, description = "Credentials resent", body = CreateUserResponse)
     ),
@@ -315,7 +315,7 @@ fn hash_password(password: &str) -> Result<String, ApiError> {
 /// Verify email configuration (test connection without sending)
 #[utoipa::path(
     post,
-    path = "/api/v1/email/verify",
+    path = crate::routes::paths::api_v1::EMAIL_VERIFY,
     responses(
         (status = 200, description = "Email configuration verified successfully")
     )
