@@ -12,6 +12,8 @@ use crate::error::{ApiError, ApiResponse, api_success};
 use crate::middleware::AuthContext;
 use crate::types::pagination::PaginationParams;
 use crate::utils::query_builder::PaginatedQuery;
+use crate::validation::RequestValidation;
+use crate::services::AuditService;
 use chrono::{DateTime, Utc};
 
 /// Service Type structure
@@ -103,6 +105,47 @@ pub struct CreateMedicalRecordRequest {
     pub access_reason: String,
 }
 
+impl RequestValidation for CreateMedicalRecordRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        validate_uuid!(self.organization_id, "Organization ID is required");
+        validate_uuid!(self.patient_id, "Patient ID is required");
+        validate_required!(self.record_type, "Record type is required");
+        validate_required!(self.title, "Title is required");
+        validate_required!(self.access_reason, "Access reason is required");
+        
+        validate_length!(self.title, 1, 200, "Title must be between 1 and 200 characters");
+        
+        // Validate record_type is one of valid values
+        let valid_types = ["progress_note", "discharge_summary", "lab_result", "imaging", "prescription", "other"];
+        validate_field!(
+            self.record_type,
+            valid_types.contains(&self.record_type.as_str()),
+            format!("Record type must be one of: {}", valid_types.join(", "))
+        );
+        
+        // Validate access_level if provided
+        if let Some(ref level) = self.access_level {
+            let valid_levels = ["public", "internal", "restricted", "confidential"];
+            validate_field!(
+                level,
+                valid_levels.contains(&level.as_str()),
+                format!("Access level must be one of: {}", valid_levels.join(", "))
+            );
+        }
+        
+        // Validate visit_duration_minutes if provided
+        if let Some(duration) = self.visit_duration_minutes {
+            validate_field!(
+                duration,
+                duration > 0 && duration <= 1440, // Max 24 hours
+                "Visit duration must be between 1 and 1440 minutes"
+            );
+        }
+        
+        Ok(())
+    }
+}
+
 /// Update Medical Record Request
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateMedicalRecordRequest {
@@ -115,6 +158,28 @@ pub struct UpdateMedicalRecordRequest {
     pub visit_duration_minutes: Option<i32>,
     pub location: Option<String>,
     pub update_reason: String,
+}
+
+impl RequestValidation for UpdateMedicalRecordRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        validate_required!(self.update_reason, "Update reason is required");
+        
+        // Validate title length if provided
+        if let Some(ref title) = self.title {
+            validate_length!(title, 1, 200, "Title must be between 1 and 200 characters");
+        }
+        
+        // Validate visit_duration_minutes if provided
+        if let Some(duration) = self.visit_duration_minutes {
+            validate_field!(
+                duration,
+                duration > 0 && duration <= 1440, // Max 24 hours
+                "Visit duration must be between 1 and 1440 minutes"
+            );
+        }
+        
+        Ok(())
+    }
 }
 
 /// List Medical Records Query Parameters
@@ -193,6 +258,9 @@ pub async fn create_medical_record(
     auth: AuthContext,
     Json(request): Json<CreateMedicalRecordRequest>,
 ) -> Result<Json<ApiResponse<MedicalRecord>>, ApiError> {
+    // Validate request
+    request.validate()?;
+    
     let record = sqlx::query_as::<_, MedicalRecord>(
         r#"
         INSERT INTO medical_records (
@@ -226,6 +294,19 @@ pub async fn create_medical_record(
     .bind(auth.user_id)
     .fetch_one(&server.db_pool)
     .await?;
+    
+    // Log the creation using AuditService
+    let audit_service = AuditService::new(server.db_pool.clone());
+    let _ = audit_service.log_medical_record_action(
+        &auth,
+        record.id,
+        "created",
+        Some(serde_json::json!({
+            "record_type": request.record_type,
+            "access_reason": request.access_reason,
+        })),
+    ).await;
+    
     Ok(Json(api_success(record)))
 }
 
@@ -261,7 +342,18 @@ pub async fn get_medical_record(
     .fetch_optional(&server.db_pool)
     .await
     {
-        Ok(Some(record)) => Ok(Json(api_success(record))),
+        Ok(Some(record)) => {
+            // Log the access using AuditService
+            let audit_service = AuditService::new(server.db_pool.clone());
+            let _ = audit_service.log_medical_record_action(
+                &auth,
+                record_id,
+                "viewed",
+                None,
+            ).await;
+            
+            Ok(Json(api_success(record)))
+        },
         Ok(None) => Err(ApiError::not_found("medical_record")),
         Err(_) => {
             let mock_record = MedicalRecord {
@@ -405,6 +497,9 @@ pub async fn update_medical_record(
     Json(request): Json<UpdateMedicalRecordRequest>,
     auth: AuthContext,
 ) -> Result<Json<ApiResponse<MedicalRecord>>, ApiError> {
+    // Validate request
+    request.validate()?;
+    
     // Ensure record exists and belongs to this organization
     let exists = sqlx::query_scalar::<_, bool>(
         r#"
@@ -451,6 +546,17 @@ pub async fn update_medical_record(
     .bind(auth.organization_id)
     .fetch_one(&server.db_pool)
     .await?;
+
+    // Log the update using AuditService
+    let audit_service = AuditService::new(server.db_pool.clone());
+    let _ = audit_service.log_medical_record_action(
+        &auth,
+        record_id,
+        "updated",
+        Some(serde_json::json!({
+            "update_reason": request.update_reason,
+        })),
+    ).await;
 
     Ok(Json(api_success(updated)))
 }

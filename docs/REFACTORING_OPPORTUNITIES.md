@@ -52,6 +52,9 @@ This document consolidates all refactoring opportunities identified through comp
 - ✅ **Phase 3 Started**: RequestValidation trait implemented (`validation.rs`)
 - ✅ **Phase 3 Started**: Centralized AuditService created (`services/audit.rs`)
 - ✅ **Phase 3 Adoption**: Notifications handler migrated to use RequestValidation and AuditService
+- ✅ **Phase 3 Adoption**: Healthcare handler migrated to use RequestValidation and AuditService
+- ✅ **Phase 3 Adoption**: Pharmacy handler migrated to use RequestValidation and AuditService
+- ✅ **Phase 3 Adoption**: Organizations handler migrated to use RequestValidation and AuditService
 
 Notes:
 - Database-related build errors seen in CI are due to environment (DB unavailable); code changes lint clean.
@@ -92,10 +95,14 @@ Notes:
    - ✅ Centralized `AuditService` created (`services/audit.rs`) with convenience methods
    - ✅ Notifications handler migrated to use `RequestValidation` trait
    - ✅ Notifications handler migrated to use `AuditService` (replaced ad-hoc logging)
+   - ✅ Healthcare handler migrated to use `RequestValidation` trait (medical records)
+   - ✅ Healthcare handler migrated to use `AuditService` (create/update/view tracking)
+   - ✅ Pharmacy handler migrated to use `RequestValidation` trait and `AuditService`
+   - ✅ Organizations handler migrated to use `RequestValidation` trait and `AuditService`
    - ⏳ Add OpenAPI helper macros for common path patterns (next)
    - ⏳ Backfill tests for utilities and refactored modules (next)
-   - ⏳ Migrate other handlers to use RequestValidation trait (adoption)
-   - ⏳ Replace ad-hoc audit logging in other handlers with AuditService (adoption)
+   - ⏳ Migrate remaining handlers to use RequestValidation trait (adoption)
+   - ⏳ Replace ad-hoc audit logging in remaining handlers with AuditService (adoption)
 
 Owner: Platform Team  
 Status: Phase 2 complete - Ready for Phase 3

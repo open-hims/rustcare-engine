@@ -9,6 +9,8 @@ use crate::server::RustCareServer;
 use crate::middleware::AuthContext;
 use crate::types::pagination::PaginationParams;
 use crate::utils::query_builder::PaginatedQuery;
+use crate::validation::RequestValidation;
+use crate::services::AuditService;
 
 /// Organization with setup configuration
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -147,6 +149,40 @@ pub struct CreateRoleRequest {
     pub name: String,
     pub description: Option<String>,
     pub permissions: Vec<String>,
+}
+
+impl RequestValidation for CreateRoleRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        validate_required!(self.name, "Role name is required");
+        validate_length!(self.name, 1, 100, "Role name must be between 1 and 100 characters");
+        Ok(())
+    }
+}
+
+impl RequestValidation for OrganizationSetupRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        validate_required!(self.name, "Organization name is required");
+        validate_required!(self.organization_type, "Organization type is required");
+        validate_required!(self.country, "Country is required");
+        validate_required!(self.timezone, "Timezone is required");
+        
+        validate_length!(self.name, 1, 200, "Name must be between 1 and 200 characters");
+        
+        // Validate organization_type
+        let valid_types = ["clinic", "hospital", "practice", "pharmacy", "lab", "other"];
+        validate_field!(
+            self.organization_type,
+            valid_types.contains(&self.organization_type.as_str()),
+            format!("Organization type must be one of: {}", valid_types.join(", "))
+        );
+        
+        // Validate email if provided
+        if let Some(ref email) = self.email {
+            validate_email!(email, "Invalid email format");
+        }
+        
+        Ok(())
+    }
 }
 
 /// Role assignment request
@@ -289,13 +325,12 @@ pub async fn list_organizations(
 pub async fn create_organization(
     State(server): State<RustCareServer>,
     Json(request): Json<OrganizationSetupRequest>,
+    auth: AuthContext,
 ) -> Result<Json<crate::error::ApiResponse<Organization>>, crate::error::ApiError> {
     use crate::error::{ApiError, api_success};
     
-    // Validate required fields
-    if request.name.trim().is_empty() {
-        return Err(ApiError::validation("Organization name is required"));
-    }
+    // Validate request
+    request.validate()?;
     
     // Generate slug from name
     let slug = request.name
@@ -436,6 +471,16 @@ pub async fn create_organization(
         updated_at: chrono::Utc::now().to_rfc3339(),
     };
 
+    // Log the creation using AuditService
+    let audit_service = AuditService::new(server.db_pool.clone());
+    let _ = audit_service.log_general_action(
+        &auth,
+        "organization",
+        org_id,
+        "created",
+        Some(serde_json::json!({"name": request.name, "type": request.organization_type})),
+    ).await;
+
     Ok(Json(api_success(organization)))
 }
 
@@ -541,13 +586,12 @@ pub async fn create_organization_role(
     State(server): State<RustCareServer>,
     Path(org_id): Path<Uuid>,
     Json(request): Json<CreateRoleRequest>,
+    auth: AuthContext,
 ) -> Result<Json<crate::error::ApiResponse<Role>>, crate::error::ApiError> {
     use crate::error::{ApiError, api_success};
     
-    // Validate role name
-    if request.name.trim().is_empty() {
-        return Err(ApiError::validation("Role name is required"));
-    }
+    // Validate request
+    request.validate()?;
     
     // Check for duplicate role name in organization
     let existing_role = sqlx::query!(
@@ -644,6 +688,16 @@ pub async fn create_organization_role(
         created_at: role_record.created_at.to_rfc3339(),
         updated_at: role_record.created_at.to_rfc3339(),
     };
+
+    // Log the creation using AuditService
+    let audit_service = AuditService::new(server.db_pool.clone());
+    let _ = audit_service.log_general_action(
+        &auth,
+        "role",
+        role_id,
+        "created",
+        Some(serde_json::json!({"name": request.name, "org_id": org_id})),
+    ).await;
 
     Ok(Json(api_success(role)))
 }

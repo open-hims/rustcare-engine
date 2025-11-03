@@ -12,6 +12,8 @@ use crate::utils::query_builder::PaginatedQuery;
 use crate::types::pagination::PaginationParams;
 use crate::middleware::AuthContext;
 use crate::handlers::common::crud::{CrudHandler, AuthCrudHandler};
+use crate::validation::RequestValidation;
+use crate::services::AuditService;
 use sqlx::FromRow;
 use std::collections::HashMap;
 use async_trait::async_trait;
@@ -69,6 +71,28 @@ pub struct CreatePharmacyRequest {
     pub settings: Option<serde_json::Value>,
 }
 
+impl RequestValidation for CreatePharmacyRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        validate_required!(self.name, "Pharmacy name is required");
+        validate_required!(self.code, "Pharmacy code is required");
+        validate_required!(self.address, "Address is required");
+        validate_required!(self.city, "City is required");
+        validate_required!(self.state, "State is required");
+        validate_required!(self.postal_code, "Postal code is required");
+        validate_required!(self.country, "Country is required");
+        
+        validate_length!(self.name, 1, 200, "Name must be between 1 and 200 characters");
+        validate_length!(self.code, 1, 50, "Code must be between 1 and 50 characters");
+        
+        // Validate email format if provided
+        if let Some(ref email) = self.email {
+            validate_email!(email, "Invalid email format");
+        }
+        
+        Ok(())
+    }
+}
+
 /// Update Pharmacy Request
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdatePharmacyRequest {
@@ -89,6 +113,27 @@ pub struct UpdatePharmacyRequest {
     pub hours_of_operation: Option<serde_json::Value>,
     pub is_active: Option<bool>,
     pub settings: Option<serde_json::Value>,
+}
+
+impl RequestValidation for UpdatePharmacyRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        // Validate name length if provided
+        if let Some(ref name) = self.name {
+            validate_length!(name, 1, 200, "Name must be between 1 and 200 characters");
+        }
+        
+        // Validate code length if provided
+        if let Some(ref code) = self.code {
+            validate_length!(code, 1, 50, "Code must be between 1 and 50 characters");
+        }
+        
+        // Validate email format if provided
+        if let Some(ref email) = self.email {
+            validate_email!(email, "Invalid email format");
+        }
+        
+        Ok(())
+    }
 }
 
 /// List Pharmacies Query Parameters
@@ -330,12 +375,7 @@ pub async fn create_pharmacy(
     Json(req): Json<CreatePharmacyRequest>,
 ) -> Result<(StatusCode, Json<ApiResponse<Pharmacy>>), ApiError> {
     // Validate request
-    if req.name.trim().is_empty() {
-        return Err(ApiError::validation("Pharmacy name is required"));
-    }
-    if req.code.trim().is_empty() {
-        return Err(ApiError::validation("Pharmacy code is required"));
-    }
+    req.validate()?;
     
     let pharmacy_id = Uuid::new_v4();
     
@@ -374,6 +414,16 @@ pub async fn create_pharmacy(
     .fetch_one(&server.db_pool)
     .await?;
     
+    // Log the creation using AuditService
+    let audit_service = AuditService::new(server.db_pool.clone());
+    let _ = audit_service.log_general_action(
+        &auth,
+        "pharmacy",
+        pharmacy.id,
+        "created",
+        Some(serde_json::json!({"name": req.name, "code": req.code})),
+    ).await;
+    
     Ok((StatusCode::CREATED, Json(api_success(pharmacy))))
 }
 
@@ -400,6 +450,9 @@ pub async fn update_pharmacy(
     auth: AuthContext,
     Json(req): Json<UpdatePharmacyRequest>,
 ) -> Result<Json<ApiResponse<Pharmacy>>, ApiError> {
+    // Validate request
+    req.validate()?;
+    
     // Check if pharmacy exists and belongs to organization
     let exists = sqlx::query_scalar::<_, bool>(
         r#"
@@ -468,6 +521,18 @@ pub async fn update_pharmacy(
     .bind(auth.organization_id)
     .fetch_optional(&server.db_pool)
     .await?;
+    
+    if let Some(ref pharmacy) = pharmacy {
+        // Log the update using AuditService
+        let audit_service = AuditService::new(server.db_pool.clone());
+        let _ = audit_service.log_general_action(
+            &auth,
+            "pharmacy",
+            pharmacy_id,
+            "updated",
+            None,
+        ).await;
+    }
     
     match pharmacy {
         Some(pharm) => Ok(Json(api_success(pharm))),
