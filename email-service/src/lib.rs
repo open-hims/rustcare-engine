@@ -28,4 +28,4 @@ pub use templates::*;
 pub use encryption::*;
 pub use compliance::*;
 pub use error::*;
-pub use verification::verify_mailbox_exists;
+pub use verification::{verify_mailbox_exists, verify_mailbox_exists_smtp, verify_domain_mx};
