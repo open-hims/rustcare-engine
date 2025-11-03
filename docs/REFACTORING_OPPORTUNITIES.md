@@ -49,9 +49,12 @@ This document consolidates all refactoring opportunities identified through comp
 - ✅ Error patterns standardized to `ApiError` across all handlers
 - ✅ Pagination standardized with `PaginationParams` and metadata helpers
 - ✅ AuthContext integrated across all handlers
+- ✅ **Phase 3 Started**: RequestValidation trait implemented (`validation.rs`)
+- ✅ **Phase 3 Started**: Centralized AuditService created (`services/audit.rs`)
 
 Notes:
 - Database-related build errors seen in CI are due to environment (DB unavailable); code changes lint clean.
+- Phase 3 utilities (validation, audit) are ready for adoption in handlers.
 
 ---
 
@@ -82,12 +85,13 @@ Notes:
    - ✅ All handlers now use `AuthContext` scoping, `PaginationParams`, `PaginatedQuery`, and `ApiError`
    - ✅ Standard pagination metadata format adopted across all list endpoints
    - ✅ Complete utoipa documentation added to all endpoints
-2. **Phase 3 - Next Steps:**
-   - Introduce `RequestValidation` trait for create/update payloads
-   - Add centralized `AuditService` and replace ad-hoc audit inserts
-   - Add OpenAPI helper macros for common path patterns
-   - Backfill tests for utilities and at least one refactored module per domain
-   - Consider CRUD trait adoption for remaining handlers (optional optimization)
+2. **Phase 3 - In Progress:**
+   - ✅ `RequestValidation` trait implemented (`validation.rs`) with helper macros
+   - ✅ Centralized `AuditService` created (`services/audit.rs`) with convenience methods
+   - ⏳ Add OpenAPI helper macros for common path patterns (next)
+   - ⏳ Backfill tests for utilities and refactored modules (next)
+   - ⏳ Migrate handlers to use RequestValidation trait (adoption)
+   - ⏳ Replace ad-hoc audit logging with AuditService (adoption)
 
 Owner: Platform Team  
 Status: Phase 2 complete - Ready for Phase 3
