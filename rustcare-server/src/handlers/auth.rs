@@ -6,6 +6,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use crate::server::RustCareServer;
 use crate::error::{ApiError, ApiResponse, api_success};
+use crate::validation::RequestValidation;
 use utoipa::ToSchema;
 
 /// Authentication request
@@ -25,6 +26,18 @@ pub struct AuthRequest {
     /// Authentication provider (optional)
     #[schema(example = "local")]
     pub provider: Option<String>,
+}
+
+impl RequestValidation for AuthRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        validate_required!(self.username, "Username is required");
+        validate_required!(self.password, "Password is required");
+        
+        validate_length!(self.username, 1, 200, "Username must be between 1 and 200 characters");
+        validate_length!(self.password, 8, 128, "Password must be between 8 and 128 characters");
+        
+        Ok(())
+    }
 }
 
 /// Login request (alias for AuthRequest for OpenAPI)
@@ -170,23 +183,14 @@ pub async fn login(
     State(_server): State<RustCareServer>,
     Json(auth_request): Json<AuthRequest>
 ) -> Result<Json<ApiResponse<AuthResponse>>, ApiError> {
+    // Validate request
+    auth_request.validate()?;
+    
     // TODO: Integrate with auth-identity and auth-oauth modules
     // This is a placeholder implementation
     
-    if auth_request.username.is_empty() || auth_request.password.is_empty() {
-        return Ok(Json(api_success(AuthResponse {
-            success: false,
-            token: None,
-            expires_in: None,
-            refresh_token: None,
-            user_id: None,
-            permissions: vec![],
-            error: Some("Username and password are required".to_string()),
-        })));
-    }
-
     // Simulate authentication logic
-    let success = !auth_request.username.is_empty() && !auth_request.password.is_empty();
+    let success = true; // Already validated above
     
     let response = if success {
         AuthResponse {

@@ -14,6 +14,8 @@ use crate::{
 };
 use crate::middleware::AuthContext;
 use crate::types::pagination::PaginationParams;
+use crate::validation::RequestValidation;
+use crate::services::AuditService;
 
 /// Entity compliance status
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -47,6 +49,20 @@ pub struct CreateComplianceFrameworkRequest {
     pub metadata: Option<serde_json::Value>,
 }
 
+impl RequestValidation for CreateComplianceFrameworkRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        validate_required!(self.name, "Framework name is required");
+        validate_required!(self.code, "Framework code is required");
+        validate_required!(self.version, "Version is required");
+        validate_required!(self.effective_date, "Effective date is required");
+        
+        validate_length!(self.name, 1, 200, "Name must be between 1 and 200 characters");
+        validate_length!(self.code, 1, 50, "Code must be between 1 and 50 characters");
+        
+        Ok(())
+    }
+}
+
 /// Request to update compliance framework
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateComplianceFrameworkRequest {
@@ -61,6 +77,18 @@ pub struct UpdateComplianceFrameworkRequest {
     pub parent_framework_id: Option<Uuid>,
     pub metadata: Option<serde_json::Value>,
     pub status: Option<String>,
+}
+
+impl RequestValidation for UpdateComplianceFrameworkRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        if let Some(ref name) = self.name {
+            validate_length!(name, 1, 200, "Name must be between 1 and 200 characters");
+        }
+        if let Some(ref code) = self.code {
+            validate_length!(code, 1, 50, "Code must be between 1 and 50 characters");
+        }
+        Ok(())
+    }
 }
 
 /// Request to create compliance rule
@@ -82,6 +110,39 @@ pub struct CreateComplianceRuleRequest {
     pub check_frequency_days: Option<i32>,
     pub effective_date: String,
     pub expiry_date: Option<String>,
+}
+
+impl RequestValidation for CreateComplianceRuleRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        validate_uuid!(self.framework_id, "Framework ID is required");
+        validate_required!(self.rule_code, "Rule code is required");
+        validate_required!(self.title, "Title is required");
+        validate_required!(self.severity, "Severity is required");
+        validate_required!(self.rule_type, "Rule type is required");
+        validate_required!(self.effective_date, "Effective date is required");
+        
+        validate_length!(self.title, 1, 200, "Title must be between 1 and 200 characters");
+        validate_length!(self.rule_code, 1, 50, "Rule code must be between 1 and 50 characters");
+        
+        // Validate severity
+        let valid_severities = ["low", "medium", "high", "critical"];
+        validate_field!(
+            self.severity,
+            valid_severities.contains(&self.severity.as_str()),
+            format!("Severity must be one of: {}", valid_severities.join(", "))
+        );
+        
+        // Validate check_frequency_days if provided
+        if let Some(frequency) = self.check_frequency_days {
+            validate_field!(
+                frequency,
+                frequency > 0 && frequency <= 365,
+                "Check frequency must be between 1 and 365 days"
+            );
+        }
+        
+        Ok(())
+    }
 }
 
 /// Request to update compliance rule
@@ -108,6 +169,46 @@ pub struct UpdateComplianceRuleRequest {
     pub metadata: Option<serde_json::Value>,
     pub tags: Option<serde_json::Value>,
     pub status: Option<String>,
+}
+
+impl RequestValidation for UpdateComplianceRuleRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        if let Some(ref title) = self.title {
+            validate_length!(title, 1, 200, "Title must be between 1 and 200 characters");
+        }
+        if let Some(ref rule_code) = self.rule_code {
+            validate_length!(rule_code, 1, 50, "Rule code must be between 1 and 50 characters");
+        }
+        if let Some(ref severity) = self.severity {
+            let valid_severities = ["low", "medium", "high", "critical"];
+            validate_field!(
+                severity,
+                valid_severities.contains(&severity.as_str()),
+                format!("Severity must be one of: {}", valid_severities.join(", "))
+            );
+        }
+        if let Some(frequency) = self.check_frequency_days {
+            validate_field!(
+                frequency,
+                frequency > 0 && frequency <= 365,
+                "Check frequency must be between 1 and 365 days"
+            );
+        }
+        Ok(())
+    }
+}
+
+impl RequestValidation for AssignComplianceRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        validate_required!(self.entity_type, "Entity type is required");
+        validate_uuid!(self.entity_id, "Entity ID is required");
+        validate_field!(
+            self.rule_ids,
+            !self.rule_ids.is_empty(),
+            "At least one rule ID is required"
+        );
+        Ok(())
+    }
 }
 
 /// Compliance assignment request
@@ -184,6 +285,9 @@ pub async fn create_compliance_framework(
     Json(request): Json<CreateComplianceFrameworkRequest>,
     auth: AuthContext,
 ) -> Result<Json<crate::error::ApiResponse<ComplianceFramework>>, ApiError> {
+    // Validate request
+    request.validate()?;
+    
     let organization_id = auth.organization_id;
     
     // Parse effective date to NaiveDate for database compatibility
@@ -219,6 +323,17 @@ pub async fn create_compliance_framework(
         .map_err(ApiError::from)?;
 
     tracing::info!("Compliance framework created: {} - {}", framework.code, framework.name);
+    
+    // Log the creation using AuditService
+    let audit_service = AuditService::new(server.db_pool.clone());
+    let _ = audit_service.log_general_action(
+        &auth,
+        "compliance_framework",
+        framework.id,
+        "created",
+        Some(serde_json::json!({"name": request.name, "code": request.code})),
+    ).await;
+    
     Ok(Json(api_success(framework)))
 }
 
@@ -328,6 +443,16 @@ pub async fn create_compliance_rule(
         )
         .await
         .map_err(ApiError::from)?;
+
+    // Log the creation using AuditService
+    let audit_service = AuditService::new(server.db_pool.clone());
+    let _ = audit_service.log_general_action(
+        &auth,
+        "compliance_rule",
+        rule.id,
+        "created",
+        Some(serde_json::json!({"title": request.title, "rule_code": request.rule_code})),
+    ).await;
 
     Ok(Json(api_success(rule)))
 }

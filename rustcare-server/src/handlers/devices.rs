@@ -14,6 +14,8 @@ use crate::{
     middleware::AuthContext,
     types::pagination::PaginationParams,
     utils::query_builder::PaginatedQuery,
+    validation::RequestValidation,
+    services::AuditService,
 };
 
 // ============================================================================
@@ -31,6 +33,21 @@ pub struct RegisterDeviceRequest {
     pub config: serde_json::Value,
 }
 
+impl RequestValidation for RegisterDeviceRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        validate_required!(self.name, "Device name is required");
+        validate_required!(self.device_type, "Device type is required");
+        validate_required!(self.manufacturer, "Manufacturer is required");
+        validate_required!(self.model, "Model is required");
+        validate_required!(self.serial_number, "Serial number is required");
+        
+        validate_length!(self.name, 1, 200, "Name must be between 1 and 200 characters");
+        validate_length!(self.serial_number, 1, 100, "Serial number must be between 1 and 100 characters");
+        
+        Ok(())
+    }
+}
+
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateDeviceRequest {
     pub name: Option<String>,
@@ -41,6 +58,18 @@ pub struct UpdateDeviceRequest {
     pub location: Option<serde_json::Value>,
     pub config: Option<serde_json::Value>,
     pub metadata: Option<serde_json::Value>,
+}
+
+impl RequestValidation for UpdateDeviceRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        if let Some(ref name) = self.name {
+            validate_length!(name, 1, 200, "Name must be between 1 and 200 characters");
+        }
+        if let Some(ref serial_number) = self.serial_number {
+            validate_length!(serial_number, 1, 100, "Serial number must be between 1 and 100 characters");
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
@@ -200,6 +229,9 @@ pub async fn register_device(
     Json(req): Json<RegisterDeviceRequest>,
     auth: AuthContext,
 ) -> Result<(StatusCode, Json<ApiResponse<DeviceResponse>>), ApiError> {
+    // Validate request
+    req.validate()?;
+    
     // TODO: Implement with device manager
     // let config: DeviceConfig = serde_json::from_value(req.config)?;
     // let device = server.device_manager
@@ -249,7 +281,19 @@ pub async fn register_device(
     .map_err(|e| ApiError::internal(format!("Failed to register device: {}", e)))?;
     
     match device {
-        Some(d) => Ok((StatusCode::CREATED, Json(api_success(d)))),
+        Some(d) => {
+            // Log the registration using AuditService
+            let audit_service = AuditService::new(server.db_pool.clone());
+            let _ = audit_service.log_general_action(
+                &auth,
+                "device",
+                d.id,
+                "registered",
+                Some(serde_json::json!({"name": req.name, "type": req.device_type})),
+            ).await;
+            
+            Ok((StatusCode::CREATED, Json(api_success(d))))
+        },
         None => {
             // Fallback if table doesn't exist yet
             let response = DeviceResponse {
@@ -269,6 +313,17 @@ pub async fn register_device(
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
             };
+            
+            // Log the registration using AuditService
+            let audit_service = AuditService::new(server.db_pool.clone());
+            let _ = audit_service.log_general_action(
+                &auth,
+                "device",
+                device_id,
+                "registered",
+                Some(serde_json::json!({"name": req.name, "type": req.device_type})),
+            ).await;
+            
             Ok((StatusCode::CREATED, Json(api_success(response))))
         }
     }
@@ -336,6 +391,9 @@ pub async fn update_device(
     Json(req): Json<UpdateDeviceRequest>,
     auth: AuthContext,
 ) -> Result<Json<ApiResponse<DeviceResponse>>, ApiError> {
+    // Validate request
+    req.validate()?;
+    
     // Check if device exists and belongs to organization
     let exists = sqlx::query_scalar::<_, bool>(
         r#"

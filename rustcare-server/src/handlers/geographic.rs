@@ -10,6 +10,8 @@ use crate::server::RustCareServer;
 use crate::middleware::AuthContext;
 use crate::error::{ApiError, ApiResponse, api_success};
 use crate::types::pagination::PaginationParams;
+use crate::validation::RequestValidation;
+use crate::services::AuditService;
 
 /// Geographic region with hierarchical structure
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -50,6 +52,27 @@ pub type CreateRegionRequest = CreateGeographicRegionRequest;
 
 /// Alias for update request (used in routes) 
 pub type UpdateRegionRequest = CreateGeographicRegionRequest;
+
+impl RequestValidation for CreateGeographicRegionRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        validate_required!(self.name, "Region name is required");
+        validate_required!(self.code, "Region code is required");
+        validate_required!(self.region_type, "Region type is required");
+        
+        validate_length!(self.name, 1, 200, "Name must be between 1 and 200 characters");
+        validate_length!(self.code, 1, 50, "Code must be between 1 and 50 characters");
+        
+        // Validate region_type
+        let valid_types = ["country", "state", "city", "district", "postal_code"];
+        validate_field!(
+            self.region_type,
+            valid_types.contains(&self.region_type.as_str()),
+            format!("Region type must be one of: {}", valid_types.join(", "))
+        );
+        
+        Ok(())
+    }
+}
 
 /// Query parameters for geographic region search
 #[derive(Debug, Deserialize, IntoParams)]
@@ -171,6 +194,9 @@ pub async fn create_geographic_region(
     Json(payload): Json<CreateGeographicRegionRequest>,
     auth: AuthContext,
 ) -> Result<(StatusCode, Json<ApiResponse<GeographicRegion>>), ApiError> {
+    // Validate request
+    payload.validate()?;
+    
     let db_region = server.geographic_repo
         .create_region(
             &payload.name,
@@ -212,8 +238,20 @@ pub async fn create_geographic_region(
         metadata: db_region.metadata.unwrap_or(serde_json::json!({})),
     };
 
+    // Log the creation using AuditService
+    let audit_service = AuditService::new(server.db_pool.clone());
+    let _ = audit_service.log_general_action(
+        &auth,
+        "geographic_region",
+        db_region.id,
+        "created",
+        Some(serde_json::json!({"name": payload.name, "code": payload.code})),
+    ).await;
+
     Ok((StatusCode::CREATED, Json(api_success(region))))
-}/// Get geographic region by ID
+}
+
+/// Get geographic region by ID
 #[utoipa::path(
     get,
     path = "/api/v1/geographic/regions/{id}",

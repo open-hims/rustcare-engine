@@ -90,6 +90,18 @@ pub struct CreateResourceRequest {
     pub contains_phi: bool,
 }
 
+impl RequestValidation for CreateResourceRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        validate_required!(self.name, "Resource name is required");
+        validate_required!(self.description, "Description is required");
+        
+        validate_length!(self.name, 1, 100, "Name must be between 1 and 100 characters");
+        validate_length!(self.description, 1, 500, "Description must be between 1 and 500 characters");
+        
+        Ok(())
+    }
+}
+
 /// List all resources
 #[utoipa::path(
     get,
@@ -169,7 +181,10 @@ pub async fn list_resources(
 pub async fn create_resource(
     State(server): State<RustCareServer>,
     Json(request): Json<CreateResourceRequest>,
+    auth: AuthContext,
 ) -> Result<(StatusCode, Json<ApiResponse<Resource>>), ApiError> {
+    // Validate request
+    request.validate()?;
     // TODO: Validate and insert into database
     // TODO: Register in Zanzibar as a namespace/resource type
     
@@ -186,6 +201,16 @@ pub async fn create_resource(
         created_at: chrono::Utc::now().to_rfc3339(),
         updated_at: chrono::Utc::now().to_rfc3339(),
     };
+    
+    // Log the creation using AuditService
+    let audit_service = AuditService::new(server.db_pool.clone());
+    let _ = audit_service.log_general_action(
+        &auth,
+        "resource",
+        resource.id,
+        "created",
+        Some(serde_json::json!({"name": request.name, "type": format!("{:?}", request.resource_type)})),
+    ).await;
     
     Ok((StatusCode::CREATED, Json(api_success(resource))))
 }
@@ -229,6 +254,18 @@ pub struct CreateGroupRequest {
     pub name: String,
     pub description: String,
     pub permissions: Vec<String>,
+}
+
+impl RequestValidation for CreateGroupRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        validate_required!(self.name, "Group name is required");
+        validate_required!(self.description, "Description is required");
+        
+        validate_length!(self.name, 1, 100, "Name must be between 1 and 100 characters");
+        validate_length!(self.description, 1, 500, "Description must be between 1 and 500 characters");
+        
+        Ok(())
+    }
 }
 
 /// List all permission groups
@@ -292,7 +329,11 @@ pub async fn list_groups(
 pub async fn create_group(
     State(server): State<RustCareServer>,
     Json(request): Json<CreateGroupRequest>,
+    auth: AuthContext,
 ) -> Result<(StatusCode, Json<ApiResponse<PermissionGroup>>), ApiError> {
+    // Validate request
+    request.validate()?;
+    
     // TODO: Validate and insert into database
     
     let group = PermissionGroup {
@@ -304,6 +345,16 @@ pub async fn create_group(
         created_at: chrono::Utc::now().to_rfc3339(),
         updated_at: chrono::Utc::now().to_rfc3339(),
     };
+    
+    // Log the creation using AuditService
+    let audit_service = AuditService::new(server.db_pool.clone());
+    let _ = audit_service.log_general_action(
+        &auth,
+        "permission_group",
+        group.id,
+        "created",
+        Some(serde_json::json!({"name": request.name})),
+    ).await;
     
     Ok((StatusCode::CREATED, Json(api_success(group))))
 }
@@ -437,7 +488,11 @@ pub async fn list_roles(
 pub async fn create_role(
     State(server): State<RustCareServer>,
     Json(request): Json<CreateRoleRequest>,
+    auth: AuthContext,
 ) -> Result<(StatusCode, Json<ApiResponse<Role>>), ApiError> {
+    // Validate request
+    request.validate()?;
+    
     // TODO: Validate and insert into database
     
     let role = Role {
@@ -451,6 +506,16 @@ pub async fn create_role(
         created_at: chrono::Utc::now().to_rfc3339(),
         updated_at: chrono::Utc::now().to_rfc3339(),
     };
+    
+    // Log the creation using AuditService
+    let audit_service = AuditService::new(server.db_pool.clone());
+    let _ = audit_service.log_general_action(
+        &auth,
+        "role",
+        role.id,
+        "created",
+        Some(serde_json::json!({"name": request.name})),
+    ).await;
     
     Ok((StatusCode::CREATED, Json(api_success(role))))
 }

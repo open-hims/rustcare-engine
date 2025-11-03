@@ -55,6 +55,11 @@ This document consolidates all refactoring opportunities identified through comp
 - ✅ **Phase 3 Adoption**: Healthcare handler migrated to use RequestValidation and AuditService
 - ✅ **Phase 3 Adoption**: Pharmacy handler migrated to use RequestValidation and AuditService
 - ✅ **Phase 3 Adoption**: Organizations handler migrated to use RequestValidation and AuditService
+- ✅ **Phase 3 Adoption**: Devices handler migrated to use RequestValidation and AuditService
+- ✅ **Phase 3 Adoption**: Compliance handler migrated to use RequestValidation and AuditService
+- ✅ **Phase 3 Adoption**: Geographic handler migrated to use RequestValidation and AuditService
+- ✅ **Phase 3 Adoption**: Permissions handler migrated to use RequestValidation and AuditService
+- ✅ **Phase 3 Adoption**: Auth handler migrated to use RequestValidation
 
 Notes:
 - Database-related build errors seen in CI are due to environment (DB unavailable); code changes lint clean.
@@ -99,10 +104,13 @@ Notes:
    - ✅ Healthcare handler migrated to use `AuditService` (create/update/view tracking)
    - ✅ Pharmacy handler migrated to use `RequestValidation` trait and `AuditService`
    - ✅ Organizations handler migrated to use `RequestValidation` trait and `AuditService`
+   - ✅ Devices handler migrated to use `RequestValidation` trait and `AuditService`
+   - ✅ Compliance handler migrated to use `RequestValidation` trait and `AuditService`
+   - ✅ Geographic handler migrated to use `RequestValidation` trait and `AuditService`
+   - ✅ Permissions handler migrated to use `RequestValidation` trait and `AuditService`
+   - ✅ Auth handler migrated to use `RequestValidation` trait
    - ⏳ Add OpenAPI helper macros for common path patterns (next)
    - ⏳ Backfill tests for utilities and refactored modules (next)
-   - ⏳ Migrate remaining handlers to use RequestValidation trait (adoption)
-   - ⏳ Replace ad-hoc audit logging in remaining handlers with AuditService (adoption)
 
 Owner: Platform Team  
 Status: Phase 2 complete - Ready for Phase 3
