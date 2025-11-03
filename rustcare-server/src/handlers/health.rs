@@ -2,12 +2,11 @@ use axum::{
     extract::State,
     http::StatusCode,
     Json,
-    response::Json as ResponseJson,
 };
 use serde::Serialize;
 use std::collections::HashMap;
 use crate::server::RustCareServer;
-use anyhow::Result;
+use crate::error::{ApiError, ApiResponse, api_success};
 use utoipa::ToSchema;
 
 /// Health check response
@@ -102,7 +101,7 @@ pub struct ServiceStatus {
 )]
 pub async fn health_check(
     State(_server): State<RustCareServer>
-) -> Result<ResponseJson<HealthResponse>, StatusCode> {
+) -> Result<Json<ApiResponse<HealthResponse>>, ApiError> {
     let mut checks = HashMap::new();
     
     // Check database connectivity
@@ -125,7 +124,7 @@ pub async fn health_check(
         checks,
     };
 
-    Ok(Json(response))
+    Ok(Json(api_success(response)))
 }
 
 /// Version information handler
@@ -137,7 +136,7 @@ pub async fn health_check(
         (status = 200, description = "Version information retrieved successfully", body = VersionResponse)
     )
 )]
-pub async fn version_info() -> Result<ResponseJson<VersionResponse>, StatusCode> {
+pub async fn version_info() -> Result<Json<ApiResponse<VersionResponse>>, ApiError> {
     let features = vec![
         "hipaa-compliance".to_string(),
         "plugin-runtime".to_string(),
@@ -156,7 +155,7 @@ pub async fn version_info() -> Result<ResponseJson<VersionResponse>, StatusCode>
         features,
     };
 
-    Ok(Json(response))
+    Ok(Json(api_success(response)))
 }
 
 /// System status handler
@@ -170,7 +169,7 @@ pub async fn version_info() -> Result<ResponseJson<VersionResponse>, StatusCode>
 )]
 pub async fn system_status(
     State(server): State<RustCareServer>
-) -> Result<ResponseJson<StatusResponse>, StatusCode> {
+) -> Result<Json<ApiResponse<StatusResponse>>, ApiError> {
     let mut services = HashMap::new();
     
     // Database service status
@@ -207,5 +206,5 @@ pub async fn system_status(
         services,
     };
 
-    Ok(Json(response))
+    Ok(Json(api_success(response)))
 }

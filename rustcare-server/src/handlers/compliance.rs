@@ -1,19 +1,19 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     Json,
-    response::Json as ResponseJson,
 };
 use chrono::{DateTime, Utc};
 use database_layer::models::{ComplianceFramework, ComplianceRule};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use utoipa::ToSchema;
+use utoipa::{ToSchema, IntoParams};
 use crate::{
-    error::{ApiError, api_success},
+    error::{ApiError, ApiResponse, api_success},
     server::RustCareServer,
 };
 use crate::middleware::AuthContext;
+use crate::types::pagination::PaginationParams;
 
 /// Entity compliance status
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -222,12 +222,20 @@ pub async fn create_compliance_framework(
     Ok(Json(api_success(framework)))
 }
 
+/// Query parameters for listing compliance rules for a framework
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct ListComplianceRulesParams {
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
+}
+
 /// List compliance rules for a framework
 #[utoipa::path(
     get,
     path = "/api/v1/compliance/frameworks/{framework_id}/rules",
     params(
-        ("framework_id" = Uuid, Path, description = "Compliance framework ID")
+        ("framework_id" = Uuid, Path, description = "Compliance framework ID"),
+        ListComplianceRulesParams
     ),
     responses(
         (status = 200, description = "Compliance rules retrieved successfully", body = Vec<ComplianceRule>),
@@ -243,13 +251,26 @@ pub async fn create_compliance_framework(
 pub async fn list_compliance_rules(
     State(server): State<RustCareServer>,
     Path(framework_id): Path<Uuid>,
-) -> Result<ResponseJson<Vec<ComplianceRule>>, StatusCode> {
+    Query(params): Query<ListComplianceRulesParams>,
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<Vec<ComplianceRule>>>, ApiError> {
     let rules = server.compliance_repo
-        .list_rules(Some(framework_id), None, None, None, None, None)
+        .list_rules(Some(framework_id), Some(auth.organization_id), None, None, None, None)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| ApiError::internal(format!("Failed to list compliance rules: {}", e)))?;
 
-    Ok(Json(rules))
+    // Apply pagination (repository doesn't support pagination, so we do it in-memory)
+    let total_count = rules.len() as i64;
+    let offset = params.pagination.offset() as usize;
+    let limit = params.pagination.limit() as usize;
+    let paginated_rules: Vec<ComplianceRule> = rules
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .collect();
+    
+    let metadata = params.pagination.to_metadata(total_count);
+    Ok(Json(crate::error::api_success_with_meta(paginated_rules, metadata)))
 }
 
 /// Create compliance rule
@@ -330,7 +351,7 @@ pub async fn create_compliance_rule(
 pub async fn auto_assign_compliance(
     State(_server): State<RustCareServer>,
     Json(request): Json<AssignComplianceRequest>,
-) -> Result<ResponseJson<ComplianceAssignmentResponse>, StatusCode> {
+) -> Result<Json<ApiResponse<ComplianceAssignmentResponse>>, ApiError> {
     // TODO: Implement auto-assignment logic based on geographic region/postal code
     let mut assigned_frameworks = Vec::new();
     let mut assigned_rules = Vec::new();
@@ -356,7 +377,7 @@ pub async fn auto_assign_compliance(
         assignment_reason: "Auto-assigned based on postal code geographic mapping".to_string(),
     };
 
-    Ok(Json(response))
+    Ok(Json(api_success(response)))
 }
 
 /// Get entity compliance status
@@ -381,10 +402,10 @@ pub async fn auto_assign_compliance(
 pub async fn get_entity_compliance(
     State(_server): State<RustCareServer>,
     Path((entity_type, entity_id)): Path<(String, Uuid)>,
-) -> Result<ResponseJson<Vec<EntityCompliance>>, StatusCode> {
+) -> Result<Json<ApiResponse<Vec<EntityCompliance>>>, ApiError> {
     // TODO: Implement database query with RLS filtering
     let compliance_records = Vec::new();
-    Ok(Json(compliance_records))
+    Ok(Json(api_success(compliance_records)))
 }
 
 /// Update entity compliance assessment
@@ -409,39 +430,61 @@ pub async fn get_entity_compliance(
 pub async fn assess_entity_compliance(
     State(_server): State<RustCareServer>,
     Path((entity_type, entity_id)): Path<(String, Uuid)>,
-) -> Result<ResponseJson<Vec<EntityCompliance>>, StatusCode> {
+) -> Result<Json<ApiResponse<Vec<EntityCompliance>>>, ApiError> {
     // TODO: Implement compliance assessment logic with Zanzibar authorization
     let compliance_records = Vec::new();
-    Ok(Json(compliance_records))
+    Ok(Json(api_success(compliance_records)))
+}
+
+/// Query parameters for listing compliance frameworks
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct ListFrameworksParams {
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
+    #[param(example = "active")]
+    pub status: Option<String>,
 }
 
 /// List all compliance frameworks
 #[utoipa::path(
     get,
     path = "/api/v1/compliance/frameworks",
+    params(ListFrameworksParams),
     responses(
         (status = 200, description = "Frameworks retrieved successfully", body = Vec<ComplianceFramework>),
+        (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "compliance"
+    tag = "compliance",
+    security(("bearer_auth" = []))
 )]
 pub async fn list_frameworks(
     State(server): State<RustCareServer>,
-) -> Result<ResponseJson<Vec<ComplianceFramework>>, StatusCode> {
+    Query(params): Query<ListFrameworksParams>,
+) -> Result<Json<ApiResponse<Vec<ComplianceFramework>>>, ApiError> {
     // Filter out soft-deleted frameworks by excluding status='deprecated'
-    match server.compliance_repo.list_frameworks(None, Some("active"), None, None).await {
-        Ok(mut frameworks) => {
-            // Additional filtering to exclude any deprecated frameworks that might slip through
-            frameworks.retain(|f| f.status.as_str() != "deprecated");
-            
-            tracing::info!("Successfully retrieved {} active compliance frameworks", frameworks.len());
-            Ok(Json(frameworks))
-        },
-        Err(e) => {
-            tracing::error!("Failed to list compliance frameworks: {:?}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        },
-    }
+    let status_filter = params.status.as_deref().unwrap_or("active");
+    let mut frameworks = server.compliance_repo
+        .list_frameworks(None, Some(status_filter), None, None)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to list compliance frameworks: {}", e)))?;
+    
+    // Additional filtering to exclude any deprecated frameworks that might slip through
+    frameworks.retain(|f| f.status.as_str() != "deprecated");
+    
+    // Apply pagination (repository doesn't support pagination, so we do it in-memory)
+    let total_count = frameworks.len() as i64;
+    let offset = params.pagination.offset() as usize;
+    let limit = params.pagination.limit() as usize;
+    let paginated_frameworks: Vec<ComplianceFramework> = frameworks
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .collect();
+    
+    tracing::info!("Successfully retrieved {} active compliance frameworks", paginated_frameworks.len());
+    let metadata = params.pagination.to_metadata(total_count);
+    Ok(Json(crate::error::api_success_with_meta(paginated_frameworks, metadata)))
 }
 
 /// Create compliance framework
@@ -505,16 +548,27 @@ pub async fn create_framework(
     responses(
         (status = 200, description = "Framework retrieved successfully", body = ComplianceFramework),
         (status = 404, description = "Framework not found"),
+        (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "compliance"
+    tag = "compliance",
+    security(("bearer_auth" = []))
 )]
 pub async fn get_framework(
-    State(_server): State<RustCareServer>,
-    Path(_id): Path<Uuid>,
-) -> Result<ResponseJson<ComplianceFramework>, StatusCode> {
-    // TODO: Implement framework lookup
-    Err(StatusCode::NOT_FOUND)
+    State(server): State<RustCareServer>,
+    Path(id): Path<Uuid>,
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<ComplianceFramework>>, ApiError> {
+    // Query framework with organization filtering
+    let framework = server.compliance_repo
+        .list_frameworks(Some(id), None, Some(auth.organization_id), None)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get compliance framework: {}", e)))?
+        .into_iter()
+        .next()
+        .ok_or_else(|| ApiError::not_found("compliance_framework"))?;
+    
+    Ok(Json(api_success(framework)))
 }
 
 /// Update compliance framework
@@ -617,45 +671,101 @@ pub async fn delete_framework(
     Ok(Json(crate::error::api_success(())))
 }
 
+/// Query parameters for listing framework rules
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct ListFrameworkRulesParams {
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
+}
+
 /// List rules for a framework
 #[utoipa::path(
     get,
     path = "/api/v1/compliance/frameworks/{id}/rules",
     params(
-        ("id" = Uuid, Path, description = "Framework ID")
+        ("id" = Uuid, Path, description = "Framework ID"),
+        ListFrameworkRulesParams
     ),
     responses(
         (status = 200, description = "Rules retrieved successfully", body = Vec<ComplianceRule>),
         (status = 404, description = "Framework not found"),
+        (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "compliance"
+    tag = "compliance",
+    security(("bearer_auth" = []))
 )]
 pub async fn list_framework_rules(
-    State(_server): State<RustCareServer>,
-    Path(_id): Path<Uuid>,
-) -> Result<ResponseJson<Vec<ComplianceRule>>, StatusCode> {
-    // TODO: Implement framework rules lookup
-    let rules = Vec::new();
-    Ok(Json(rules))
+    State(server): State<RustCareServer>,
+    Path(framework_id): Path<Uuid>,
+    Query(params): Query<ListFrameworkRulesParams>,
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<Vec<ComplianceRule>>>, ApiError> {
+    // Query rules for the framework with organization filtering
+    let rules = server.compliance_repo
+        .list_rules(Some(framework_id), Some(auth.organization_id), None, None, None, None)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to list framework rules: {}", e)))?;
+    
+    // Apply pagination (repository doesn't support pagination, so we do it in-memory)
+    let total_count = rules.len() as i64;
+    let offset = params.pagination.offset() as usize;
+    let limit = params.pagination.limit() as usize;
+    let paginated_rules: Vec<ComplianceRule> = rules
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .collect();
+    
+    let metadata = params.pagination.to_metadata(total_count);
+    Ok(Json(crate::error::api_success_with_meta(paginated_rules, metadata)))
+}
+
+/// Query parameters for listing all compliance rules
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct ListRulesParams {
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
+    #[param(example = "00000000-0000-0000-0000-000000000000")]
+    pub framework_id: Option<Uuid>,
 }
 
 /// List all compliance rules
 #[utoipa::path(
     get,
     path = "/api/v1/compliance/rules",
+    params(ListRulesParams),
     responses(
         (status = 200, description = "Rules retrieved successfully", body = Vec<ComplianceRule>),
+        (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "compliance"
+    tag = "compliance",
+    security(("bearer_auth" = []))
 )]
 pub async fn list_rules(
-    State(_server): State<RustCareServer>,
-) -> Result<ResponseJson<Vec<ComplianceRule>>, StatusCode> {
-    // TODO: Implement database query
-    let rules = Vec::new();
-    Ok(Json(rules))
+    State(server): State<RustCareServer>,
+    Query(params): Query<ListRulesParams>,
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<Vec<ComplianceRule>>>, ApiError> {
+    // Query rules with organization filtering
+    let rules = server.compliance_repo
+        .list_rules(params.framework_id, Some(auth.organization_id), None, None, None, None)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to list compliance rules: {}", e)))?;
+    
+    // Apply pagination (repository doesn't support pagination, so we do it in-memory)
+    let total_count = rules.len() as i64;
+    let offset = params.pagination.offset() as usize;
+    let limit = params.pagination.limit() as usize;
+    let paginated_rules: Vec<ComplianceRule> = rules
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .collect();
+    
+    let metadata = params.pagination.to_metadata(total_count);
+    Ok(Json(crate::error::api_success_with_meta(paginated_rules, metadata)))
 }
 
 /// Create compliance rule
@@ -672,9 +782,9 @@ pub async fn list_rules(
 pub async fn create_rule(
     State(_server): State<RustCareServer>,
     Json(_request): Json<serde_json::Value>,
-) -> Result<ResponseJson<ComplianceRule>, StatusCode> {
+) -> Result<Json<ApiResponse<ComplianceRule>>, ApiError> {
     // TODO: Implement rule creation
-    Err(StatusCode::NOT_IMPLEMENTED)
+    Err(ApiError::internal("Rule creation not yet implemented"))
 }
 
 /// Get compliance rule by ID
@@ -694,9 +804,9 @@ pub async fn create_rule(
 pub async fn get_rule(
     State(_server): State<RustCareServer>,
     Path(_id): Path<Uuid>,
-) -> Result<ResponseJson<ComplianceRule>, StatusCode> {
+) -> Result<Json<ApiResponse<ComplianceRule>>, ApiError> {
     // TODO: Implement rule lookup
-    Err(StatusCode::NOT_FOUND)
+    Err(ApiError::not_found("compliance_rule"))
 }
 
 /// Update compliance rule

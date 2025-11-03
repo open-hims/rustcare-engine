@@ -7,15 +7,16 @@
 //! 4. KMS executes cryptographic operations and returns results
 
 use axum::{
-    extract::{Path, State, Json},
+    extract::{Path, Query, State, Json},
     http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{ToSchema, IntoParams};
 use std::collections::HashMap;
 use crate::server::RustCareServer;
 use crate::middleware::AuthContext;
 use crate::error::{ApiError, ApiResponse, api_success};
+use crate::types::pagination::PaginationParams;
 
 type Result<T> = std::result::Result<T, ApiError>;
 
@@ -448,18 +449,49 @@ pub async fn describe_key(
     })))
 }
 
+/// Query parameters for listing KMS keys
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct ListKeysParams {
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
+}
+
 /// List all keys
 /// 
 /// Returns metadata for all keys the caller has permission to view.
+#[utoipa::path(
+    get,
+    path = "/api/v1/kms/keys",
+    params(ListKeysParams),
+    responses(
+        (status = 200, description = "Keys retrieved successfully", body = Vec<KeyMetadataResponse>),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "kms",
+    security(("bearer_auth" = []))
+)]
 pub async fn list_keys(
     State(_server): State<RustCareServer>,
-) -> Result<Json<ApiResponse<KeyListResponse>>> {
+    Query(params): Query<ListKeysParams>,
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<Vec<KeyMetadataResponse>>>> {
     // TODO: Integrate with KMS provider
     
-    Ok(Json(api_success(KeyListResponse {
-        keys: vec![],
-        total: 0,
-    })))
+    let mut keys: Vec<KeyMetadataResponse> = vec![];
+    
+    // Apply pagination
+    let total_count = keys.len() as i64;
+    let offset = params.pagination.offset() as usize;
+    let limit = params.pagination.limit() as usize;
+    let paginated_keys: Vec<KeyMetadataResponse> = keys
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .collect();
+    
+    let metadata = params.pagination.to_metadata(total_count);
+    Ok(Json(crate::error::api_success_with_meta(paginated_keys, metadata)))
 }
 
 /// Enable automatic key rotation

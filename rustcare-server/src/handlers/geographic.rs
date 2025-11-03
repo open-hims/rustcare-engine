@@ -2,13 +2,14 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     Json,
-    response::{IntoResponse, Json as ResponseJson},
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use utoipa::{ToSchema, IntoParams};
 use crate::server::RustCareServer;
 use crate::middleware::AuthContext;
+use crate::error::{ApiError, ApiResponse, api_success};
+use crate::types::pagination::PaginationParams;
 
 /// Geographic region with hierarchical structure
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -53,14 +54,12 @@ pub type UpdateRegionRequest = CreateGeographicRegionRequest;
 /// Query parameters for geographic region search
 #[derive(Debug, Deserialize, IntoParams)]
 pub struct GeographicQuery {
-    #[param(style = Form, example = "country")]
+    #[param(example = "country")]
     pub region_type: Option<String>,
-    #[param(style = Form, example = "United States")]
+    #[param(example = "United States")]
     pub search: Option<String>,
-    #[param(style = Form, example = 10)]
-    pub limit: Option<i32>,
-    #[param(style = Form, example = 0)]
-    pub offset: Option<i32>,
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
 }
 
 /// Postal code mapping for compliance auto-assignment
@@ -93,21 +92,23 @@ pub struct PostalCodeMapping {
 pub async fn list_geographic_regions(
     State(server): State<RustCareServer>,
     Query(query): Query<GeographicQuery>,
-) -> Result<ResponseJson<Vec<GeographicRegion>>, StatusCode> {
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<Vec<GeographicRegion>>>, ApiError> {
     // Use the database repository to fetch regions
+    // Note: Repository doesn't support pagination natively, so we fetch all and paginate in-memory
     let db_regions = server.geographic_repo
         .list_regions(
             None, // parent_id
             query.region_type.as_deref(),
             query.search.as_deref(),
-            query.limit,
-            query.offset,
+            None, // limit - handled by pagination
+            None, // offset - handled by pagination
         )
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| ApiError::internal(format!("Failed to list geographic regions: {}", e)))?;
 
     // Convert database models to API models
-    let regions: Vec<GeographicRegion> = db_regions
+    let mut regions: Vec<GeographicRegion> = db_regions
         .into_iter()
         .map(|db_region| {
             let level = db_region
@@ -134,7 +135,18 @@ pub async fn list_geographic_regions(
         })
         .collect();
 
-    Ok(Json(regions))
+    // Apply pagination
+    let total_count = regions.len() as i64;
+    let offset = query.pagination.offset() as usize;
+    let limit = query.pagination.limit() as usize;
+    let paginated_regions: Vec<GeographicRegion> = regions
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .collect();
+
+    let metadata = query.pagination.to_metadata(total_count);
+    Ok(Json(crate::error::api_success_with_meta(paginated_regions, metadata)))
 }
 
 /// Create a new geographic region
@@ -157,8 +169,9 @@ pub async fn list_geographic_regions(
 pub async fn create_geographic_region(
     State(server): State<RustCareServer>,
     Json(payload): Json<CreateGeographicRegionRequest>,
-) -> impl IntoResponse {
-    match server.geographic_repo
+    auth: AuthContext,
+) -> Result<(StatusCode, Json<ApiResponse<GeographicRegion>>), ApiError> {
+    let db_region = server.geographic_repo
         .create_region(
             &payload.name,
             &payload.code,
@@ -172,20 +185,34 @@ pub async fn create_geographic_region(
             payload.metadata,
         )
         .await
-    {
-        Ok(region) => {
-            tracing::info!("Geographic region created: {} - {}", region.code, region.name);
-            (StatusCode::CREATED, Json(region)).into_response()
-        }
-        Err(e) => {
-            tracing::error!("Failed to create geographic region: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(format!("Failed to create region: {}", e)),
-            )
-                .into_response()
-        }
-    }
+        .map_err(|e| ApiError::internal(format!("Failed to create geographic region: {}", e)))?;
+
+    tracing::info!("Geographic region created: {} - {}", db_region.code, db_region.name);
+    
+    let level = db_region
+        .path
+        .as_ref()
+        .map(|p| p.matches('.').count() as i32)
+        .unwrap_or(0);
+    
+    let region = GeographicRegion {
+        id: db_region.id,
+        code: db_region.code,
+        name: db_region.name,
+        region_type: db_region.region_type,
+        parent_region_id: db_region.parent_region_id,
+        path: db_region.path,
+        level,
+        iso_country_code: db_region.iso_country_code,
+        iso_subdivision_code: db_region.iso_subdivision_code,
+        timezone: db_region.timezone,
+        population: None,
+        area_sq_km: None,
+        is_active: db_region.is_active,
+        metadata: db_region.metadata.unwrap_or(serde_json::json!({})),
+    };
+
+    Ok((StatusCode::CREATED, Json(api_success(region))))
 }/// Get geographic region by ID
 #[utoipa::path(
     get,
@@ -205,9 +232,10 @@ pub async fn create_geographic_region(
     )
 )]
 pub async fn get_geographic_region(
-    State(_server): State<RustCareServer>,
+    State(server): State<RustCareServer>,
     Path(id): Path<Uuid>,
-) -> Result<ResponseJson<GeographicRegion>, StatusCode> {
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<GeographicRegion>>, ApiError> {
     // TODO: Implement database query with RLS
     // Sample data for development
     let region = GeographicRegion {
@@ -227,7 +255,7 @@ pub async fn get_geographic_region(
         metadata: serde_json::json!({}),
     };
 
-    Ok(Json(region))
+    Ok(Json(api_success(region)))
 }
 
 /// Update geographic region
@@ -253,7 +281,8 @@ pub async fn update_geographic_region(
     State(_server): State<RustCareServer>,
     Path(id): Path<Uuid>,
     Json(request): Json<CreateGeographicRegionRequest>,
-) -> Result<ResponseJson<GeographicRegion>, StatusCode> {
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<GeographicRegion>>, ApiError> {
     // TODO: Implement database update with RLS
     let region = GeographicRegion {
         id,
@@ -272,7 +301,7 @@ pub async fn update_geographic_region(
         metadata: request.metadata.unwrap_or_else(|| serde_json::json!({})),
     };
 
-    Ok(Json(region))
+    Ok(Json(api_success(region)))
 }
 
 /// Delete geographic region
@@ -297,7 +326,8 @@ pub async fn update_geographic_region(
 pub async fn delete_geographic_region(
     State(_server): State<RustCareServer>,
     Path(_id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
+    auth: AuthContext,
+) -> Result<StatusCode, ApiError> {
     // TODO: Implement database delete with RLS and dependency checks
     Ok(StatusCode::NO_CONTENT)
 }
@@ -319,7 +349,8 @@ pub async fn delete_geographic_region(
 pub async fn get_postal_code_compliance(
     State(_server): State<RustCareServer>,
     Path(postal_code): Path<String>,
-) -> Result<ResponseJson<PostalCodeMapping>, StatusCode> {
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<PostalCodeMapping>>, ApiError> {
     // TODO: Implement postal code lookup with compliance auto-assignment
     let mapping = PostalCodeMapping {
         id: Uuid::new_v4(),
@@ -330,7 +361,7 @@ pub async fn get_postal_code_compliance(
         regulatory_authorities: vec!["HHS".to_string(), "OCR".to_string()],
     };
 
-    Ok(Json(mapping))
+    Ok(Json(api_success(mapping)))
 }
 
 /// Get geographic hierarchy for a region
@@ -350,8 +381,9 @@ pub async fn get_postal_code_compliance(
 pub async fn get_geographic_hierarchy(
     State(_server): State<RustCareServer>,
     Path(_id): Path<Uuid>,
-) -> Result<ResponseJson<Vec<GeographicRegion>>, StatusCode> {
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<Vec<GeographicRegion>>>, ApiError> {
     // TODO: Implement hierarchical query using ltree to get full path
     let hierarchy = Vec::new();
-    Ok(Json(hierarchy))
+    Ok(Json(api_success(hierarchy)))
 }

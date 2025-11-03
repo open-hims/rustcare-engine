@@ -101,7 +101,7 @@ pub struct ConflictInfo {
 pub async fn pull(
     State(_server): State<RustCareServer>,
     Json(request): Json<PullRequest>,
-    _auth: AuthContext,
+    auth: AuthContext,
 ) -> Result<Json<ApiResponse<PullResponse>>, ApiError> {
     tracing::info!(
         node_id = %request.node_id,
@@ -146,7 +146,7 @@ pub async fn pull(
 pub async fn push(
     State(_server): State<RustCareServer>,
     Json(request): Json<PushRequest>,
-    _auth: AuthContext,
+    auth: AuthContext,
 ) -> Result<Json<ApiResponse<PushResponse>>, ApiError> {
     tracing::info!(
         node_id = %request.node_id,

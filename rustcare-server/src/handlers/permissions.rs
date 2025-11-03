@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 use crate::server::RustCareServer;
+use crate::error::{ApiError, ApiResponse, api_success};
 
 // ============================================================================
 // Resource Management (Screens, APIs, Modules)
@@ -168,7 +169,7 @@ pub async fn list_resources(
 pub async fn create_resource(
     State(server): State<RustCareServer>,
     Json(request): Json<CreateResourceRequest>,
-) -> Result<(StatusCode, Json<Resource>), StatusCode> {
+) -> Result<(StatusCode, Json<ApiResponse<Resource>>), ApiError> {
     // TODO: Validate and insert into database
     // TODO: Register in Zanzibar as a namespace/resource type
     
@@ -186,7 +187,7 @@ pub async fn create_resource(
         updated_at: chrono::Utc::now().to_rfc3339(),
     };
     
-    Ok((StatusCode::CREATED, Json(resource)))
+    Ok((StatusCode::CREATED, Json(api_success(resource))))
 }
 
 // ============================================================================
@@ -291,7 +292,7 @@ pub async fn list_groups(
 pub async fn create_group(
     State(server): State<RustCareServer>,
     Json(request): Json<CreateGroupRequest>,
-) -> Result<(StatusCode, Json<PermissionGroup>), StatusCode> {
+) -> Result<(StatusCode, Json<ApiResponse<PermissionGroup>>), ApiError> {
     // TODO: Validate and insert into database
     
     let group = PermissionGroup {
@@ -304,7 +305,7 @@ pub async fn create_group(
         updated_at: chrono::Utc::now().to_rfc3339(),
     };
     
-    Ok((StatusCode::CREATED, Json(group)))
+    Ok((StatusCode::CREATED, Json(api_success(group))))
 }
 
 // ============================================================================
@@ -436,7 +437,7 @@ pub async fn list_roles(
 pub async fn create_role(
     State(server): State<RustCareServer>,
     Json(request): Json<CreateRoleRequest>,
-) -> Result<(StatusCode, Json<Role>), StatusCode> {
+) -> Result<(StatusCode, Json<ApiResponse<Role>>), ApiError> {
     // TODO: Validate and insert into database
     
     let role = Role {
@@ -451,7 +452,7 @@ pub async fn create_role(
         updated_at: chrono::Utc::now().to_rfc3339(),
     };
     
-    Ok((StatusCode::CREATED, Json(role)))
+    Ok((StatusCode::CREATED, Json(api_success(role))))
 }
 
 // ============================================================================

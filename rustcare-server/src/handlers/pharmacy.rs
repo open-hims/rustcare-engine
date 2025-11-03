@@ -11,8 +11,10 @@ use crate::error::{ApiError, ApiResponse, api_success};
 use crate::utils::query_builder::PaginatedQuery;
 use crate::types::pagination::PaginationParams;
 use crate::middleware::AuthContext;
+use crate::handlers::common::crud::{CrudHandler, AuthCrudHandler};
 use sqlx::FromRow;
 use std::collections::HashMap;
+use async_trait::async_trait;
 
 // ============================================================================
 // DATA STRUCTURES
@@ -201,6 +203,41 @@ pub struct ListPrescriptionsParams {
 }
 
 // ============================================================================
+// CRUD HANDLER IMPLEMENTATION (Example of using Generic CRUD Traits)
+// ============================================================================
+
+/// Pharmacy CRUD handler implementation
+///
+/// This demonstrates how to use the AuthCrudHandler trait for organization-scoped CRUD operations.
+struct PharmacyHandler;
+
+#[async_trait]
+impl CrudHandler<Pharmacy, CreatePharmacyRequest, UpdatePharmacyRequest, ListPharmaciesParams> for PharmacyHandler {
+    fn table_name() -> &'static str {
+        "pharmacies"
+    }
+    
+    fn apply_filters(query: &mut PaginatedQuery, params: &ListPharmaciesParams) -> Result<(), ApiError> {
+        query
+            .filter_eq("is_active", params.is_active)
+            .filter_eq("is_internal", params.is_internal)
+            .filter_eq("city", params.city.as_ref().map(|s| s.as_str()))
+            .filter_eq("state", params.state.as_ref().map(|s| s.as_str()));
+        Ok(())
+    }
+    
+    fn extract_page(params: &ListPharmaciesParams) -> Option<u32> {
+        Some(params.pagination.page)
+    }
+    
+    fn extract_page_size(params: &ListPharmaciesParams) -> Option<u32> {
+        Some(params.pagination.page_size)
+    }
+}
+
+impl AuthCrudHandler<Pharmacy, CreatePharmacyRequest, UpdatePharmacyRequest, ListPharmaciesParams> for PharmacyHandler {}
+
+// ============================================================================
 // API HANDLERS (Refactored to use new utilities)
 // ============================================================================
 
@@ -269,23 +306,8 @@ pub async fn get_pharmacy(
     Path(pharmacy_id): Path<Uuid>,
     auth: AuthContext,
 ) -> Result<Json<ApiResponse<Pharmacy>>, ApiError> {
-    let pharmacy = sqlx::query_as::<_, Pharmacy>(
-        r#"
-        SELECT * FROM pharmacies 
-        WHERE id = $1 
-          AND organization_id = $2 
-          AND (is_deleted = false OR is_deleted IS NULL)
-        "#
-    )
-    .bind(pharmacy_id)
-    .bind(auth.organization_id) // Use actual auth context
-    .fetch_optional(&server.db_pool)
-    .await?;
-    
-    match pharmacy {
-        Some(pharm) => Ok(Json(api_success(pharm))),
-        None => Err(ApiError::not_found("pharmacy")),
-    }
+    // Using AuthCrudHandler trait method for organization-scoped get
+    PharmacyHandler::get_with_auth(State(server), Path(pharmacy_id), auth).await
 }
 
 /// Create a new pharmacy
@@ -474,24 +496,8 @@ pub async fn delete_pharmacy(
     Path(pharmacy_id): Path<Uuid>,
     auth: AuthContext,
 ) -> Result<StatusCode, ApiError> {
-    let rows_affected = sqlx::query(
-        r#"
-        UPDATE pharmacies 
-        SET is_deleted = true, updated_at = NOW()
-        WHERE id = $1 AND organization_id = $2 AND (is_deleted = false OR is_deleted IS NULL)
-        "#
-    )
-    .bind(pharmacy_id)
-    .bind(auth.organization_id)
-    .execute(&server.db_pool)
-    .await?
-    .rows_affected();
-    
-    if rows_affected == 0 {
-        Err(ApiError::not_found("pharmacy"))
-    } else {
-        Ok(StatusCode::NO_CONTENT)
-    }
+    // Using AuthCrudHandler trait method for organization-scoped delete
+    PharmacyHandler::delete_with_auth(State(server), Path(pharmacy_id), auth).await
 }
 
 /// Get pharmacy inventory

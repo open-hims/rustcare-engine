@@ -132,7 +132,7 @@ pub struct CommandResponse {
     path = "/api/v1/devices",
     params(ListDevicesQuery),
     responses(
-        (status = 200, description = "Devices retrieved successfully", body = DeviceListResponse),
+        (status = 200, description = "Devices retrieved successfully", body = Vec<DeviceResponse>),
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
     ),
@@ -143,7 +143,7 @@ pub async fn list_devices(
     State(server): State<RustCareServer>,
     Query(query): Query<ListDevicesQuery>,
     auth: AuthContext,
-) -> Result<Json<ApiResponse<DeviceListResponse>>, ApiError> {
+) -> Result<Json<ApiResponse<Vec<DeviceResponse>>>, ApiError> {
     // Use PaginatedQuery utility
     let mut query_builder = PaginatedQuery::new(
         "SELECT * FROM devices WHERE organization_id = $1 AND (is_deleted = false OR is_deleted IS NULL)"
@@ -175,12 +175,9 @@ pub async fn list_devices(
     .await
     .unwrap_or(0);
     
-    Ok(Json(api_success(DeviceListResponse {
-        devices,
-        total: total_count as usize,
-        page: query.pagination.page.unwrap_or(1),
-        page_size: query.pagination.page_size.unwrap_or(20),
-    })))
+    // Use standard pagination metadata format
+    let metadata = query.pagination.to_metadata(total_count);
+    Ok(Json(crate::error::api_success_with_meta(devices, metadata)))
 }
 
 /// Register a new device

@@ -3,7 +3,7 @@
 //! Provides secure secret storage, retrieval, and rotation through multiple providers
 
 use axum::{
-    extract::{Path, State, Json},
+    extract::{Path, Query, State, Json},
     http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
@@ -12,6 +12,7 @@ use secrets_service::SecretProvider;
 use crate::server::RustCareServer;
 use crate::middleware::AuthContext;
 use crate::error::{ApiError, ApiResponse, api_success};
+use crate::types::pagination::PaginationParams;
 
 type Result<T> = std::result::Result<T, ApiError>;
 
@@ -123,14 +124,22 @@ pub struct HealthCheckResponse {
 // API Handlers
 // ============================================================================
 
+/// Query parameters for listing secrets
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct ListSecretsParams {
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
+}
+
 /// List all secrets
 /// 
 /// Returns a list of all secret keys (values are not included)
 #[utoipa::path(
     get,
     path = "/api/v1/secrets",
+    params(ListSecretsParams),
     responses(
-        (status = 200, description = "Secrets retrieved successfully", body = SecretListResponse),
+        (status = 200, description = "Secrets retrieved successfully", body = Vec<String>),
         (status = 401, description = "Unauthorized"),
         (status = 503, description = "Service unavailable"),
         (status = 500, description = "Internal server error")
@@ -140,20 +149,29 @@ pub struct HealthCheckResponse {
 )]
 pub async fn list_secrets(
     State(server): State<RustCareServer>,
-    _auth: AuthContext,
-) -> Result<Json<ApiResponse<SecretListResponse>>> {
+    Query(params): Query<ListSecretsParams>,
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<Vec<String>>>> {
     // Get secrets manager
     let secrets_manager = server.secrets_manager()
         .ok_or_else(|| ApiError::service_unavailable("Secrets manager not configured"))?;
     
-    let keys = secrets_manager.list_secrets()
+    let mut keys = secrets_manager.list_secrets()
         .await
         .map_err(|e| ApiError::internal(format!("Failed to list secrets: {}", e)))?;
     
-    Ok(Json(api_success(SecretListResponse {
-        total: keys.len(),
-        secrets: keys,
-    })))
+    // Apply pagination
+    let total_count = keys.len() as i64;
+    let offset = params.pagination.offset() as usize;
+    let limit = params.pagination.limit() as usize;
+    let paginated_keys: Vec<String> = keys
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .collect();
+    
+    let metadata = params.pagination.to_metadata(total_count);
+    Ok(Json(crate::error::api_success_with_meta(paginated_keys, metadata)))
 }
 
 /// Get a secret by key
@@ -175,7 +193,7 @@ pub async fn list_secrets(
 pub async fn get_secret(
     State(server): State<RustCareServer>,
     Path(key): Path<String>,
-    _auth: AuthContext,
+    auth: AuthContext,
 ) -> Result<Json<ApiResponse<SecretResponse>>> {
     // Get secrets manager
     let secrets_manager = server.secrets_manager()
@@ -330,17 +348,28 @@ pub async fn delete_secret(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Query parameters for listing secret versions
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct ListSecretVersionsParams {
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
+}
+
 /// List secret versions
 /// 
 /// Returns all available versions for a specific secret
 #[utoipa::path(
     get,
     path = "/api/v1/secrets/{key}/versions",
-    params(("key" = String, Path, description = "Secret key")),
+    params(
+        ("key" = String, Path, description = "Secret key"),
+        ListSecretVersionsParams
+    ),
     responses(
-        (status = 200, description = "Secret versions retrieved", body = SecretVersionsResponse),
+        (status = 200, description = "Secret versions retrieved", body = Vec<String>),
         (status = 404, description = "Secret not found"),
-        (status = 401, description = "Unauthorized")
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
     ),
     tag = "secrets",
     security(("bearer_auth" = []))
@@ -348,18 +377,26 @@ pub async fn delete_secret(
 pub async fn list_secret_versions(
     State(_server): State<RustCareServer>,
     Path(key): Path<String>,
-    _auth: AuthContext,
-) -> Result<Json<ApiResponse<SecretVersionsResponse>>> {
+    Query(params): Query<ListSecretVersionsParams>,
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<Vec<String>>>> {
     // TODO: Implement with SecretsManager
     
     // Mock response for now
-    let versions = vec!["v3".to_string(), "v2".to_string(), "v1".to_string()];
+    let mut versions = vec!["v3".to_string(), "v2".to_string(), "v1".to_string()];
     
-    Ok(Json(api_success(SecretVersionsResponse {
-        key,
-        total: versions.len(),
-        versions,
-    })))
+    // Apply pagination
+    let total_count = versions.len() as i64;
+    let offset = params.pagination.offset() as usize;
+    let limit = params.pagination.limit() as usize;
+    let paginated_versions: Vec<String> = versions
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .collect();
+    
+    let metadata = params.pagination.to_metadata(total_count);
+    Ok(Json(crate::error::api_success_with_meta(paginated_versions, metadata)))
 }
 
 /// Get a specific version of a secret
