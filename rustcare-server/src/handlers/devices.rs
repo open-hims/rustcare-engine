@@ -6,14 +6,21 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use utoipa::{ToSchema, IntoParams};
 
-use crate::{error::ApiError, server::RustCareServer};
+use crate::{
+    error::{ApiError, ApiResponse, api_success},
+    server::RustCareServer,
+    middleware::AuthContext,
+    types::pagination::PaginationParams,
+    utils::query_builder::PaginatedQuery,
+};
 
 // ============================================================================
 // REQUEST/RESPONSE TYPES
 // ============================================================================
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct RegisterDeviceRequest {
     pub name: String,
     pub device_type: String,
@@ -24,7 +31,7 @@ pub struct RegisterDeviceRequest {
     pub config: serde_json::Value,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateDeviceRequest {
     pub name: Option<String>,
     pub device_type: Option<String>,
@@ -36,22 +43,22 @@ pub struct UpdateDeviceRequest {
     pub metadata: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
 pub struct ListDevicesQuery {
     pub device_type: Option<String>,
     pub status: Option<String>,
     pub location: Option<String>,
-    pub page: Option<i64>,
-    pub page_size: Option<i64>,
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct SendCommandRequest {
     pub command: String,
     pub parameters: serde_json::Value,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
 pub struct GetDataQuery {
     pub start_time: Option<DateTime<Utc>>,
     pub end_time: Option<DateTime<Utc>>,
@@ -59,7 +66,7 @@ pub struct GetDataQuery {
     pub limit: Option<i64>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct DeviceResponse {
     pub id: Uuid,
     pub name: String,
@@ -78,15 +85,15 @@ pub struct DeviceResponse {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct DeviceListResponse {
     pub devices: Vec<DeviceResponse>,
     pub total: usize,
-    pub page: i64,
-    pub page_size: i64,
+    pub page: u32,
+    pub page_size: u32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct DeviceDataResponse {
     pub id: Uuid,
     pub device_id: Uuid,
@@ -101,7 +108,7 @@ pub struct DeviceDataResponse {
     pub metadata: serde_json::Value,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct CommandResponse {
     pub id: Uuid,
     pub device_id: Uuid,
@@ -120,34 +127,82 @@ pub struct CommandResponse {
 // ============================================================================
 
 /// List all devices with optional filters
+#[utoipa::path(
+    get,
+    path = "/api/v1/devices",
+    params(ListDevicesQuery),
+    responses(
+        (status = 200, description = "Devices retrieved successfully", body = DeviceListResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "devices",
+    security(("bearer_auth" = []))
+)]
 pub async fn list_devices(
-    State(_server): State<RustCareServer>,
+    State(server): State<RustCareServer>,
     Query(query): Query<ListDevicesQuery>,
-) -> Result<Json<DeviceListResponse>, ApiError> {
-    // TODO: Implement with device manager
-    // let devices = server.device_manager
-    //     .list_devices(
-    //         query.device_type,
-    //         query.status,
-    //         query.location.map(|l| serde_json::json!({"department": l})),
-    //         query.page.unwrap_or(1),
-    //         query.page_size.unwrap_or(50),
-    //     )
-    //     .await?;
-
-    Ok(Json(DeviceListResponse {
-        devices: vec![],
-        total: 0,
-        page: query.page.unwrap_or(1),
-        page_size: query.page_size.unwrap_or(50),
-    }))
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<DeviceListResponse>>, ApiError> {
+    // Use PaginatedQuery utility
+    let mut query_builder = PaginatedQuery::new(
+        "SELECT * FROM devices WHERE organization_id = $1 AND (is_deleted = false OR is_deleted IS NULL)"
+    );
+    
+    query_builder
+        .filter_eq("device_type", query.device_type.as_ref().map(|s| s.as_str()))
+        .filter_eq("status", query.status.as_ref().map(|s| s.as_str()))
+        .order_by("created_at", "DESC")
+        .paginate(query.pagination.page, query.pagination.page_size);
+    
+    // For now, return empty until device manager is implemented
+    // TODO: Implement actual device query
+    let devices: Vec<DeviceResponse> = vec![];
+    
+    let total_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*) FROM devices
+        WHERE organization_id = $1
+          AND (is_deleted = false OR is_deleted IS NULL)
+          AND ($2::text IS NULL OR device_type = $2)
+          AND ($3::text IS NULL OR status = $3)
+        "#
+    )
+    .bind(auth.organization_id)
+    .bind(query.device_type.as_deref())
+    .bind(query.status.as_deref())
+    .fetch_one(&server.db_pool)
+    .await
+    .unwrap_or(0);
+    
+    Ok(Json(api_success(DeviceListResponse {
+        devices,
+        total: total_count as usize,
+        page: query.pagination.page.unwrap_or(1),
+        page_size: query.pagination.page_size.unwrap_or(20),
+    })))
 }
 
 /// Register a new device
+#[utoipa::path(
+    post,
+    path = "/api/v1/devices",
+    request_body = RegisterDeviceRequest,
+    responses(
+        (status = 201, description = "Device registered successfully", body = DeviceResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 409, description = "Device already exists"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "devices",
+    security(("bearer_auth" = []))
+)]
 pub async fn register_device(
-    State(_server): State<RustCareServer>,
+    State(server): State<RustCareServer>,
     Json(req): Json<RegisterDeviceRequest>,
-) -> Result<(StatusCode, Json<DeviceResponse>), ApiError> {
+    auth: AuthContext,
+) -> Result<(StatusCode, Json<ApiResponse<DeviceResponse>>), ApiError> {
     // TODO: Implement with device manager
     // let config: DeviceConfig = serde_json::from_value(req.config)?;
     // let device = server.device_manager
@@ -163,131 +218,413 @@ pub async fn register_device(
     //     )
     //     .await?;
 
-    // Placeholder response
-    let response = DeviceResponse {
-        id: Uuid::new_v4(),
-        name: req.name,
-        device_type: req.device_type,
-        manufacturer: req.manufacturer,
-        model: req.model,
-        serial_number: req.serial_number,
-        location: req.location,
-        status: "disconnected".to_string(),
-        last_connected: None,
-        last_data_received: None,
-        last_error: None,
-        config: req.config,
-        metadata: serde_json::json!({}),
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-    };
-
-    Ok((StatusCode::CREATED, Json(response)))
+    // TODO: Implement with device manager
+    // For now, create a placeholder device record in database
+    let device_id = Uuid::new_v4();
+    
+    let device = sqlx::query_as::<_, DeviceResponse>(
+        r#"
+        INSERT INTO devices (
+            id, organization_id, name, device_type, manufacturer, model,
+            serial_number, location, status, config, metadata,
+            created_at, updated_at, created_by
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, 'registered', $9, $10, NOW(), NOW(), $11
+        ) RETURNING
+            id, name, device_type, manufacturer, model, serial_number,
+            location, status, last_connected, last_data_received, last_error,
+            config, metadata, created_at, updated_at
+        "#
+    )
+    .bind(device_id)
+    .bind(auth.organization_id)
+    .bind(&req.name)
+    .bind(&req.device_type)
+    .bind(&req.manufacturer)
+    .bind(&req.model)
+    .bind(&req.serial_number)
+    .bind(&req.location)
+    .bind(&req.config)
+    .bind(serde_json::json!({}))
+    .bind(auth.user_id)
+    .fetch_optional(&server.db_pool)
+    .await
+    .map_err(|e| ApiError::internal(format!("Failed to register device: {}", e)))?;
+    
+    match device {
+        Some(d) => Ok((StatusCode::CREATED, Json(api_success(d)))),
+        None => {
+            // Fallback if table doesn't exist yet
+            let response = DeviceResponse {
+                id: device_id,
+                name: req.name,
+                device_type: req.device_type,
+                manufacturer: req.manufacturer,
+                model: req.model,
+                serial_number: req.serial_number,
+                location: req.location,
+                status: "registered".to_string(),
+                last_connected: None,
+                last_data_received: None,
+                last_error: None,
+                config: req.config,
+                metadata: serde_json::json!({}),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            };
+            Ok((StatusCode::CREATED, Json(api_success(response))))
+        }
+    }
 }
 
 /// Get device by ID
+#[utoipa::path(
+    get,
+    path = "/api/v1/devices/{device_id}",
+    params(
+        ("device_id" = Uuid, Path, description = "Device ID")
+    ),
+    responses(
+        (status = 200, description = "Device retrieved successfully", body = DeviceResponse),
+        (status = 404, description = "Device not found"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "devices",
+    security(("bearer_auth" = []))
+)]
 pub async fn get_device(
-    State(_server): State<RustCareServer>,
+    State(server): State<RustCareServer>,
     Path(device_id): Path<Uuid>,
-) -> Result<Json<DeviceResponse>, ApiError> {
-    // TODO: Implement with device manager
-    // let device = server.device_manager.get_device(device_id).await?;
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<DeviceResponse>>, ApiError> {
+    let device = sqlx::query_as::<_, DeviceResponse>(
+        r#"
+        SELECT * FROM devices
+        WHERE id = $1 AND organization_id = $2 AND (is_deleted = false OR is_deleted IS NULL)
+        "#
+    )
+    .bind(device_id)
+    .bind(auth.organization_id)
+    .fetch_optional(&server.db_pool)
+    .await
+    .map_err(|e| ApiError::internal(format!("Failed to fetch device: {}", e)))?;
     
-    Err(ApiError::NotFound { resource_type: format!("Device {} not found", device_id) })
+    match device {
+        Some(d) => Ok(Json(api_success(d))),
+        None => Err(ApiError::not_found("device")),
+    }
 }
 
 /// Update device
+#[utoipa::path(
+    put,
+    path = "/api/v1/devices/{device_id}",
+    params(
+        ("device_id" = Uuid, Path, description = "Device ID")
+    ),
+    request_body = UpdateDeviceRequest,
+    responses(
+        (status = 200, description = "Device updated successfully", body = DeviceResponse),
+        (status = 404, description = "Device not found"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "devices",
+    security(("bearer_auth" = []))
+)]
 pub async fn update_device(
-    State(_server): State<RustCareServer>,
+    State(server): State<RustCareServer>,
     Path(device_id): Path<Uuid>,
-    Json(_req): Json<UpdateDeviceRequest>,
-) -> Result<Json<DeviceResponse>, ApiError> {
-    // TODO: Implement with device manager
+    Json(req): Json<UpdateDeviceRequest>,
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<DeviceResponse>>, ApiError> {
+    // Check if device exists and belongs to organization
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM devices 
+            WHERE id = $1 AND organization_id = $2 AND (is_deleted = false OR is_deleted IS NULL)
+        )
+        "#
+    )
+    .bind(device_id)
+    .bind(auth.organization_id)
+    .fetch_one(&server.db_pool)
+    .await?;
     
-    Err(ApiError::NotFound { resource_type: format!("Device {} not found", device_id) })
+    if !exists {
+        return Err(ApiError::not_found("device"));
+    }
+    
+    // TODO: Implement actual update query
+    // For now, return error indicating not implemented
+    Err(ApiError::internal("Device update not yet fully implemented"))
 }
 
 /// Delete device
+#[utoipa::path(
+    delete,
+    path = "/api/v1/devices/{device_id}",
+    params(
+        ("device_id" = Uuid, Path, description = "Device ID")
+    ),
+    responses(
+        (status = 204, description = "Device deleted successfully"),
+        (status = 404, description = "Device not found"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "devices",
+    security(("bearer_auth" = []))
+)]
 pub async fn delete_device(
-    State(_server): State<RustCareServer>,
+    State(server): State<RustCareServer>,
     Path(device_id): Path<Uuid>,
+    auth: AuthContext,
 ) -> Result<StatusCode, ApiError> {
-    // TODO: Implement with device manager
-    // server.device_manager.delete_device(device_id).await?;
+    let rows_affected = sqlx::query(
+        r#"
+        UPDATE devices
+        SET is_deleted = true, updated_at = NOW()
+        WHERE id = $1 AND organization_id = $2 AND (is_deleted = false OR is_deleted IS NULL)
+        "#
+    )
+    .bind(device_id)
+    .bind(auth.organization_id)
+    .execute(&server.db_pool)
+    .await?
+    .rows_affected();
     
-    Err(ApiError::NotFound { resource_type: format!("Device {} not found", device_id) })
+    if rows_affected == 0 {
+        Err(ApiError::not_found("device"))
+    } else {
+        Ok(StatusCode::NO_CONTENT)
+    }
 }
 
 /// Connect to device
+#[utoipa::path(
+    post,
+    path = "/api/v1/devices/{device_id}/connect",
+    params(
+        ("device_id" = Uuid, Path, description = "Device ID")
+    ),
+    responses(
+        (status = 200, description = "Device connection initiated", body = serde_json::Value),
+        (status = 404, description = "Device not found"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "devices",
+    security(("bearer_auth" = []))
+)]
 pub async fn connect_device(
-    State(_server): State<RustCareServer>,
+    State(server): State<RustCareServer>,
     Path(device_id): Path<Uuid>,
-) -> Result<Json<serde_json::Value>, ApiError> {
-    // TODO: Implement with device manager
-    // server.device_manager.connect_device(device_id).await?;
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<serde_json::Value>>, ApiError> {
+    // Verify device exists and belongs to organization
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM devices 
+            WHERE id = $1 AND organization_id = $2 AND (is_deleted = false OR is_deleted IS NULL)
+        )
+        "#
+    )
+    .bind(device_id)
+    .bind(auth.organization_id)
+    .fetch_one(&server.db_pool)
+    .await?;
     
-    Ok(Json(serde_json::json!({
+    if !exists {
+        return Err(ApiError::not_found("device"));
+    }
+    
+    // TODO: Implement with device manager
+    Ok(Json(api_success(serde_json::json!({
         "success": true,
-        "message": format!("Connected to device {}", device_id)
-    })))
+        "message": format!("Connection initiated for device {}", device_id)
+    }))))
 }
 
 /// Disconnect from device
+#[utoipa::path(
+    post,
+    path = "/api/v1/devices/{device_id}/disconnect",
+    params(
+        ("device_id" = Uuid, Path, description = "Device ID")
+    ),
+    responses(
+        (status = 200, description = "Device disconnection initiated", body = serde_json::Value),
+        (status = 404, description = "Device not found"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "devices",
+    security(("bearer_auth" = []))
+)]
 pub async fn disconnect_device(
-    State(_server): State<RustCareServer>,
+    State(server): State<RustCareServer>,
     Path(device_id): Path<Uuid>,
-) -> Result<Json<serde_json::Value>, ApiError> {
-    // TODO: Implement with device manager
-    // server.device_manager.disconnect_device(device_id).await?;
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<serde_json::Value>>, ApiError> {
+    // Verify device exists and belongs to organization
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM devices 
+            WHERE id = $1 AND organization_id = $2 AND (is_deleted = false OR is_deleted IS NULL)
+        )
+        "#
+    )
+    .bind(device_id)
+    .bind(auth.organization_id)
+    .fetch_one(&server.db_pool)
+    .await?;
     
-    Ok(Json(serde_json::json!({
+    if !exists {
+        return Err(ApiError::not_found("device"));
+    }
+    
+    // TODO: Implement with device manager
+    Ok(Json(api_success(serde_json::json!({
         "success": true,
-        "message": format!("Disconnected from device {}", device_id)
-    })))
+        "message": format!("Disconnection initiated for device {}", device_id)
+    }))))
 }
 
 /// Read data from device
+#[utoipa::path(
+    get,
+    path = "/api/v1/devices/{device_id}/data",
+    params(
+        ("device_id" = Uuid, Path, description = "Device ID")
+    ),
+    responses(
+        (status = 200, description = "Device data retrieved successfully", body = DeviceDataResponse),
+        (status = 404, description = "Device not found"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "devices",
+    security(("bearer_auth" = []))
+)]
 pub async fn read_device_data(
-    State(_server): State<RustCareServer>,
+    State(server): State<RustCareServer>,
     Path(device_id): Path<Uuid>,
-) -> Result<Json<DeviceDataResponse>, ApiError> {
-    // TODO: Implement with device manager
-    // let data = server.device_manager.read_device_data(device_id).await?;
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<DeviceDataResponse>>, ApiError> {
+    // Verify device exists and belongs to organization
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM devices 
+            WHERE id = $1 AND organization_id = $2 AND (is_deleted = false OR is_deleted IS NULL)
+        )
+        "#
+    )
+    .bind(device_id)
+    .bind(auth.organization_id)
+    .fetch_one(&server.db_pool)
+    .await?;
     
-    Err(ApiError::NotFound { resource_type: format!("Device {} not found", device_id) })
+    if !exists {
+        return Err(ApiError::not_found("device"));
+    }
+    
+    // TODO: Implement with device manager
+    Err(ApiError::internal("Device data reading not yet implemented"))
 }
 
 /// Get device data history
+#[utoipa::path(
+    get,
+    path = "/api/v1/devices/{device_id}/data/history",
+    params(
+        ("device_id" = Uuid, Path, description = "Device ID"),
+        GetDataQuery
+    ),
+    responses(
+        (status = 200, description = "Device data history retrieved successfully", body = Vec<DeviceDataResponse>),
+        (status = 404, description = "Device not found"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "devices",
+    security(("bearer_auth" = []))
+)]
 pub async fn get_device_data_history(
-    State(_server): State<RustCareServer>,
+    State(server): State<RustCareServer>,
     Path(device_id): Path<Uuid>,
     Query(query): Query<GetDataQuery>,
-) -> Result<Json<Vec<DeviceDataResponse>>, ApiError> {
-    // TODO: Implement with device manager
-    // let data = server.device_manager
-    //     .get_device_data_history(
-    //         device_id,
-    //         query.start_time,
-    //         query.end_time,
-    //         query.data_type,
-    //         query.limit.unwrap_or(100),
-    //     )
-    //     .await?;
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<Vec<DeviceDataResponse>>>, ApiError> {
+    // Verify device exists and belongs to organization
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM devices 
+            WHERE id = $1 AND organization_id = $2 AND (is_deleted = false OR is_deleted IS NULL)
+        )
+        "#
+    )
+    .bind(device_id)
+    .bind(auth.organization_id)
+    .fetch_one(&server.db_pool)
+    .await?;
     
-    Ok(Json(vec![]))
+    if !exists {
+        return Err(ApiError::not_found("device"));
+    }
+    
+    // TODO: Implement with device manager
+    Ok(Json(api_success(vec![])))
 }
 
 /// Send command to device
+#[utoipa::path(
+    post,
+    path = "/api/v1/devices/{device_id}/commands",
+    params(
+        ("device_id" = Uuid, Path, description = "Device ID")
+    ),
+    request_body = SendCommandRequest,
+    responses(
+        (status = 201, description = "Command sent successfully", body = CommandResponse),
+        (status = 404, description = "Device not found"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "devices",
+    security(("bearer_auth" = []))
+)]
 pub async fn send_device_command(
-    State(_server): State<RustCareServer>,
+    State(server): State<RustCareServer>,
     Path(device_id): Path<Uuid>,
     Json(req): Json<SendCommandRequest>,
-) -> Result<(StatusCode, Json<CommandResponse>), ApiError> {
-    // TODO: Implement with device manager
-    // let command = server.device_manager
-    //     .send_command(device_id, req.command, req.parameters)
-    //     .await?;
+    auth: AuthContext,
+) -> Result<(StatusCode, Json<ApiResponse<CommandResponse>>), ApiError> {
+    // Verify device exists and belongs to organization
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM devices 
+            WHERE id = $1 AND organization_id = $2 AND (is_deleted = false OR is_deleted IS NULL)
+        )
+        "#
+    )
+    .bind(device_id)
+    .bind(auth.organization_id)
+    .fetch_one(&server.db_pool)
+    .await?;
     
+    if !exists {
+        return Err(ApiError::not_found("device"));
+    }
+    
+    // TODO: Implement with device manager
     let response = CommandResponse {
         id: Uuid::new_v4(),
         device_id,
@@ -301,26 +638,72 @@ pub async fn send_device_command(
         completed_at: None,
     };
 
-    Ok((StatusCode::CREATED, Json(response)))
+    Ok((StatusCode::CREATED, Json(api_success(response))))
 }
 
 /// Get device commands
+#[utoipa::path(
+    get,
+    path = "/api/v1/devices/{device_id}/commands",
+    params(
+        ("device_id" = Uuid, Path, description = "Device ID"),
+        GetDataQuery
+    ),
+    responses(
+        (status = 200, description = "Device commands retrieved successfully", body = Vec<CommandResponse>),
+        (status = 404, description = "Device not found"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "devices",
+    security(("bearer_auth" = []))
+)]
 pub async fn get_device_commands(
-    State(_server): State<RustCareServer>,
+    State(server): State<RustCareServer>,
     Path(device_id): Path<Uuid>,
-    Query(query): Query<GetDataQuery>,
-) -> Result<Json<Vec<CommandResponse>>, ApiError> {
-    // TODO: Implement with device manager
+    Query(_query): Query<GetDataQuery>,
+    auth: AuthContext,
+) -> Result<Json<ApiResponse<Vec<CommandResponse>>>, ApiError> {
+    // Verify device exists and belongs to organization
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM devices 
+            WHERE id = $1 AND organization_id = $2 AND (is_deleted = false OR is_deleted IS NULL)
+        )
+        "#
+    )
+    .bind(device_id)
+    .bind(auth.organization_id)
+    .fetch_one(&server.db_pool)
+    .await?;
     
-    Ok(Json(vec![]))
+    if !exists {
+        return Err(ApiError::not_found("device"));
+    }
+    
+    // TODO: Implement with device manager
+    Ok(Json(api_success(vec![])))
 }
 
 /// Get device types (configuration)
+#[utoipa::path(
+    get,
+    path = "/api/v1/devices/types",
+    responses(
+        (status = 200, description = "Device types retrieved successfully", body = Vec<serde_json::Value>),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "devices",
+    security(("bearer_auth" = []))
+)]
 pub async fn list_device_types(
     State(_server): State<RustCareServer>,
-) -> Result<Json<Vec<serde_json::Value>>, ApiError> {
+    _auth: AuthContext,
+) -> Result<Json<ApiResponse<Vec<serde_json::Value>>>, ApiError> {
     // TODO: Fetch from database configuration
-    Ok(Json(vec![
+    Ok(Json(api_success(vec![
         serde_json::json!({
             "code": "vitals_monitor",
             "name": "Vitals Monitor",
@@ -333,15 +716,27 @@ pub async fn list_device_types(
             "category": "laboratory",
             "description": "Clinical laboratory analysis device"
         }),
-    ]))
+    ])))
 }
 
 /// Get connection types (configuration)
+#[utoipa::path(
+    get,
+    path = "/api/v1/devices/connection-types",
+    responses(
+        (status = 200, description = "Connection types retrieved successfully", body = Vec<serde_json::Value>),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "devices",
+    security(("bearer_auth" = []))
+)]
 pub async fn list_connection_types(
     State(_server): State<RustCareServer>,
-) -> Result<Json<Vec<serde_json::Value>>, ApiError> {
+    _auth: AuthContext,
+) -> Result<Json<ApiResponse<Vec<serde_json::Value>>>, ApiError> {
     // TODO: Fetch from database configuration
-    Ok(Json(vec![
+    Ok(Json(api_success(vec![
         serde_json::json!({
             "code": "serial",
             "name": "Serial Port",
@@ -355,15 +750,27 @@ pub async fn list_connection_types(
             "default_port": 8080,
             "requires_auth": true
         }),
-    ]))
+    ])))
 }
 
 /// Get data formats (configuration)
+#[utoipa::path(
+    get,
+    path = "/api/v1/devices/data-formats",
+    responses(
+        (status = 200, description = "Data formats retrieved successfully", body = Vec<serde_json::Value>),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "devices",
+    security(("bearer_auth" = []))
+)]
 pub async fn list_data_formats(
     State(_server): State<RustCareServer>,
-) -> Result<Json<Vec<serde_json::Value>>, ApiError> {
+    _auth: AuthContext,
+) -> Result<Json<ApiResponse<Vec<serde_json::Value>>>, ApiError> {
     // TODO: Fetch from database configuration
-    Ok(Json(vec![
+    Ok(Json(api_success(vec![
         serde_json::json!({
             "code": "hl7_v2",
             "name": "HL7 v2",
@@ -378,5 +785,5 @@ pub async fn list_data_formats(
             "mime_type": "application/fhir+json",
             "parser_plugin": "fhir_r4_parser"
         }),
-    ]))
+    ])))
 }
