@@ -13,6 +13,7 @@ use crate::{
     error::{ApiError, api_success},
     server::RustCareServer,
 };
+use crate::middleware::AuthContext;
 
 /// Entity compliance status
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -145,12 +146,11 @@ pub struct ComplianceAssignmentResponse {
 )]
 pub async fn list_compliance_frameworks(
     State(server): State<RustCareServer>,
+    auth: AuthContext,
 ) -> Result<Json<crate::error::ApiResponse<Vec<ComplianceFramework>>>, ApiError> {
-    // For now, we'll get frameworks without organization filtering
-    // TODO: Add proper organization context from authentication
     let frameworks = server.compliance_repo
         .list_frameworks(
-            None, // organization_id - TODO: get from auth context
+            Some(auth.organization_id),
             Some("active"),
             Some(100),
             None,
@@ -182,9 +182,9 @@ pub async fn list_compliance_frameworks(
 pub async fn create_compliance_framework(
     State(server): State<RustCareServer>,
     Json(request): Json<CreateComplianceFrameworkRequest>,
+    auth: AuthContext,
 ) -> Result<Json<crate::error::ApiResponse<ComplianceFramework>>, ApiError> {
-    // TODO: Get organization ID from authentication context
-    let organization_id = Uuid::new_v4(); // Placeholder
+    let organization_id = auth.organization_id;
     
     // Parse effective date to NaiveDate for database compatibility
     let effective_date = chrono::DateTime::parse_from_rfc3339(&request.effective_date)
@@ -213,7 +213,7 @@ pub async fn create_compliance_framework(
             review_date,
             request.parent_framework_id,
             request.metadata,
-            None, // created_by - TODO: get from auth context
+            Some(auth.user_id),
         )
         .await
         .map_err(ApiError::from)?;
@@ -271,10 +271,10 @@ pub async fn list_compliance_rules(
 pub async fn create_compliance_rule(
     State(server): State<RustCareServer>,
     Json(request): Json<CreateComplianceRuleRequest>,
+    auth: AuthContext,
 ) -> Result<Json<crate::error::ApiResponse<ComplianceRule>>, ApiError> {
-    // TODO: Get actual organization_id from auth context
-    let organization_id = Uuid::new_v4();
-    let created_by = Uuid::new_v4(); // TODO: Get from auth context
+    let organization_id = auth.organization_id;
+    let created_by = auth.user_id;
     
     // Parse effective_date from string to NaiveDate for database compatibility
     let effective_date = chrono::DateTime::parse_from_rfc3339(&request.effective_date)
@@ -302,7 +302,7 @@ pub async fn create_compliance_rule(
             request.is_automated,
             request.check_frequency_days,
             effective_date,
-            None, // metadata
+            None, // metadata (optional)
             Some(created_by),
         )
         .await
@@ -458,6 +458,7 @@ pub async fn list_frameworks(
 pub async fn create_framework(
     State(server): State<RustCareServer>,
     Json(request): Json<CreateComplianceFrameworkRequest>,
+    auth: AuthContext,
 ) -> Result<Json<crate::error::ApiResponse<ComplianceFramework>>, ApiError> {
     // Parse dates as DateTime first, then convert to NaiveDate for database compatibility
     let effective_date = DateTime::parse_from_rfc3339(&request.effective_date)
@@ -472,8 +473,7 @@ pub async fn create_framework(
         })
         .transpose()?;
     
-    // For now, use a default organization ID (will be replaced with proper auth later)
-    let org_id = Uuid::nil();
+    let org_id = auth.organization_id;
     
     let framework = server.compliance_repo.create_framework(
         org_id,
@@ -487,7 +487,7 @@ pub async fn create_framework(
         review_date,
         request.parent_framework_id,
         request.metadata,
-        None, // created_by - will be set from auth context later
+        Some(auth.user_id),
     ).await
         .map_err(ApiError::from)?;
 
