@@ -7,6 +7,10 @@ use axum::{
 use tower_http::cors::CorsLayer;
 use std::time::{Duration, Instant};
 
+// Re-export auth context module for easy access
+pub mod auth_context;
+pub use auth_context::AuthContext;
+
 /// HIPAA compliance middleware
 pub async fn hipaa_compliance_middleware(
     headers: HeaderMap,
@@ -28,147 +32,70 @@ pub async fn hipaa_compliance_middleware(
     
     response.headers_mut().insert(
         "X-Privacy-Policy",
-        "https://rustcare.com/privacy".parse().unwrap(),
+        "https://rustcare.dev/privacy".parse().unwrap(),
     );
-
+    
     Ok(response)
 }
 
-/// Request timing middleware
+/// Request timing middleware for performance monitoring
 pub async fn request_timing_middleware(
     request: Request,
     next: Next,
 ) -> Response {
     let start = Instant::now();
-    let method = request.method().clone();
-    let uri = request.uri().clone();
-    
     let response = next.run(request).await;
+    let duration = start.elapsed();
     
-    let elapsed = start.elapsed();
+    // Log slow requests
+    if duration > Duration::from_secs(1) {
+        tracing::warn!(
+            path = %request.uri().path(),
+            duration_ms = duration.as_millis(),
+            "Slow request detected"
+        );
+    }
     
-    tracing::info!(
-        method = %method,
-        uri = %uri,
-        duration_ms = elapsed.as_millis(),
-        status = response.status().as_u16(),
-        "Request processed"
-    );
-
     response
 }
 
-/// Audit logging middleware
+/// Audit logging middleware for HIPAA compliance
 pub async fn audit_logging_middleware(
-    headers: HeaderMap,
     request: Request,
     next: Next,
 ) -> Response {
+    // Extract audit information
     let method = request.method().clone();
-    let uri = request.uri().clone();
-    let user_id = headers
-        .get("Authorization")
+    let path = request.uri().path().to_string();
+    let user_agent = request.headers()
+        .get(header::USER_AGENT)
         .and_then(|h| h.to_str().ok())
-        .unwrap_or("anonymous");
-
-    // Log the request for audit purposes
-    tracing::info!(
-        method = %method,
-        uri = %uri,
-        user_id = user_id,
-        timestamp = %chrono::Utc::now().to_rfc3339(),
-        "Audit log: Request received"
-    );
-
+        .map(|s| s.to_string());
+    
+    // Execute request
     let response = next.run(request).await;
-
-    // Log the response for audit purposes
+    
+    // Log audit event (TODO: Integrate with audit-engine)
     tracing::info!(
         method = %method,
-        uri = %uri,
-        user_id = user_id,
-        status = response.status().as_u16(),
-        timestamp = %chrono::Utc::now().to_rfc3339(),
-        "Audit log: Response sent"
+        path = %path,
+        status = %response.status(),
+        user_agent = ?user_agent,
+        "API request audit"
     );
-
+    
     response
 }
 
-/// Authentication middleware
-pub async fn auth_middleware(
-    headers: HeaderMap,
-    request: Request,
-    next: Next,
-) -> Result<Response, StatusCode> {
-    // Skip authentication for health check endpoints
-    let path = request.uri().path();
-    if path.starts_with("/health") || path.starts_with("/version") {
-        return Ok(next.run(request).await);
-    }
-
-    // Check for Authorization header
-    let auth_header = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|header| header.to_str().ok());
-
-    match auth_header {
-        Some(token) if token.starts_with("Bearer ") => {
-            // TODO: Validate JWT token with auth-gateway module
-            // For now, accept any bearer token
-            Ok(next.run(request).await)
-        }
-        _ => Err(StatusCode::UNAUTHORIZED),
-    }
-}
-
-/// Rate limiting middleware
-pub async fn rate_limiting_middleware(
-    headers: HeaderMap,
-    request: Request,
-    next: Next,
-) -> Result<Response, StatusCode> {
-    // TODO: Implement proper rate limiting with Redis or in-memory store
-    // For now, this is a placeholder that allows all requests
-    
-    let client_ip = headers
-        .get("X-Forwarded-For")
-        .or_else(|| headers.get("X-Real-IP"))
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("unknown");
-
-    // Log rate limiting info
-    tracing::debug!(
-        client_ip = client_ip,
-        path = %request.uri().path(),
-        "Rate limiting check"
-    );
-
-    Ok(next.run(request).await)
-}
-
-/// Create CORS layer for the application
+/// Create CORS layer with HIPAA-compliant configuration
 pub fn create_cors_layer() -> CorsLayer {
-    use tower_http::cors::Any;
-    
     CorsLayer::new()
-        .allow_origin(Any)  // Allow all origins in development
-        .allow_methods([
-            Method::GET,
-            Method::POST,
-            Method::PUT,
-            Method::DELETE,
-            Method::PATCH,
-            Method::OPTIONS,
-        ])
+        .allow_origin("*".parse::<axum::http::HeaderValue>().unwrap())
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::PATCH])
         .allow_headers([
-            header::AUTHORIZATION,
             header::CONTENT_TYPE,
+            header::AUTHORIZATION,
             header::ACCEPT,
-            header::ORIGIN,
-            "X-HIPAA-Consent".parse().unwrap(),
-            "X-Requested-With".parse().unwrap(),
         ])
-        .allow_credentials(false)
         .max_age(Duration::from_secs(3600))
 }

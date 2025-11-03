@@ -11,6 +11,8 @@ pub mod routes;
 pub mod server;
 pub mod openapi;
 pub mod security_state;
+pub mod utils;
+pub mod types;
 
 // Re-export commonly used types
 pub use server::RustCareServer;
