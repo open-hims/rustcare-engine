@@ -5,9 +5,12 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use utoipa::ToSchema;
+use utoipa::{ToSchema, IntoParams};
 use crate::server::RustCareServer;
 use crate::error::{ApiError, ApiResponse, api_success};
+use crate::utils::query_builder::PaginatedQuery;
+use crate::types::pagination::PaginationParams;
+use crate::middleware::AuthContext;
 use chrono::{DateTime, Utc};
 use sqlx::FromRow;
 
@@ -76,14 +79,14 @@ pub struct NotificationAuditLog {
 }
 
 /// Query parameters for listing notifications
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
 pub struct ListNotificationsParams {
-    pub limit: Option<i64>,
-    pub offset: Option<i64>,
     pub is_read: Option<bool>,
     pub notification_type: Option<String>,
     pub priority: Option<String>,
     pub category: Option<String>,
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
 }
 
 /// Create notification request
@@ -138,11 +141,38 @@ pub struct BulkMarkReadRequest {
 pub async fn list_notifications(
     Query(params): Query<ListNotificationsParams>,
     State(app_state): State<RustCareServer>,
+    auth: AuthContext, // Using new AuthContext extractor
 ) -> Result<Json<ApiResponse<Vec<Notification>>>, ApiError> {
-    let limit = params.limit.unwrap_or(50);
-    let offset = params.offset.unwrap_or(0);
+    // Use PaginatedQuery utility
+    let mut query_builder = PaginatedQuery::new(
+        r#"
+        SELECT 
+            n.id,
+            n.organization_id,
+            n.user_id,
+            n.title,
+            n.message,
+            n.notification_type,
+            n.priority,
+            n.category,
+            n.action_url,
+            n.action_label,
+            n.is_read,
+            n.read_at,
+            n.icon,
+            n.image_url,
+            n.expires_at,
+            n.created_at,
+            n.updated_at
+        FROM notifications n
+        WHERE n.user_id = $1
+            AND (n.expires_at IS NULL OR n.expires_at > NOW())
+        "#
+    );
     
-    let result = sqlx::query_as::<_, Notification>(
+    // Note: PaginatedQuery doesn't easily support binding parameters in the base query
+    // For now, use direct query with pagination
+    let notifications = sqlx::query_as::<_, Notification>(
         r#"
         SELECT 
             n.id,
@@ -170,24 +200,41 @@ pub async fn list_notifications(
             AND ($4::text IS NULL OR n.priority = $4)
             AND ($5::text IS NULL OR n.category = $5)
         ORDER BY n.created_at DESC
-        LIMIT $6
-        OFFSET $7
+        LIMIT $6 OFFSET $7
         "#
     )
-    .bind(Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap_or_else(|_| Uuid::nil())) // TODO: Get from auth context
+    .bind(auth.user_id) // Use actual auth context
     .bind(params.is_read)
     .bind(params.notification_type.as_deref())
     .bind(params.priority.as_deref())
     .bind(params.category.as_deref())
-    .bind(limit)
-    .bind(offset)
+    .bind(params.pagination.limit() as i64)
+    .bind(params.pagination.offset() as i64)
     .fetch_all(&app_state.db_pool)
-    .await;
+    .await?;
     
-    match result {
-        Ok(notifications) => Ok(Json(api_success(notifications))),
-        Err(e) => Err(ApiError::internal(format!("Failed to fetch notifications: {}", e)))
-    }
+    // Get total count for pagination metadata
+    let total_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*) FROM notifications
+        WHERE user_id = $1
+            AND (expires_at IS NULL OR expires_at > NOW())
+            AND ($2::bool IS NULL OR is_read = $2)
+            AND ($3::text IS NULL OR notification_type = $3)
+            AND ($4::text IS NULL OR priority = $4)
+            AND ($5::text IS NULL OR category = $5)
+        "#
+    )
+    .bind(auth.user_id)
+    .bind(params.is_read)
+    .bind(params.notification_type.as_deref())
+    .bind(params.priority.as_deref())
+    .bind(params.category.as_deref())
+    .fetch_one(&app_state.db_pool)
+    .await?;
+    
+    let metadata = params.pagination.to_metadata(total_count);
+    Ok(Json(crate::error::api_success_with_meta(notifications, metadata)))
 }
 
 /// Get notification by ID
@@ -204,6 +251,7 @@ pub async fn list_notifications(
 pub async fn get_notification(
     Path(id): Path<Uuid>,
     State(app_state): State<RustCareServer>,
+    auth: AuthContext,
 ) -> Result<Json<ApiResponse<Notification>>, ApiError> {
     let result = sqlx::query_as::<_, Notification>(
         r#"
@@ -227,9 +275,11 @@ pub async fn get_notification(
             n.updated_at
         FROM notifications n
         WHERE n.id = $1
+          AND n.user_id = $2
         "#
     )
     .bind(id)
+    .bind(auth.user_id) // Ensure user can only access their own notifications
     .fetch_optional(&app_state.db_pool)
     .await;
     
@@ -252,6 +302,7 @@ pub async fn get_notification(
 pub async fn create_notification(
     State(app_state): State<RustCareServer>,
     Json(req): Json<CreateNotificationRequest>,
+    auth: AuthContext,
 ) -> Result<Json<ApiResponse<Notification>>, ApiError> {
     let result = sqlx::query_as::<_, Notification>(
         r#"
@@ -289,8 +340,8 @@ pub async fn create_notification(
             updated_at
         "#
     )
-    .bind(Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap_or_else(|_| Uuid::nil())) // TODO: Get from auth context
-    .bind(req.user_id)
+    .bind(auth.organization_id) // Use actual auth context
+    .bind(req.user_id.or(Some(auth.user_id))) // Use request user_id or default to auth user_id
     .bind(&req.title)
     .bind(&req.message)
     .bind(&req.notification_type)
@@ -310,6 +361,8 @@ pub async fn create_notification(
             let _ = log_notification_action(
                 &app_state,
                 notification.id,
+                auth.organization_id,
+                auth.user_id,
                 "created".to_string(),
                 None,
             ).await;
@@ -336,6 +389,7 @@ pub async fn mark_notification_read(
     Path(id): Path<Uuid>,
     State(app_state): State<RustCareServer>,
     Json(req): Json<MarkReadRequest>,
+    auth: AuthContext,
 ) -> Result<Json<ApiResponse<Notification>>, ApiError> {
     let result = sqlx::query_as::<_, Notification>(
         r#"
@@ -344,7 +398,7 @@ pub async fn mark_notification_read(
             is_read = $1,
             read_at = CASE WHEN $1 THEN NOW() ELSE NULL END,
             updated_at = NOW()
-        WHERE id = $2
+        WHERE id = $2 AND user_id = $3
         RETURNING 
             id,
             organization_id,
@@ -367,6 +421,7 @@ pub async fn mark_notification_read(
     )
     .bind(req.read)
     .bind(id)
+    .bind(auth.user_id) // Ensure user can only update their own notifications
     .fetch_optional(&app_state.db_pool)
     .await;
     
@@ -376,6 +431,8 @@ pub async fn mark_notification_read(
             let _ = log_notification_action(
                 &app_state,
                 notification.id,
+                auth.organization_id,
+                auth.user_id,
                 if req.read { "read".to_string() } else { "unread".to_string() },
                 Some(serde_json::json!({"read": req.read})),
             ).await;
@@ -399,6 +456,7 @@ pub async fn mark_notification_read(
 pub async fn bulk_mark_read(
     State(app_state): State<RustCareServer>,
     Json(req): Json<BulkMarkReadRequest>,
+    auth: AuthContext,
 ) -> Result<Json<ApiResponse<()>>, ApiError> {
     if req.notification_ids.is_empty() {
         return Ok(Json(api_success(())));
@@ -411,11 +469,12 @@ pub async fn bulk_mark_read(
             is_read = $1,
             read_at = CASE WHEN $1 THEN NOW() ELSE NULL END,
             updated_at = NOW()
-        WHERE id = ANY($2)
+        WHERE id = ANY($2) AND user_id = $3
         "#
     )
     .bind(req.read)
     .bind(&req.notification_ids)
+    .bind(auth.user_id) // Ensure user can only update their own notifications
     .execute(&app_state.db_pool)
     .await;
     
@@ -426,6 +485,8 @@ pub async fn bulk_mark_read(
                 let _ = log_notification_action(
                     &app_state,
                     notification_id,
+                    auth.organization_id,
+                    auth.user_id,
                     if req.read { "bulk_read".to_string() } else { "bulk_unread".to_string() },
                     None,
                 ).await;
@@ -447,6 +508,7 @@ pub async fn bulk_mark_read(
 )]
 pub async fn get_unread_count(
     State(app_state): State<RustCareServer>,
+    auth: AuthContext,
 ) -> Result<Json<ApiResponse<i64>>, ApiError> {
     let result = sqlx::query_scalar::<_, i64>(
         r#"
@@ -457,7 +519,7 @@ pub async fn get_unread_count(
             AND (expires_at IS NULL OR expires_at > NOW())
         "#
     )
-    .bind(Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap_or_else(|_| Uuid::nil())) // TODO: Get from auth context
+    .bind(auth.user_id) // Use actual auth context
     .fetch_one(&app_state.db_pool)
     .await;
     
@@ -525,6 +587,8 @@ pub async fn list_audit_logs(
 async fn log_notification_action(
     app_state: &RustCareServer,
     notification_id: Uuid,
+    organization_id: Uuid,
+    user_id: Uuid,
     action: String,
     action_details: Option<serde_json::Value>,
 ) -> Result<(), sqlx::Error> {
@@ -540,8 +604,8 @@ async fn log_notification_action(
         "#
     )
     .bind(notification_id)
-    .bind(Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap_or_else(|_| Uuid::nil())) // TODO: Get from auth context
-    .bind(Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap_or_else(|_| Uuid::nil())) // TODO: Get from auth context
+    .bind(organization_id)
+    .bind(user_id)
     .bind(action)
     .bind(action_details)
     .execute(&app_state.db_pool)

@@ -52,17 +52,6 @@ impl AuthContext {
     }
 }
 
-/// JWT Claims structure (internal)
-#[derive(Debug, Deserialize)]
-struct JwtClaims {
-    sub: Uuid,              // user_id
-    org_id: Option<Uuid>,   // organization_id (optional)
-    roles: Option<Vec<String>>,
-    permissions: Option<Vec<String>>,
-    email: Option<String>,
-    exp: i64,
-}
-
 /// Extract and validate JWT token from Authorization header
 fn extract_token(parts: &Parts) -> Result<String, ApiError> {
     let headers = parts.headers
@@ -82,31 +71,81 @@ fn extract_token(parts: &Parts) -> Result<String, ApiError> {
 
 /// Validate JWT token and extract claims
 ///
-/// TODO: Integrate with auth-gateway module for actual JWT validation
-fn validate_jwt_token(token: &str) -> Result<JwtClaims, ApiError> {
-    // TODO: Implement actual JWT validation using auth-gateway module
-    // For now, return error to force implementation
-    // 
-    // Expected implementation:
-    // 1. Verify token signature using public key
-    // 2. Check token expiration
-    // 3. Extract and validate claims
-    // 4. Return JwtClaims
+/// Uses the existing TokenClaims structure from auth/tokens module
+fn validate_jwt_token(token: &str) -> Result<AuthContext, ApiError> {
+    // For now, we'll use a simple approach:
+    // 1. Try to decode the token using jsonwebtoken
+    // 2. Extract claims
+    // 3. Convert to AuthContext
     
-    Err(ApiError::authentication(
-        "JWT validation not yet implemented. Please integrate with auth-gateway module."
-    ))
+    // TODO: Use the actual JWT service from auth/tokens.rs when available
+    // For now, we'll implement basic validation here
     
-    // Placeholder for future implementation:
-    // use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
-    // 
-    // let decoding_key = DecodingKey::from_secret(JWT_SECRET.as_bytes());
-    // let validation = Validation::new(Algorithm::HS256);
-    // 
-    // let token_data = decode::<JwtClaims>(token, &decoding_key, &validation)
-    //     .map_err(|e| ApiError::authentication(format!("Invalid token: {}", e)))?;
-    // 
-    // Ok(token_data.claims)
+    use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
+    
+    // In production, get this from environment or config
+    let jwt_secret = std::env::var("JWT_SECRET")
+        .unwrap_or_else(|_| "your-secret-key-change-in-production".to_string());
+    
+    let decoding_key = DecodingKey::from_secret(jwt_secret.as_bytes());
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.validate_exp = true;
+    validation.validate_nbf = true;
+    
+    // Decode token using TokenClaims structure from auth module
+    // Note: We need to use a simplified claims structure here since
+    // the full TokenClaims has extra fields we might not need
+    #[derive(Debug, Deserialize)]
+    struct SimplifiedClaims {
+        sub: String,
+        org_id: Option<String>,
+        permissions: Option<Vec<String>>,
+        email: Option<String>,
+        exp: i64,
+        #[serde(flatten)]
+        extra: std::collections::HashMap<String, serde_json::Value>,
+    }
+    
+    let token_data = decode::<SimplifiedClaims>(token, &decoding_key, &validation)
+        .map_err(|e| ApiError::authentication(format!("Invalid or expired token: {}", e)))?;
+    
+    let claims = token_data.claims;
+    
+    // Extract user_id
+    let user_id = Uuid::parse_str(&claims.sub)
+        .map_err(|_| ApiError::authentication("Invalid user ID in token"))?;
+    
+    // Extract organization_id (try org_id claim first, then look in extra)
+    let organization_id = if let Some(org_id_str) = claims.org_id {
+        Uuid::parse_str(&org_id_str).ok()
+    } else {
+        claims.extra
+            .get("org_id")
+            .and_then(|v| v.as_str())
+            .and_then(|s| Uuid::parse_str(s).ok())
+    }.unwrap_or_else(|| {
+        tracing::warn!("JWT token missing organization_id claim");
+        Uuid::nil()
+    });
+    
+    // Extract roles from extra claims (if present)
+    let roles = claims.extra
+        .get("roles")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+    
+    Ok(AuthContext {
+        user_id,
+        organization_id,
+        roles,
+        permissions: claims.permissions.unwrap_or_default(),
+        email: claims.email,
+    })
 }
 
 #[async_trait]

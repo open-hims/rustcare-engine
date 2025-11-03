@@ -229,8 +229,12 @@ pub fn healthcare_routes() -> Router<RustCareServer> {
 /// Create pharmacy routes
 pub fn pharmacy_routes() -> Router<RustCareServer> {
     Router::new()
-        // Pharmacies
+        // Pharmacies CRUD
         .route("/pharmacy/pharmacies", get(pharmacy::list_pharmacies))
+        .route("/pharmacy/pharmacies", post(pharmacy::create_pharmacy))
+        .route("/pharmacy/pharmacies/:pharmacy_id", get(pharmacy::get_pharmacy))
+        .route("/pharmacy/pharmacies/:pharmacy_id", put(pharmacy::update_pharmacy))
+        .route("/pharmacy/pharmacies/:pharmacy_id", delete(pharmacy::delete_pharmacy))
         
         // Inventory
         .route("/pharmacy/inventory", get(pharmacy::list_inventory))

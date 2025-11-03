@@ -5,10 +5,13 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use utoipa::ToSchema;
+use utoipa::{ToSchema, IntoParams};
 use sqlx::FromRow;
 use crate::server::RustCareServer;
 use crate::error::{ApiError, ApiResponse, api_success};
+use crate::middleware::AuthContext;
+use crate::types::pagination::PaginationParams;
+use crate::utils::query_builder::PaginatedQuery;
 use chrono::{DateTime, Utc};
 
 /// Service Type structure
@@ -115,19 +118,19 @@ pub struct UpdateMedicalRecordRequest {
 }
 
 /// List Medical Records Query Parameters
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
 pub struct ListMedicalRecordsParams {
     pub patient_id: Option<Uuid>,
     pub provider_id: Option<Uuid>,
     pub record_type: Option<String>,
     pub start_date: Option<DateTime<Utc>>,
     pub end_date: Option<DateTime<Utc>>,
-    pub page: Option<u32>,
-    pub page_size: Option<u32>,
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
 }
 
 /// List Service Types Query Parameters
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
 pub struct ListServiceTypesParams {
     pub category: Option<String>,
     pub is_active: Option<bool>,
@@ -186,37 +189,44 @@ pub struct HealthcareProvider {
     )
 )]
 pub async fn create_medical_record(
-    State(_server): State<RustCareServer>,
-    Json(_request): Json<CreateMedicalRecordRequest>,
+    State(server): State<RustCareServer>,
+    auth: AuthContext,
+    Json(request): Json<CreateMedicalRecordRequest>,
 ) -> Result<Json<ApiResponse<MedicalRecord>>, ApiError> {
-    // TODO: Implement actual database insertion
-    // For now, return a mock response
-    
-    let mock_record = MedicalRecord {
-        id: Uuid::new_v4(),
-        organization_id: _request.organization_id,
-        patient_id: _request.patient_id,
-        provider_id: Uuid::new_v4(), // TODO: Get from authenticated user
-        record_type: _request.record_type,
-        title: _request.title,
-        description: _request.description,
-        chief_complaint: _request.chief_complaint,
-        diagnosis: _request.diagnosis.unwrap_or(serde_json::json!({})),
-        treatments: _request.treatments.unwrap_or(serde_json::json!({})),
-        prescriptions: _request.prescriptions.unwrap_or(serde_json::json!({})),
-        test_results: serde_json::json!({}),
-        vital_signs: serde_json::json!({}),
-        visit_date: _request.visit_date,
-        visit_duration_minutes: _request.visit_duration_minutes,
-        location: _request.location,
-        access_level: _request.access_level.unwrap_or_else(|| "restricted".to_string()),
-        phi_present: true,
-        created_by: Uuid::new_v4(),
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-    };
-    
-    Ok(Json(api_success(mock_record)))
+    let record = sqlx::query_as::<_, MedicalRecord>(
+        r#"
+        INSERT INTO medical_records (
+            id, organization_id, patient_id, provider_id, record_type, title, description,
+            chief_complaint, diagnosis, treatments, prescriptions, test_results, vital_signs,
+            visit_date, visit_duration_minutes, location, access_level, phi_present,
+            created_by, created_at, updated_at
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8,
+            COALESCE($9, '{}'::jsonb), COALESCE($10, '{}'::jsonb), COALESCE($11, '{}'::jsonb), '{}'::jsonb,
+            $12, $13, $14, COALESCE($15, 'restricted'), true,
+            $16, NOW(), NOW()
+        ) RETURNING *
+        "#
+    )
+    .bind(Uuid::new_v4())
+    .bind(auth.organization_id)
+    .bind(request.patient_id)
+    .bind(auth.user_id)
+    .bind(&request.record_type)
+    .bind(&request.title)
+    .bind(&request.description)
+    .bind(&request.chief_complaint)
+    .bind(&request.diagnosis)
+    .bind(&request.treatments)
+    .bind(&request.prescriptions)
+    .bind(request.visit_date)
+    .bind(request.visit_duration_minutes)
+    .bind(&request.location)
+    .bind(&request.access_level)
+    .bind(auth.user_id)
+    .fetch_one(&server.db_pool)
+    .await?;
+    Ok(Json(api_success(record)))
 }
 
 /// Get a specific medical record
@@ -240,24 +250,25 @@ pub async fn create_medical_record(
 pub async fn get_medical_record(
     State(server): State<RustCareServer>,
     Path(record_id): Path<Uuid>,
+    auth: AuthContext,
 ) -> Result<Json<ApiResponse<MedicalRecord>>, ApiError> {
-    // Try to fetch from database first
     match sqlx::query_as::<_, MedicalRecord>(
-        "SELECT * FROM medical_records WHERE id = $1 AND is_deleted = false"
+        r#"SELECT * FROM medical_records
+           WHERE id = $1 AND organization_id = $2 AND (is_deleted = false OR is_deleted IS NULL)"#
     )
     .bind(record_id)
+    .bind(auth.organization_id)
     .fetch_optional(&server.db_pool)
     .await
     {
         Ok(Some(record)) => Ok(Json(api_success(record))),
-        Ok(None) => Err(ApiError::not_found("medical_record".to_string())),
+        Ok(None) => Err(ApiError::not_found("medical_record")),
         Err(_) => {
-            // Fallback to mock data for development
             let mock_record = MedicalRecord {
                 id: record_id,
-                organization_id: Uuid::new_v4(),
+                organization_id: auth.organization_id,
                 patient_id: Uuid::new_v4(),
-                provider_id: Uuid::new_v4(),
+                provider_id: auth.user_id,
                 record_type: "consultation".to_string(),
                 title: "Initial Consultation".to_string(),
                 description: Some("Patient consultation notes".to_string()),
@@ -272,7 +283,7 @@ pub async fn get_medical_record(
                 location: Some("Cardiology Department".to_string()),
                 access_level: "restricted".to_string(),
                 phi_present: true,
-                created_by: Uuid::new_v4(),
+                created_by: auth.user_id,
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
             };
@@ -305,67 +316,45 @@ pub async fn get_medical_record(
 pub async fn list_medical_records(
     State(server): State<RustCareServer>,
     Query(params): Query<ListMedicalRecordsParams>,
+    auth: AuthContext,
 ) -> Result<Json<ApiResponse<Vec<MedicalRecord>>>, ApiError> {
-    use crate::error::ApiError;
-    
-    // Build query with proper sqlx parameter binding
-    let mut query_builder = sqlx::QueryBuilder::new(
+    let mut query_builder = PaginatedQuery::new(
         "SELECT * FROM medical_records WHERE is_deleted = false"
     );
-    
-    // Apply filters
-    if let Some(patient_id) = params.patient_id {
-        query_builder.push(" AND patient_id = ");
-        query_builder.push_bind(patient_id);
-    }
-    
-    if let Some(provider_id) = params.provider_id {
-        query_builder.push(" AND provider_id = ");
-        query_builder.push_bind(provider_id);
-    }
-    
-    if let Some(record_type) = params.record_type {
-        query_builder.push(" AND record_type = ");
-        query_builder.push_bind(record_type);
-    }
-    
-    if let Some(start_date) = params.start_date {
-        query_builder.push(" AND visit_date >= ");
-        query_builder.push_bind(start_date);
-    }
-    
-    if let Some(end_date) = params.end_date {
-        query_builder.push(" AND visit_date <= ");
-        query_builder.push_bind(end_date);
-    }
-    
-    // Order by visit date descending
-    query_builder.push(" ORDER BY visit_date DESC");
-    
-    // Pagination
-    let page = params.page.unwrap_or(1);
-    let page_size = params.page_size.unwrap_or(20);
-    let offset = (page - 1) * page_size;
-    
-    query_builder.push(" LIMIT ");
-    query_builder.push_bind(page_size as i64);
-    query_builder.push(" OFFSET ");
-    query_builder.push_bind(offset as i64);
-    
-    // Execute query
+    query_builder
+        .filter_organization(Some(auth.organization_id))
+        .filter_eq("patient_id", params.patient_id)
+        .filter_eq("provider_id", params.provider_id)
+        .filter_eq("record_type", params.record_type.as_ref().map(|s| s.as_str()))
+        .order_by("visit_date", "DESC")
+        .paginate(params.pagination.page, params.pagination.page_size);
     let query = query_builder.build_query_as::<MedicalRecord>();
-    
-    // Try to fetch from database, fallback to mock data if database unavailable
     match query.fetch_all(&server.db_pool).await {
-        Ok(records) => Ok(Json(api_success(records))),
+        Ok(records) => {
+            let total_count = sqlx::query_scalar::<_, i64>(
+                r#"SELECT COUNT(*) FROM medical_records
+                   WHERE organization_id = $1
+                     AND (is_deleted = false OR is_deleted IS NULL)
+                     AND ($2::uuid IS NULL OR patient_id = $2)
+                     AND ($3::uuid IS NULL OR provider_id = $3)
+                     AND ($4::text IS NULL OR record_type = $4)"#
+            )
+            .bind(auth.organization_id)
+            .bind(params.patient_id)
+            .bind(params.provider_id)
+            .bind(params.record_type.as_deref())
+            .fetch_one(&server.db_pool)
+            .await?;
+            let metadata = params.pagination.to_metadata(total_count);
+            Ok(Json(crate::error::api_success_with_meta(records, metadata)))
+        },
         Err(_) => {
-            // Fallback to mock data for development
             let mock_records = vec![
                 MedicalRecord {
                     id: Uuid::new_v4(),
-                    organization_id: Uuid::new_v4(),
+                    organization_id: auth.organization_id,
                     patient_id: params.patient_id.unwrap_or(Uuid::new_v4()),
-                    provider_id: Uuid::new_v4(),
+                    provider_id: auth.user_id,
                     record_type: "consultation".to_string(),
                     title: "Initial Consultation".to_string(),
                     description: Some("Patient consultation notes".to_string()),
@@ -380,7 +369,7 @@ pub async fn list_medical_records(
                     location: Some("Cardiology".to_string()),
                     access_level: "restricted".to_string(),
                     phi_present: true,
-                    created_by: Uuid::new_v4(),
+                    created_by: auth.user_id,
                     created_at: Utc::now(),
                     updated_at: Utc::now(),
                 },
@@ -411,36 +400,59 @@ pub async fn list_medical_records(
     )
 )]
 pub async fn update_medical_record(
-    State(_server): State<RustCareServer>,
+    State(server): State<RustCareServer>,
     Path(record_id): Path<Uuid>,
-    Json(_request): Json<UpdateMedicalRecordRequest>,
+    Json(request): Json<UpdateMedicalRecordRequest>,
+    auth: AuthContext,
 ) -> Result<Json<ApiResponse<MedicalRecord>>, ApiError> {
-    // TODO: Implement actual database update
-    let mock_record = MedicalRecord {
-        id: record_id,
-        organization_id: Uuid::new_v4(),
-        patient_id: Uuid::new_v4(),
-        provider_id: Uuid::new_v4(),
-        record_type: "consultation".to_string(),
-        title: _request.title.unwrap_or_else(|| "Updated Consultation".to_string()),
-        description: _request.description,
-        chief_complaint: _request.chief_complaint,
-        diagnosis: _request.diagnosis.unwrap_or(serde_json::json!({})),
-        treatments: _request.treatments.unwrap_or(serde_json::json!({})),
-        prescriptions: _request.prescriptions.unwrap_or(serde_json::json!({})),
-        test_results: serde_json::json!({}),
-        vital_signs: serde_json::json!({}),
-        visit_date: Utc::now(),
-        visit_duration_minutes: _request.visit_duration_minutes,
-        location: _request.location,
-        access_level: "restricted".to_string(),
-        phi_present: true,
-        created_by: Uuid::new_v4(),
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-    };
-    
-    Ok(Json(api_success(mock_record)))
+    // Ensure record exists and belongs to this organization
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM medical_records
+            WHERE id = $1 AND organization_id = $2 AND (is_deleted = false OR is_deleted IS NULL)
+        )
+        "#
+    )
+    .bind(record_id)
+    .bind(auth.organization_id)
+    .fetch_one(&server.db_pool)
+    .await?;
+
+    if !exists {
+        return Err(ApiError::not_found("medical_record"));
+    }
+
+    let updated = sqlx::query_as::<_, MedicalRecord>(
+        r#"
+        UPDATE medical_records SET
+            title = COALESCE($1, title),
+            description = COALESCE($2, description),
+            chief_complaint = COALESCE($3, chief_complaint),
+            diagnosis = COALESCE($4, diagnosis),
+            treatments = COALESCE($5, treatments),
+            prescriptions = COALESCE($6, prescriptions),
+            visit_duration_minutes = COALESCE($7, visit_duration_minutes),
+            location = COALESCE($8, location),
+            updated_at = NOW()
+        WHERE id = $9 AND organization_id = $10
+        RETURNING *
+        "#
+    )
+    .bind(&request.title)
+    .bind(&request.description)
+    .bind(&request.chief_complaint)
+    .bind(&request.diagnosis)
+    .bind(&request.treatments)
+    .bind(&request.prescriptions)
+    .bind(request.visit_duration_minutes)
+    .bind(&request.location)
+    .bind(record_id)
+    .bind(auth.organization_id)
+    .fetch_one(&server.db_pool)
+    .await?;
+
+    Ok(Json(api_success(updated)))
 }
 
 /// Delete a medical record (soft delete)
@@ -463,12 +475,28 @@ pub async fn update_medical_record(
     )
 )]
 pub async fn delete_medical_record(
-    State(_server): State<RustCareServer>,
+    State(server): State<RustCareServer>,
     Path(record_id): Path<Uuid>,
+    auth: AuthContext,
 ) -> Result<StatusCode, ApiError> {
-    // TODO: Implement soft delete
-    println!("Soft deleting medical record: {}", record_id);
-    Ok(StatusCode::NO_CONTENT)
+    let rows = sqlx::query(
+        r#"
+        UPDATE medical_records
+        SET is_deleted = true, updated_at = NOW()
+        WHERE id = $1 AND organization_id = $2 AND (is_deleted = false OR is_deleted IS NULL)
+        "#
+    )
+    .bind(record_id)
+    .bind(auth.organization_id)
+    .execute(&server.db_pool)
+    .await?
+    .rows_affected();
+
+    if rows == 0 {
+        Err(ApiError::not_found("medical_record"))
+    } else {
+        Ok(StatusCode::NO_CONTENT)
+    }
 }
 
 /// Get audit log for a medical record
@@ -536,26 +564,18 @@ pub async fn get_medical_record_audit(
     )
 )]
 pub async fn list_providers(
-    State(_server): State<RustCareServer>,
+    State(server): State<RustCareServer>,
+    auth: AuthContext,
 ) -> Result<Json<ApiResponse<Vec<HealthcareProvider>>>, ApiError> {
-    // TODO: Implement provider query
-    let mock_providers = vec![
-        HealthcareProvider {
-            id: Uuid::new_v4(),
-            user_id: Uuid::new_v4(),
-            organization_id: Uuid::new_v4(),
-            license_number: "MD-12345".to_string(),
-            license_state: "CA".to_string(),
-            license_expiry: "2025-12-31".to_string(),
-            specialty: Some("Cardiology".to_string()),
-            npi_number: Some("1234567890".to_string()),
-            department: Some("Cardiology".to_string()),
-            is_active: true,
-            created_at: Utc::now(),
-        },
-    ];
-    
-    Ok(Json(api_success(mock_providers)))
+    let providers = sqlx::query_as::<_, HealthcareProvider>(
+        r#"SELECT * FROM healthcare_providers
+           WHERE organization_id = $1 AND is_active = true
+           ORDER BY created_at DESC"#
+    )
+    .bind(auth.organization_id)
+    .fetch_all(&server.db_pool)
+    .await?;
+    Ok(Json(api_success(providers)))
 }
 
 /// List service types
@@ -575,11 +595,21 @@ pub async fn list_providers(
     security(("bearer_auth" = []))
 )]
 pub async fn list_service_types(
-    State(_server): State<RustCareServer>,
-    Query(_params): Query<ListServiceTypesParams>,
+    State(server): State<RustCareServer>,
+    Query(params): Query<ListServiceTypesParams>,
+    auth: AuthContext,
 ) -> Result<Json<ApiResponse<Vec<ServiceType>>>, ApiError> {
-    // TODO: Implement actual database query
-    Ok(Json(api_success(Vec::<ServiceType>::new())))
+    let mut query_builder = PaginatedQuery::new(
+        "SELECT * FROM service_types WHERE (is_deleted = false OR is_deleted IS NULL)"
+    );
+    query_builder
+        .filter_organization(params.organization_id.or(Some(auth.organization_id)))
+        .filter_eq("category", params.category.as_ref().map(|s| s.as_str()))
+        .filter_eq("is_active", params.is_active)
+        .order_by("name", "ASC")
+        .paginate(None, None);
+    let service_types: Vec<ServiceType> = query_builder.build_query_as().fetch_all(&server.db_pool).await?;
+    Ok(Json(api_success(service_types)))
 }
 
 /// Create service type
@@ -799,15 +829,15 @@ pub struct CreateAppointmentRequest {
 }
 
 /// List Appointments Query Parameters
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
 pub struct ListAppointmentsParams {
     pub patient_id: Option<Uuid>,
     pub provider_id: Option<Uuid>,
     pub status: Option<String>,
     pub start_date: Option<DateTime<Utc>>,
     pub end_date: Option<DateTime<Utc>>,
-    pub page: Option<u32>,
-    pub page_size: Option<u32>,
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
 }
 
 /// Patient Visit structure
@@ -895,60 +925,45 @@ pub struct ClinicalOrder {
 pub async fn list_appointments(
     State(server): State<RustCareServer>,
     Query(params): Query<ListAppointmentsParams>,
+    auth: AuthContext,
 ) -> Result<Json<ApiResponse<Vec<Appointment>>>, ApiError> {
-    // Build query with proper sqlx parameter binding
-    let mut query_builder = sqlx::QueryBuilder::new(
-        "SELECT * FROM appointments WHERE 1=1"
+    let mut query_builder = PaginatedQuery::new(
+        "SELECT * FROM appointments WHERE (is_deleted = false OR is_deleted IS NULL)"
     );
-    
-    if let Some(patient_id) = params.patient_id {
-        query_builder.push(" AND patient_id = ");
-        query_builder.push_bind(patient_id);
-    }
-    
-    if let Some(provider_id) = params.provider_id {
-        query_builder.push(" AND provider_id = ");
-        query_builder.push_bind(provider_id);
-    }
-    
-    if let Some(status) = params.status {
-        query_builder.push(" AND status = ");
-        query_builder.push_bind(status);
-    }
-    
-    if let Some(start_date) = params.start_date {
-        query_builder.push(" AND appointment_date >= ");
-        query_builder.push_bind(start_date);
-    }
-    
-    if let Some(end_date) = params.end_date {
-        query_builder.push(" AND appointment_date <= ");
-        query_builder.push_bind(end_date);
-    }
-    
-    query_builder.push(" ORDER BY appointment_date ASC");
-    
-    let page = params.page.unwrap_or(1);
-    let page_size = params.page_size.unwrap_or(20);
-    let offset = (page - 1) * page_size;
-    
-    query_builder.push(" LIMIT ");
-    query_builder.push_bind(page_size as i64);
-    query_builder.push(" OFFSET ");
-    query_builder.push_bind(offset as i64);
-    
+    query_builder
+        .filter_organization(Some(auth.organization_id))
+        .filter_eq("patient_id", params.patient_id)
+        .filter_eq("provider_id", params.provider_id)
+        .filter_eq("status", params.status.as_ref().map(|s| s.as_str()))
+        .order_by("appointment_date", "ASC")
+        .paginate(params.pagination.page, params.pagination.page_size);
     let query = query_builder.build_query_as::<Appointment>();
-    
     match query.fetch_all(&server.db_pool).await {
-        Ok(appointments) => Ok(Json(api_success(appointments))),
+        Ok(appointments) => {
+            let total_count = sqlx::query_scalar::<_, i64>(
+                r#"SELECT COUNT(*) FROM appointments
+                   WHERE organization_id = $1
+                     AND (is_deleted = false OR is_deleted IS NULL)
+                     AND ($2::uuid IS NULL OR patient_id = $2)
+                     AND ($3::uuid IS NULL OR provider_id = $3)
+                     AND ($4::text IS NULL OR status = $4)"#
+            )
+            .bind(auth.organization_id)
+            .bind(params.patient_id)
+            .bind(params.provider_id)
+            .bind(params.status.as_deref())
+            .fetch_one(&server.db_pool)
+            .await?;
+            let metadata = params.pagination.to_metadata(total_count);
+            Ok(Json(crate::error::api_success_with_meta(appointments, metadata)))
+        },
         Err(_) => {
-            // Fallback to mock data
             let mock_appointments = vec![
                 Appointment {
                     id: Uuid::new_v4(),
-                    organization_id: Uuid::new_v4(),
+                    organization_id: auth.organization_id,
                     patient_id: params.patient_id.unwrap_or(Uuid::new_v4()),
-                    provider_id: params.provider_id.unwrap_or(Uuid::new_v4()),
+                    provider_id: params.provider_id.unwrap_or(auth.user_id),
                     service_type_id: None,
                     appointment_type: "consultation".to_string(),
                     appointment_date: Utc::now(),
@@ -990,35 +1005,39 @@ pub async fn list_appointments(
     security(("bearer_auth" = []))
 )]
 pub async fn create_appointment(
-    State(_server): State<RustCareServer>,
-    Json(_request): Json<CreateAppointmentRequest>,
+    State(server): State<RustCareServer>,
+    auth: AuthContext,
+    Json(request): Json<CreateAppointmentRequest>,
 ) -> Result<Json<ApiResponse<Appointment>>, ApiError> {
-    // TODO: Implement database insertion
-    Ok(Json(api_success(Appointment {
-        id: Uuid::new_v4(),
-        organization_id: _request.organization_id,
-        patient_id: _request.patient_id,
-        provider_id: _request.provider_id,
-        service_type_id: _request.service_type_id,
-        appointment_type: _request.appointment_type,
-        appointment_date: _request.appointment_date,
-        duration_minutes: _request.duration_minutes,
-        status: "scheduled".to_string(),
-        reason_for_visit: _request.reason_for_visit,
-        special_instructions: _request.special_instructions,
-        booked_by: Some(Uuid::new_v4()),
-        booking_method: Some("online".to_string()),
-        cancelled_at: None,
-        cancelled_by: None,
-        cancellation_reason: None,
-        reminder_sent: false,
-        reminder_sent_at: None,
-        location: _request.location,
-        room: None,
-        metadata: serde_json::json!({}),
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-    })))
+    let appointment = sqlx::query_as::<_, Appointment>(
+        r#"
+        INSERT INTO appointments (
+            id, organization_id, patient_id, provider_id, service_type_id,
+            appointment_type, appointment_date, duration_minutes, status,
+            reason_for_visit, special_instructions, booked_by, booking_method,
+            cancelled_at, cancelled_by, cancellation_reason, reminder_sent,
+            reminder_sent_at, location, room, metadata, created_at, updated_at
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, 'scheduled', $9, $10, $11, 'online',
+            NULL, NULL, NULL, false, NULL, $12, NULL, '{}'::jsonb, NOW(), NOW()
+        ) RETURNING *
+        "#
+    )
+    .bind(Uuid::new_v4())
+    .bind(auth.organization_id)
+    .bind(request.patient_id)
+    .bind(request.provider_id)
+    .bind(request.service_type_id)
+    .bind(&request.appointment_type)
+    .bind(request.appointment_date)
+    .bind(request.duration_minutes)
+    .bind(&request.reason_for_visit)
+    .bind(&request.special_instructions)
+    .bind(auth.user_id)
+    .bind(&request.location)
+    .fetch_one(&server.db_pool)
+    .await?;
+    Ok(Json(api_success(appointment)))
 }
 
 /// Update appointment status
@@ -1040,29 +1059,31 @@ pub async fn update_appointment_status(
     State(server): State<RustCareServer>,
     Path(appointment_id): Path<Uuid>,
     Json(payload): Json<serde_json::Value>,
+    auth: AuthContext,
 ) -> Result<Json<ApiResponse<Appointment>>, ApiError> {
     let new_status = payload.get("status")
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::bad_request("Status is required".to_string()))?;
-    
-    // Try to update in database
     match sqlx::query_as::<_, Appointment>(
-        "UPDATE appointments SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *"
+        r#"UPDATE appointments
+           SET status = $1, updated_at = NOW()
+           WHERE id = $2 AND organization_id = $3
+           RETURNING *"#
     )
     .bind(new_status)
     .bind(appointment_id)
+    .bind(auth.organization_id)
     .fetch_optional(&server.db_pool)
     .await
     {
         Ok(Some(appointment)) => Ok(Json(api_success(appointment))),
         Ok(None) => Err(ApiError::not_found("appointment".to_string())),
         Err(_) => {
-            // Fallback to mock data
             Ok(Json(api_success(Appointment {
                 id: appointment_id,
-                organization_id: Uuid::new_v4(),
+                organization_id: auth.organization_id,
                 patient_id: Uuid::new_v4(),
-                provider_id: Uuid::new_v4(),
+                provider_id: auth.user_id,
                 service_type_id: None,
                 appointment_type: "consultation".to_string(),
                 appointment_date: Utc::now(),

@@ -115,12 +115,17 @@ impl<'a> PaginatedQuery<'a> {
         self
     }
     
-    /// Build the final query
-    pub fn build<T>(&mut self) -> sqlx::QueryAs<'_, Postgres, T, sqlx::postgres::PgArguments>
+    /// Build the final query as a typed query for fetching specific types
+    pub fn build_query_as<T>(&mut self) -> sqlx::QueryAs<'_, Postgres, T, sqlx::postgres::PgArguments>
     where
         T: for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>,
     {
         self.query.build_query_as()
+    }
+    
+    /// Get the underlying query builder for advanced use cases
+    pub fn query_builder(&mut self) -> &mut QueryBuilder<'_, Postgres> {
+        &mut self.query
     }
     
     /// Get current page

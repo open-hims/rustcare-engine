@@ -4,9 +4,12 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use utoipa::ToSchema;
+use utoipa::{ToSchema, IntoParams};
 use crate::server::RustCareServer;
 use crate::error::{ApiError, ApiResponse, api_success};
+use crate::utils::query_builder::PaginatedQuery;
+use crate::types::pagination::PaginationParams;
+use crate::middleware::AuthContext;
 use chrono::{DateTime, Utc};
 use sqlx::FromRow;
 use std::collections::HashMap;
@@ -113,7 +116,31 @@ pub struct VendorService {
 }
 
 // ============================================================================
-// API HANDLERS
+// QUERY PARAMETERS
+// ============================================================================
+
+/// List Vendor Types Query Parameters
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct ListVendorTypesParams {
+    pub category: Option<String>,
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
+}
+
+/// List Vendors Query Parameters
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct ListVendorsParams {
+    pub vendor_type_id: Option<Uuid>,
+    pub is_preferred_vendor: Option<bool>,
+    pub is_active: Option<bool>,
+    pub city: Option<String>,
+    pub state: Option<String>,
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
+}
+
+// ============================================================================
+// API HANDLERS (Refactored to use new utilities)
 // ============================================================================
 
 /// List vendor types
@@ -125,67 +152,122 @@ pub struct VendorService {
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
     ),
+    params(ListVendorTypesParams),
     tag = "vendors",
     security(("bearer_auth" = []))
 )]
 pub async fn list_vendor_types(
-    State(_server): State<RustCareServer>,
+    State(server): State<RustCareServer>,
+    Query(params): Query<ListVendorTypesParams>,
+    _auth: AuthContext, // Using AuthContext for consistency, even though vendor types are global
 ) -> Result<Json<ApiResponse<Vec<VendorType>>>, ApiError> {
-    // TODO: Implement actual database query
-    let mock_types = vec![
-        VendorType {
-            id: Uuid::new_v4(),
-            code: "lab_external".to_string(),
-            name: "External Laboratory".to_string(),
-            description: Some("Third-party lab services provider".to_string()),
-            category: "services".to_string(),
-            is_active: true,
-            metadata: serde_json::json!({}),
-        },
-        VendorType {
-            id: Uuid::new_v4(),
-            code: "equipment_rental".to_string(),
-            name: "Medical Equipment Rental".to_string(),
-            description: Some("Equipment leasing and rental".to_string()),
-            category: "equipment".to_string(),
-            is_active: true,
-            metadata: serde_json::json!({}),
-        },
-    ];
-    Ok(Json(api_success(mock_types)))
+    // Use PaginatedQuery utility
+    let mut query_builder = PaginatedQuery::new(
+        "SELECT * FROM vendor_types WHERE is_active = true"
+    );
+    
+    query_builder
+        .filter_eq("category", params.category.as_ref().map(|s| s.as_str()))
+        .order_by("name", "ASC")
+        .paginate(
+            params.pagination.page,
+            params.pagination.page_size
+        );
+    
+    let vendor_types: Vec<VendorType> = query_builder.build_query_as().fetch_all(&server.db_pool).await?;
+    
+    // Get total count for pagination metadata
+    let total_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*) FROM vendor_types
+        WHERE is_active = true
+          AND ($1::text IS NULL OR category = $1)
+        "#
+    )
+    .bind(params.category.as_deref())
+    .fetch_one(&server.db_pool)
+    .await?;
+    
+    let metadata = params.pagination.to_metadata(total_count);
+    Ok(Json(crate::error::api_success_with_meta(vendor_types, metadata)))
 }
 
 /// List vendors
 #[utoipa::path(
     get,
     path = "/api/v1/vendors",
-    params(
-        ("vendor_type_id" = Option<Uuid>, Query, description = "Filter by vendor type"),
-        ("is_preferred" = Option<bool>, Query, description = "Filter by preferred status")
-    ),
     responses(
         (status = 200, description = "Vendors retrieved successfully", body = Vec<Vendor>),
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
     ),
+    params(ListVendorsParams),
     tag = "vendors",
     security(("bearer_auth" = []))
 )]
 pub async fn list_vendors(
-    State(_server): State<RustCareServer>,
-    Query(_params): Query<HashMap<String, String>>,
+    State(server): State<RustCareServer>,
+    Query(params): Query<ListVendorsParams>,
+    auth: AuthContext,
 ) -> Result<Json<ApiResponse<Vec<Vendor>>>, ApiError> {
-    // TODO: Implement actual database query
-    Ok(Json(api_success(Vec::<Vendor>::new())))
+    // Use PaginatedQuery utility
+    let mut query_builder = PaginatedQuery::new(
+        "SELECT * FROM vendors WHERE is_deleted = false"
+    );
+    
+    query_builder
+        .filter_organization(Some(auth.organization_id)) // Use actual auth context
+        .filter_eq("vendor_type_id", params.vendor_type_id)
+        .filter_eq("is_preferred_vendor", params.is_preferred_vendor)
+        .filter_eq("is_active", params.is_active)
+        .filter_eq("city", params.city.as_ref().map(|s| s.as_str()))
+        .filter_eq("state", params.state.as_ref().map(|s| s.as_str()))
+        .order_by_created_desc()
+        .paginate(
+            params.pagination.page,
+            params.pagination.page_size
+        );
+    
+    let vendors: Vec<Vendor> = query_builder.build_query_as().fetch_all(&server.db_pool).await?;
+    
+    // Get total count for pagination metadata
+    let total_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*) FROM vendors
+        WHERE organization_id = $1
+          AND (is_deleted = false OR is_deleted IS NULL)
+          AND ($2::uuid IS NULL OR vendor_type_id = $2)
+          AND ($3::bool IS NULL OR is_preferred_vendor = $3)
+          AND ($4::bool IS NULL OR is_active = $4)
+          AND ($5::text IS NULL OR city = $5)
+          AND ($6::text IS NULL OR state = $6)
+        "#
+    )
+    .bind(auth.organization_id)
+    .bind(params.vendor_type_id)
+    .bind(params.is_preferred_vendor)
+    .bind(params.is_active)
+    .bind(params.city.as_deref())
+    .bind(params.state.as_deref())
+    .fetch_one(&server.db_pool)
+    .await?;
+    
+    let metadata = params.pagination.to_metadata(total_count);
+    Ok(Json(crate::error::api_success_with_meta(vendors, metadata)))
 }
 
 /// Get vendor inventory
 #[utoipa::path(
     get,
     path = "/api/v1/vendors/{vendor_id}/inventory",
-    params(("vendor_id" = Uuid, Path, description = "Vendor ID")),
+    params(
+        ("vendor_id" = Uuid, Path, description = "Vendor ID"),
+        ("is_active" = Option<bool>, Query, description = "Filter by active status"),
+        ("in_stock" = Option<bool>, Query, description = "Filter by stock availability")
+    ),
     responses(
         (status = 200, description = "Vendor inventory retrieved successfully", body = Vec<VendorInventory>),
+        (status = 404, description = "Vendor not found"),
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
     ),
@@ -193,20 +275,77 @@ pub async fn list_vendors(
     security(("bearer_auth" = []))
 )]
 pub async fn get_vendor_inventory(
-    State(_server): State<RustCareServer>,
-    Path(_vendor_id): Path<Uuid>,
+    State(server): State<RustCareServer>,
+    Path(vendor_id): Path<Uuid>,
+    Query(params): Query<HashMap<String, String>>,
+    auth: AuthContext,
 ) -> Result<Json<ApiResponse<Vec<VendorInventory>>>, ApiError> {
-    // TODO: Implement actual database query
-    Ok(Json(api_success(Vec::<VendorInventory>::new())))
+    // Verify vendor exists and belongs to organization
+    let vendor_exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM vendors 
+            WHERE id = $1 
+              AND organization_id = $2 
+              AND (is_deleted = false OR is_deleted IS NULL)
+        )
+        "#
+    )
+    .bind(vendor_id)
+    .bind(auth.organization_id)
+    .fetch_one(&server.db_pool)
+    .await?;
+    
+    if !vendor_exists {
+        return Err(ApiError::not_found("vendor"));
+    }
+    
+    // Parse query parameters
+    let is_active = params.get("is_active").and_then(|v| v.parse().ok());
+    let in_stock = params.get("in_stock").and_then(|v| v.parse().ok());
+    
+    // Use PaginatedQuery utility
+    let mut query_builder = PaginatedQuery::new(
+        "SELECT * FROM vendor_inventory WHERE vendor_id = $1"
+    );
+    
+    // Add vendor_id as a bound parameter (PaginatedQuery needs to support this better)
+    // For now, use direct query with proper filtering
+    let inventory = sqlx::query_as::<_, VendorInventory>(
+        r#"
+        SELECT vi.* 
+        FROM vendor_inventory vi
+        JOIN vendors v ON vi.vendor_id = v.id
+        WHERE vi.vendor_id = $1
+          AND v.organization_id = $2
+          AND ($3::bool IS NULL OR vi.is_active = $3)
+          AND ($4::bool IS NULL OR vi.in_stock = $4)
+          AND (v.is_deleted = false OR v.is_deleted IS NULL)
+        ORDER BY vi.created_at DESC
+        "#
+    )
+    .bind(vendor_id)
+    .bind(auth.organization_id)
+    .bind(is_active)
+    .bind(in_stock)
+    .fetch_all(&server.db_pool)
+    .await?;
+    
+    Ok(Json(api_success(inventory)))
 }
 
 /// Get vendor services
 #[utoipa::path(
     get,
     path = "/api/v1/vendors/{vendor_id}/services",
-    params(("vendor_id" = Uuid, Path, description = "Vendor ID")),
+    params(
+        ("vendor_id" = Uuid, Path, description = "Vendor ID"),
+        ("is_available" = Option<bool>, Query, description = "Filter by availability"),
+        ("is_active" = Option<bool>, Query, description = "Filter by active status")
+    ),
     responses(
         (status = 200, description = "Vendor services retrieved successfully", body = Vec<VendorService>),
+        (status = 404, description = "Vendor not found"),
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Internal server error")
     ),
@@ -214,10 +353,56 @@ pub async fn get_vendor_inventory(
     security(("bearer_auth" = []))
 )]
 pub async fn get_vendor_services(
-    State(_server): State<RustCareServer>,
-    Path(_vendor_id): Path<Uuid>,
+    State(server): State<RustCareServer>,
+    Path(vendor_id): Path<Uuid>,
+    Query(params): Query<HashMap<String, String>>,
+    auth: AuthContext,
 ) -> Result<Json<ApiResponse<Vec<VendorService>>>, ApiError> {
-    // TODO: Implement actual database query
-    Ok(Json(api_success(Vec::<VendorService>::new())))
+    // Verify vendor exists and belongs to organization
+    let vendor_exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM vendors 
+            WHERE id = $1 
+              AND organization_id = $2 
+              AND (is_deleted = false OR is_deleted IS NULL)
+        )
+        "#
+    )
+    .bind(vendor_id)
+    .bind(auth.organization_id)
+    .fetch_one(&server.db_pool)
+    .await?;
+    
+    if !vendor_exists {
+        return Err(ApiError::not_found("vendor"));
+    }
+    
+    // Parse query parameters
+    let is_available = params.get("is_available").and_then(|v| v.parse().ok());
+    let is_active = params.get("is_active").and_then(|v| v.parse().ok());
+    
+    // Query vendor services
+    let services = sqlx::query_as::<_, VendorService>(
+        r#"
+        SELECT vs.* 
+        FROM vendor_services vs
+        JOIN vendors v ON vs.vendor_id = v.id
+        WHERE vs.vendor_id = $1
+          AND v.organization_id = $2
+          AND ($3::bool IS NULL OR vs.is_available = $3)
+          AND ($4::bool IS NULL OR vs.is_active = $4)
+          AND (v.is_deleted = false OR v.is_deleted IS NULL)
+        ORDER BY vs.created_at DESC
+        "#
+    )
+    .bind(vendor_id)
+    .bind(auth.organization_id)
+    .bind(is_available)
+    .bind(is_active)
+    .fetch_all(&server.db_pool)
+    .await?;
+    
+    Ok(Json(api_success(services)))
 }
 
