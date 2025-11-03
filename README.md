@@ -46,7 +46,7 @@ RustCare Engine Core is a modular, microservices-ready platform providing founda
 
 ```bash
 # Clone the repository
-git clone https://github.com/open-hims/rustcare-engine.git
+git clone https://github.com/Open-Hims-HQ/rustcare-engine.git
 cd rustcare-engine
 
 # Build all components
@@ -63,12 +63,12 @@ cargo build --release --bin rustcare
 
 #### Infrastructure Setup
 
-For setting up PostgreSQL, Redis, and running database migrations, see the **[rustcare-infra](https://github.com/open-hims/rustcare-infra)** repository:
+For setting up PostgreSQL, Redis, and running database migrations, see the **[rustcare-infra](https://github.com/Open-Hims-HQ/rustcare-infra)** repository:
 
 ```bash
 # Clone infra repo (if separate)
 cd ..
-git clone https://github.com/open-hims/rustcare-infra.git
+git clone https://github.com/Open-Hims-HQ/rustcare-infra.git
 cd rustcare-infra
 
 # Install PostgreSQL & Redis
@@ -414,8 +414,8 @@ This project is licensed under the MIT OR Apache-2.0 license.
 ## 🆘 Support
 
 - **Documentation**: [https://docs.rustcare.dev](https://docs.rustcare.dev)
-- **Issues**: [GitHub Issues](https://github.com/open-hims/rustcare-engine/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/open-hims/rustcare-engine/discussions)
+- **Issues**: [GitHub Issues](https://github.com/Open-Hims-HQ/rustcare-engine/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Open-Hims-HQ/rustcare-engine/discussions)
 - **Security**: security@rustcare.dev
 
 ## 🗺️ Roadmap

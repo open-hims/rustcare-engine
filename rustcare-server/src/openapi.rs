@@ -55,7 +55,7 @@ use crate::server::RustCareServer;
         ),
         license(
             name = "MIT OR Apache-2.0",
-            url = "https://github.com/open-hims/rustcare-engine/blob/main/LICENSE"
+            url = "https://github.com/Open-Hims-HQ/rustcare-engine/blob/main/LICENSE"
         ),
     ),
     servers(
