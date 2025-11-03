@@ -185,7 +185,7 @@ pub async fn list_notifications(
     auth: AuthContext, // Using new AuthContext extractor
 ) -> Result<Json<ApiResponse<Vec<Notification>>>, ApiError> {
     // Use PaginatedQuery utility
-    let mut query_builder = PaginatedQuery::new(
+    let mut query = PaginatedQuery::new(
         r#"
         SELECT 
             n.id,
@@ -206,53 +206,26 @@ pub async fn list_notifications(
             n.created_at,
             n.updated_at
         FROM notifications n
-        WHERE n.user_id = $1
-            AND (n.expires_at IS NULL OR n.expires_at > NOW())
         "#
     );
     
-    // Note: PaginatedQuery doesn't easily support binding parameters in the base query
-    // For now, use direct query with pagination
-    let notifications = sqlx::query_as::<_, Notification>(
-        r#"
-        SELECT 
-            n.id,
-            n.organization_id,
-            n.user_id,
-            n.title,
-            n.message,
-            n.notification_type,
-            n.priority,
-            n.category,
-            n.action_url,
-            n.action_label,
-            n.is_read,
-            n.read_at,
-            n.icon,
-            n.image_url,
-            n.expires_at,
-            n.created_at,
-            n.updated_at
-        FROM notifications n
-        WHERE n.user_id = $1
-            AND (n.expires_at IS NULL OR n.expires_at > NOW())
-            AND ($2::bool IS NULL OR n.is_read = $2)
-            AND ($3::text IS NULL OR n.notification_type = $3)
-            AND ($4::text IS NULL OR n.priority = $4)
-            AND ($5::text IS NULL OR n.category = $5)
-        ORDER BY n.created_at DESC
-        LIMIT $6 OFFSET $7
-        "#
-    )
-    .bind(auth.user_id) // Use actual auth context
-    .bind(params.is_read)
-    .bind(params.notification_type.as_deref())
-    .bind(params.priority.as_deref())
-    .bind(params.category.as_deref())
-    .bind(params.pagination.limit() as i64)
-    .bind(params.pagination.offset() as i64)
-    .fetch_all(&app_state.db_pool)
-    .await?;
+    query
+        .add_base_filter("n.user_id", auth.user_id)
+        .query_builder()
+        .push(" AND (n.expires_at IS NULL OR n.expires_at > NOW())");
+    
+    query
+        .filter_eq("n.is_read", params.is_read)
+        .filter_eq("n.notification_type", params.notification_type.as_ref())
+        .filter_eq("n.priority", params.priority.as_ref())
+        .filter_eq("n.category", params.category.as_ref())
+        .order_by("n.created_at", "DESC")
+        .paginate(
+            params.pagination.page,
+            params.pagination.page_size
+        );
+    
+    let notifications: Vec<Notification> = query.build_query_as().fetch_all(&app_state.db_pool).await?;
     
     // Get total count for pagination metadata
     let total_count = sqlx::query_scalar::<_, i64>(

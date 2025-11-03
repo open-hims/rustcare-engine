@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use utoipa::{ToSchema, IntoParams};
 use crate::server::RustCareServer;
-use crate::error::{ApiError, ApiResponse, api_success};
+use crate::error::{ApiError, ApiResponse, api_success, api_success_with_meta};
 use crate::utils::query_builder::PaginatedQuery;
 use crate::types::pagination::PaginationParams;
 use crate::middleware::AuthContext;
@@ -604,12 +604,16 @@ pub async fn list_inventory(
     Query(params): Query<ListInventoryParams>,
     auth: AuthContext,
 ) -> Result<Json<ApiResponse<Vec<PharmacyInventory>>>, ApiError> {
-    // Use PaginatedQuery utility
+    // Use PaginatedQuery utility with JOIN query
     let mut query = PaginatedQuery::new(
         "SELECT pi.* FROM pharmacy_inventory pi
-         JOIN pharmacies p ON pi.pharmacy_id = p.id
-         WHERE p.organization_id = $1 AND (p.is_deleted = false OR p.is_deleted IS NULL)"
+         JOIN pharmacies p ON pi.pharmacy_id = p.id"
     );
+    
+    query
+        .add_base_filter("p.organization_id", auth.organization_id)
+        .query_builder()
+        .push(" AND (p.is_deleted = false OR p.is_deleted IS NULL)");
     
     query
         .filter_eq("pi.pharmacy_id", params.pharmacy_id)
@@ -621,32 +625,30 @@ pub async fn list_inventory(
             params.pagination.page_size
         );
     
-    // Note: This query needs adjustment for the JOIN condition
-    // For now, we'll use a simpler approach
-    let inventory = sqlx::query_as::<_, PharmacyInventory>(
+    let inventory: Vec<PharmacyInventory> = query.build_query_as().fetch_all(&server.db_pool).await?;
+    
+    // Get total count for pagination metadata
+    let total_count = sqlx::query_scalar::<_, i64>(
         r#"
-        SELECT pi.* 
+        SELECT COUNT(*) 
         FROM pharmacy_inventory pi
         JOIN pharmacies p ON pi.pharmacy_id = p.id
         WHERE p.organization_id = $1
+          AND (p.is_deleted = false OR p.is_deleted IS NULL)
           AND ($2::uuid IS NULL OR pi.pharmacy_id = $2)
           AND ($3::uuid IS NULL OR pi.medication_id = $3)
           AND ($4::text IS NULL OR pi.status = $4)
-          AND (p.is_deleted = false OR p.is_deleted IS NULL)
-        ORDER BY pi.created_at DESC
-        LIMIT $5 OFFSET $6
         "#
     )
     .bind(auth.organization_id)
     .bind(params.pharmacy_id)
     .bind(params.medication_id)
     .bind(params.status.as_deref())
-    .bind(params.pagination.limit() as i64)
-    .bind(params.pagination.offset() as i64)
-    .fetch_all(&server.db_pool)
+    .fetch_one(&server.db_pool)
     .await?;
     
-    Ok(Json(api_success(inventory)))
+    let metadata = params.pagination.to_metadata(total_count);
+    Ok(Json(api_success_with_meta(inventory, metadata)))
 }
 
 /// List prescriptions
@@ -668,9 +670,12 @@ pub async fn list_prescriptions(
     auth: AuthContext,
 ) -> Result<Json<ApiResponse<Vec<Prescription>>>, ApiError> {
     // Use PaginatedQuery utility
-    let mut query = PaginatedQuery::new(
-        "SELECT * FROM prescriptions WHERE organization_id = $1 AND (is_deleted = false OR is_deleted IS NULL)"
-    );
+    let mut query = PaginatedQuery::new("SELECT * FROM prescriptions");
+    
+    query
+        .add_base_filter("organization_id", auth.organization_id)
+        .query_builder()
+        .push(" AND (is_deleted = false OR is_deleted IS NULL)");
     
     query
         .filter_eq("patient_id", params.patient_id)
@@ -683,40 +688,18 @@ pub async fn list_prescriptions(
             params.pagination.page_size
         );
     
-    // Note: PaginatedQuery needs to support bound parameters better for JOIN queries
-    // For now, use direct query with organization filter
-    let prescriptions = sqlx::query_as::<_, Prescription>(
-        r#"
-        SELECT * FROM prescriptions
-        WHERE organization_id = $1
-          AND ($2::uuid IS NULL OR patient_id = $2)
-          AND ($3::uuid IS NULL OR provider_id = $3)
-          AND ($4::uuid IS NULL OR pharmacy_id = $4)
-          AND ($5::text IS NULL OR status = $5)
-          AND (is_deleted = false OR is_deleted IS NULL)
-        ORDER BY prescribed_date DESC
-        LIMIT $6 OFFSET $7
-        "#
-    )
-    .bind(auth.organization_id)
-    .bind(params.patient_id)
-    .bind(params.provider_id)
-    .bind(params.pharmacy_id)
-    .bind(params.status.as_deref())
-    .bind(params.pagination.limit() as i64)
-    .bind(params.pagination.offset() as i64)
-    .fetch_all(&server.db_pool)
-    .await?;
+    let prescriptions: Vec<Prescription> = query.build_query_as().fetch_all(&server.db_pool).await?;
     
+    // Get total count for pagination metadata
     let total_count = sqlx::query_scalar::<_, i64>(
         r#"
         SELECT COUNT(*) FROM prescriptions
         WHERE organization_id = $1
+          AND (is_deleted = false OR is_deleted IS NULL)
           AND ($2::uuid IS NULL OR patient_id = $2)
           AND ($3::uuid IS NULL OR provider_id = $3)
           AND ($4::uuid IS NULL OR pharmacy_id = $4)
           AND ($5::text IS NULL OR status = $5)
-          AND (is_deleted = false OR is_deleted IS NULL)
         "#
     )
     .bind(auth.organization_id)
@@ -728,7 +711,7 @@ pub async fn list_prescriptions(
     .await?;
     
     let metadata = params.pagination.to_metadata(total_count);
-    Ok(Json(crate::error::api_success_with_meta(prescriptions, metadata)))
+    Ok(Json(api_success_with_meta(prescriptions, metadata)))
 }
 
 // ============================================================================

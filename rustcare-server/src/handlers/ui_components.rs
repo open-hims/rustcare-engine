@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use utoipa::{ToSchema, IntoParams};
 use crate::server::RustCareServer;
-use crate::error::{ApiError, ApiResponse, api_success};
+use crate::error::{ApiError, ApiResponse, api_success, api_success_with_meta};
 use crate::middleware::AuthContext;
 use crate::validation::RequestValidation;
 use crate::types::pagination::PaginationParams;
@@ -303,6 +303,8 @@ pub async fn list_components(
     Query(params): Query<ListComponentsParams>,
     auth: AuthContext,
 ) -> Result<Json<ApiResponse<Vec<serde_json::Value>>>, ApiError> {
+    // Note: Using sqlx::query! macro for compile-time query checking
+    // PaginatedQuery doesn't work well with query! macro, so using raw SQL with pagination
     let components = sqlx::query!(
         r#"
         SELECT 
@@ -323,10 +325,7 @@ pub async fn list_components(
     .bind(auth.organization_id)
     .bind(params.component_type.as_deref())
     .bind(params.category.as_deref())
-    .bind(params.parent_component.and_then(|name| {
-        // Would need to lookup parent component ID first
-        None
-    }))
+    .bind(params.parent_component.and_then(|_| None::<uuid::Uuid>))
     .bind(params.pagination.limit() as i64)
     .bind(params.pagination.offset() as i64)
     .fetch_all(&server.db_pool)
@@ -349,6 +348,27 @@ pub async fn list_components(
         })
     }).collect();
     
-    Ok(Json(api_success(result)))
+    // Get total count for pagination metadata
+    let total_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*) FROM ui_components
+        WHERE organization_id = $1
+          AND is_active = true
+          AND is_deleted = false
+          AND ($2::text IS NULL OR component_type = $2)
+          AND ($3::text IS NULL OR category = $3)
+          AND ($4::uuid IS NULL OR parent_component_id = $4)
+        "#
+    )
+    .bind(auth.organization_id)
+    .bind(params.component_type.as_deref())
+    .bind(params.category.as_deref())
+    .bind(params.parent_component.and_then(|_| None::<uuid::Uuid>))
+    .fetch_one(&server.db_pool)
+    .await
+    .map_err(|e| ApiError::internal(format!("Failed to count components: {}", e)))?;
+    
+    let metadata = params.pagination.to_metadata(total_count);
+    Ok(Json(api_success_with_meta(result, metadata)))
 }
 

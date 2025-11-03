@@ -36,6 +36,32 @@ impl<'a> PaginatedQuery<'a> {
         }
     }
     
+    /// Create a new paginated query builder with an initial WHERE clause and bound parameter
+    /// Useful for queries that need a required parameter like `WHERE user_id = $1`
+    pub fn new_with_base_filter<T>(base_query: &'static str, column: &str, value: T) -> Self
+    where
+        T: sqlx::Encode<'_, Postgres> + Send + Sync,
+    {
+        let mut query = QueryBuilder::new(base_query);
+        query.push(format!(" WHERE {} = ", column));
+        query.push_bind(value);
+        Self {
+            query,
+            page: 1,
+            page_size: 20,
+        }
+    }
+    
+    /// Add a required base filter (appends to existing WHERE clause)
+    pub fn add_base_filter<T>(&mut self, column: &str, value: T) -> &mut Self
+    where
+        T: sqlx::Encode<'_, Postgres> + Send + Sync,
+    {
+        self.query.push(format!(" AND {} = ", column));
+        self.query.push_bind(value);
+        self
+    }
+    
     /// Add an equality filter (only if value is Some)
     pub fn filter_eq<T>(&mut self, column: &str, value: Option<T>) -> &mut Self
     where
