@@ -4,8 +4,11 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use utoipa::ToSchema;
+use utoipa::{ToSchema, IntoParams};
 use crate::server::RustCareServer;
+use crate::middleware::AuthContext;
+use crate::types::pagination::PaginationParams;
+use crate::utils::query_builder::PaginatedQuery;
 
 /// Organization with setup configuration
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -172,6 +175,14 @@ pub struct ZanzibarTuple {
     pub expires_at: Option<String>,
 }
 
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct ListOrganizationsParams {
+    pub is_active: Option<bool>,
+    pub country: Option<String>,
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
+}
+
 /// List organizations
 #[utoipa::path(
     get,
@@ -188,81 +199,71 @@ pub struct ZanzibarTuple {
 )]
 pub async fn list_organizations(
     State(server): State<RustCareServer>,
+    auth: AuthContext,
 ) -> Result<Json<crate::error::ApiResponse<Vec<Organization>>>, crate::error::ApiError> {
     use crate::error::{ApiError, api_success};
     
-    // Query all active organizations
-    let orgs = sqlx::query!(
-        r#"
-        SELECT 
-            id, name, slug, description, contact_email, contact_phone,
-            website_url, address_line1, city, state_province, postal_code, country,
-            settings, subscription_tier, is_active, created_at, updated_at
-        FROM organizations
-        WHERE deleted_at IS NULL AND is_active = true
-        ORDER BY created_at DESC
-        "#
-    )
-    .fetch_all(&server.db_pool)
-    .await
-    .map_err(|e| ApiError::internal(format!("Failed to fetch organizations: {}", e)))?;
-    
+    let mut query_builder = PaginatedQuery::new(
+        "SELECT \
+            id, name, slug, description, contact_email, contact_phone, \
+            website_url, address_line1, city, state_province, postal_code, country, \
+            settings, subscription_tier, is_active, created_at, updated_at \
+         FROM organizations \
+         WHERE deleted_at IS NULL"
+    );
+
+    query_builder
+        .filter_eq("is_active", Some(true))
+        .order_by("created_at", "DESC")
+        .paginate(None, None);
+
+    let orgs = query_builder.build_query_as::<(Uuid, String, String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, serde_json::Value, String, bool, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)>()
+        .fetch_all(&server.db_pool)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to fetch organizations: {}", e)))?;
+
     let mut organizations = Vec::new();
     for org in orgs {
-        // Extract organization_type and other fields from settings
-        let settings = org.settings.unwrap_or_else(|| serde_json::json!({}));
+        let (id, name, slug, description, contact_email, contact_phone, website_url, address_line1, city, state_province, postal_code, country, settings, _subscription_tier, is_active, created_at, updated_at) = org;
         let settings_obj = settings.as_object();
         let org_type = settings_obj
             .and_then(|s| s.get("organization_type"))
             .and_then(|v| v.as_str())
             .unwrap_or("clinic")
             .to_string();
-        
         let timezone = settings_obj
             .and_then(|s| s.get("timezone"))
             .and_then(|v| v.as_str())
             .unwrap_or("UTC")
             .to_string();
-        
-        let license_number = settings_obj
-            .and_then(|s| s.get("license_number"))
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        
-        let license_authority = settings_obj
-            .and_then(|s| s.get("license_authority"))
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        
-        let license_valid_until = settings_obj
-            .and_then(|s| s.get("license_valid_until"))
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        
+        let license_number = settings_obj.and_then(|s| s.get("license_number")).and_then(|v| v.as_str()).map(|s| s.to_string());
+        let license_authority = settings_obj.and_then(|s| s.get("license_authority")).and_then(|v| v.as_str()).map(|s| s.to_string());
+        let license_valid_until = settings_obj.and_then(|s| s.get("license_valid_until")).and_then(|v| v.as_str()).map(|s| s.to_string());
+
         organizations.push(Organization {
-            id: org.id,
-            name: org.name,
-            slug: org.slug,
+            id,
+            name,
+            slug,
             organization_type: org_type,
-            description: org.description,
-            email: org.contact_email,
-            phone: org.contact_phone,
-            website: org.website_url,
-            address: org.address_line1,
-            city: org.city,
-            state: org.state_province,
-            postal_code: org.postal_code,
-            country: org.country.unwrap_or_else(|| "US".to_string()),
+            description,
+            email: contact_email,
+            phone: contact_phone,
+            website: website_url,
+            address: address_line1,
+            city,
+            state: state_province,
+            postal_code,
+            country: country.unwrap_or_else(|| "US".to_string()),
             timezone,
             license_number,
             license_authority,
             license_valid_until,
-            compliance_frameworks: Vec::new(), // TODO: Query from junction table
-            geographic_regions: Vec::new(), // TODO: Query from organization_regions
+            compliance_frameworks: Vec::new(),
+            geographic_regions: Vec::new(),
             settings,
-            is_active: org.is_active,
-            created_at: org.created_at.to_rfc3339(),
-            updated_at: org.updated_at.to_rfc3339(),
+            is_active,
+            created_at: created_at.to_rfc3339(),
+            updated_at: updated_at.to_rfc3339(),
         });
     }
     
@@ -742,14 +743,32 @@ pub async fn get_role_templates(
     )
 )]
 pub async fn list_organization_employees(
-    State(_server): State<RustCareServer>,
-    Path(_org_id): Path<Uuid>,
+    State(server): State<RustCareServer>,
+    Path(org_id): Path<Uuid>,
+    auth: AuthContext,
 ) -> Result<Json<crate::error::ApiResponse<Vec<Employee>>>, crate::error::ApiError> {
-    use crate::error::api_success;
-    
-    // TODO: Implement database query with RLS filtering
-    // For now, return empty array with proper API response format
-    let employees = Vec::new();
+    use crate::error::{ApiError, api_success};
+
+    if auth.organization_id != org_id {
+        return Err(ApiError::authorization("Access denied"));
+    }
+
+    let employees = sqlx::query_as!(
+        Employee,
+        r#"SELECT 
+            id, user_id, organization_id, employee_id, first_name, last_name, email,
+            phone, department, position, ARRAY[]::uuid[] as roles, ARRAY[]::text[] as direct_permissions,
+            to_char(start_date, 'YYYY-MM-DD') as start_date, NULL::text as end_date, is_active,
+            NULL::text as last_login, '' as zanzibar_subject_id
+          FROM organization_employees
+          WHERE organization_id = $1 AND (is_deleted = false OR is_deleted IS NULL)
+          ORDER BY created_at DESC"#,
+        org_id
+    )
+    .fetch_all(&server.db_pool)
+    .await
+    .map_err(|e| ApiError::internal(format!("Failed to fetch employees: {}", e)))?;
+
     Ok(Json(api_success(employees)))
 }
 
@@ -897,13 +916,33 @@ pub async fn assign_employee_role(
     )
 )]
 pub async fn list_organization_patients(
-    State(_server): State<RustCareServer>,
-    Path(_org_id): Path<Uuid>,
+    State(server): State<RustCareServer>,
+    Path(org_id): Path<Uuid>,
+    auth: AuthContext,
 ) -> Result<Json<crate::error::ApiResponse<Vec<Patient>>>, crate::error::ApiError> {
-    use crate::error::api_success;
-    
-    // TODO: Implement database query with RLS filtering and Zanzibar authorization
-    let patients = Vec::new();
+    use crate::error::{ApiError, api_success};
+
+    if auth.organization_id != org_id {
+        return Err(ApiError::authorization("Access denied"));
+    }
+
+    let patients = sqlx::query_as!(
+        Patient,
+        r#"SELECT 
+            id, organization_id, patient_id, first_name, last_name,
+            to_char(date_of_birth, 'YYYY-MM-DD') as date_of_birth,
+            email, phone, assigned_department, primary_provider, access_level,
+            consent_status, to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as created_at,
+            to_char(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as updated_at
+          FROM patients
+          WHERE organization_id = $1 AND (is_deleted = false OR is_deleted IS NULL)
+          ORDER BY created_at DESC"#,
+        org_id
+    )
+    .fetch_all(&server.db_pool)
+    .await
+    .map_err(|e| ApiError::internal(format!("Failed to fetch patients: {}", e)))?;
+
     Ok(Json(api_success(patients)))
 }
 
