@@ -7,11 +7,13 @@ use axum::{
     http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{ToSchema, IntoParams};
 use secrets_service::SecretProvider;
 use crate::server::RustCareServer;
+use crate::middleware::AuthContext;
+use crate::error::{ApiError, ApiResponse, api_success};
 
-type Result<T> = std::result::Result<T, StatusCode>;
+type Result<T> = std::result::Result<T, ApiError>;
 
 // ============================================================================
 // Request/Response Types
@@ -124,47 +126,68 @@ pub struct HealthCheckResponse {
 /// List all secrets
 /// 
 /// Returns a list of all secret keys (values are not included)
+#[utoipa::path(
+    get,
+    path = "/api/v1/secrets",
+    responses(
+        (status = 200, description = "Secrets retrieved successfully", body = SecretListResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 503, description = "Service unavailable"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "secrets",
+    security(("bearer_auth" = []))
+)]
 pub async fn list_secrets(
     State(server): State<RustCareServer>,
-) -> Result<Json<SecretListResponse>> {
+    _auth: AuthContext,
+) -> Result<Json<ApiResponse<SecretListResponse>>> {
     // Get secrets manager
     let secrets_manager = server.secrets_manager()
-        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+        .ok_or_else(|| ApiError::service_unavailable("Secrets manager not configured"))?;
     
     let keys = secrets_manager.list_secrets()
         .await
-        .map_err(|e| {
-            tracing::error!("Failed to list secrets: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        .map_err(|e| ApiError::internal(format!("Failed to list secrets: {}", e)))?;
     
-    Ok(Json(SecretListResponse {
+    Ok(Json(api_success(SecretListResponse {
         total: keys.len(),
         secrets: keys,
-    }))
+    })))
 }
 
 /// Get a secret by key
 /// 
 /// Retrieves the current version of a secret
+#[utoipa::path(
+    get,
+    path = "/api/v1/secrets/{key}",
+    params(("key" = String, Path, description = "Secret key")),
+    responses(
+        (status = 200, description = "Secret metadata retrieved", body = SecretResponse),
+        (status = 404, description = "Secret not found"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "secrets",
+    security(("bearer_auth" = []))
+)]
 pub async fn get_secret(
     State(server): State<RustCareServer>,
     Path(key): Path<String>,
-) -> Result<Json<SecretResponse>> {
+    _auth: AuthContext,
+) -> Result<Json<ApiResponse<SecretResponse>>> {
     // Get secrets manager
     let secrets_manager = server.secrets_manager()
-        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+        .ok_or_else(|| ApiError::service_unavailable("Secrets manager not configured"))?;
     
     let secret = secrets_manager.get_secret(&key)
         .await
         .map_err(|e| {
             use secrets_service::SecretsError;
             match e {
-                SecretsError::NotFound(_) => StatusCode::NOT_FOUND,
-                _ => {
-                    tracing::error!("Failed to get secret '{}': {}", key, e);
-                    StatusCode::INTERNAL_SERVER_ERROR
-                }
+                SecretsError::NotFound(_) => ApiError::not_found("secret"),
+                _ => ApiError::internal(format!("Failed to get secret '{}': {}", key, e)),
             }
         })?;
     
@@ -180,16 +203,30 @@ pub async fn get_secret(
         tags: secret.metadata.tags,
     };
     
-    Ok(Json(response))
+    Ok(Json(api_success(response)))
 }
 
 /// Create a new secret
 /// 
 /// Stores a new secret with optional rotation and expiration settings
+#[utoipa::path(
+    post,
+    path = "/api/v1/secrets",
+    request_body = CreateSecretRequest,
+    responses(
+        (status = 201, description = "Secret created", body = SecretResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "secrets",
+    security(("bearer_auth" = []))
+)]
 pub async fn create_secret(
     State(_server): State<RustCareServer>,
     Json(request): Json<CreateSecretRequest>,
-) -> Result<Json<SecretResponse>> {
+    _auth: AuthContext,
+) -> Result<Json<ApiResponse<SecretResponse>>> {
     // TODO: Implement with SecretsManager
     // let secrets_manager = server.secrets_manager();
     // let metadata = SecretMetadata {
@@ -218,17 +255,32 @@ pub async fn create_secret(
         tags: request.tags,
     };
     
-    Ok(Json(response))
+    Ok(Json(api_success(response)))
 }
 
 /// Update an existing secret
 /// 
 /// Updates the value and/or settings of an existing secret
+#[utoipa::path(
+    put,
+    path = "/api/v1/secrets/{key}",
+    params(("key" = String, Path, description = "Secret key")),
+    request_body = UpdateSecretRequest,
+    responses(
+        (status = 200, description = "Secret updated", body = SecretResponse),
+        (status = 404, description = "Secret not found"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "secrets",
+    security(("bearer_auth" = []))
+)]
 pub async fn update_secret(
     State(_server): State<RustCareServer>,
     Path(key): Path<String>,
     Json(request): Json<UpdateSecretRequest>,
-) -> Result<Json<SecretResponse>> {
+    _auth: AuthContext,
+) -> Result<Json<ApiResponse<SecretResponse>>> {
     // TODO: Implement with SecretsManager
     
     // Mock response for now
@@ -244,15 +296,29 @@ pub async fn update_secret(
         tags: request.tags.unwrap_or_default(),
     };
     
-    Ok(Json(response))
+    Ok(Json(api_success(response)))
 }
 
 /// Delete a secret
 /// 
 /// Permanently removes a secret and all its versions
+#[utoipa::path(
+    delete,
+    path = "/api/v1/secrets/{key}",
+    params(("key" = String, Path, description = "Secret key")),
+    responses(
+        (status = 204, description = "Secret deleted"),
+        (status = 404, description = "Secret not found"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "secrets",
+    security(("bearer_auth" = []))
+)]
 pub async fn delete_secret(
     State(_server): State<RustCareServer>,
     Path(_key): Path<String>,
+    _auth: AuthContext,
 ) -> Result<StatusCode> {
     // TODO: Implement with SecretsManager
     // let secrets_manager = server.secrets_manager();
@@ -267,29 +333,58 @@ pub async fn delete_secret(
 /// List secret versions
 /// 
 /// Returns all available versions for a specific secret
+#[utoipa::path(
+    get,
+    path = "/api/v1/secrets/{key}/versions",
+    params(("key" = String, Path, description = "Secret key")),
+    responses(
+        (status = 200, description = "Secret versions retrieved", body = SecretVersionsResponse),
+        (status = 404, description = "Secret not found"),
+        (status = 401, description = "Unauthorized")
+    ),
+    tag = "secrets",
+    security(("bearer_auth" = []))
+)]
 pub async fn list_secret_versions(
     State(_server): State<RustCareServer>,
     Path(key): Path<String>,
-) -> Result<Json<SecretVersionsResponse>> {
+    _auth: AuthContext,
+) -> Result<Json<ApiResponse<SecretVersionsResponse>>> {
     // TODO: Implement with SecretsManager
     
     // Mock response for now
     let versions = vec!["v3".to_string(), "v2".to_string(), "v1".to_string()];
     
-    Ok(Json(SecretVersionsResponse {
+    Ok(Json(api_success(SecretVersionsResponse {
         key,
         total: versions.len(),
         versions,
-    }))
+    })))
 }
 
 /// Get a specific version of a secret
 /// 
 /// Retrieves a historical version of a secret
+#[utoipa::path(
+    get,
+    path = "/api/v1/secrets/{key}/versions/{version}",
+    params(
+        ("key" = String, Path, description = "Secret key"),
+        ("version" = String, Path, description = "Secret version"),
+    ),
+    responses(
+        (status = 200, description = "Secret version retrieved", body = SecretResponse),
+        (status = 404, description = "Secret/version not found"),
+        (status = 401, description = "Unauthorized")
+    ),
+    tag = "secrets",
+    security(("bearer_auth" = []))
+)]
 pub async fn get_secret_version(
     State(_server): State<RustCareServer>,
     Path((key, version)): Path<(String, String)>,
-) -> Result<Json<SecretResponse>> {
+    _auth: AuthContext,
+) -> Result<Json<ApiResponse<SecretResponse>>> {
     // TODO: Implement with SecretsManager
     
     // Mock response for now
@@ -305,16 +400,29 @@ pub async fn get_secret_version(
         tags: std::collections::HashMap::new(),
     };
     
-    Ok(Json(response))
+    Ok(Json(api_success(response)))
 }
 
 /// Rotate a secret
 /// 
 /// Generates a new value for the secret and creates a new version
+#[utoipa::path(
+    post,
+    path = "/api/v1/secrets/{key}/rotate",
+    params(("key" = String, Path, description = "Secret key")),
+    responses(
+        (status = 200, description = "Secret rotated", body = RotateSecretResponse),
+        (status = 404, description = "Secret not found"),
+        (status = 401, description = "Unauthorized")
+    ),
+    tag = "secrets",
+    security(("bearer_auth" = []))
+)]
 pub async fn rotate_secret(
     State(_server): State<RustCareServer>,
     Path(key): Path<String>,
-) -> Result<Json<RotateSecretResponse>> {
+    _auth: AuthContext,
+) -> Result<Json<ApiResponse<RotateSecretResponse>>> {
     // TODO: Implement with SecretsManager
     // let secrets_manager = server.secrets_manager();
     // let new_version = secrets_manager.rotate_secret(&key).await
@@ -330,25 +438,32 @@ pub async fn rotate_secret(
         rotated_at: chrono::Utc::now().to_rfc3339(),
     };
     
-    Ok(Json(response))
+    Ok(Json(api_success(response)))
 }
 
 /// Check secrets service health
 /// 
 /// Verifies connectivity to all configured secret providers
+#[utoipa::path(
+    get,
+    path = "/api/v1/secrets/health",
+    responses(
+        (status = 200, description = "Secrets health", body = HealthCheckResponse),
+        (status = 503, description = "Service unavailable"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "secrets"
+)]
 pub async fn secrets_health_check(
     State(server): State<RustCareServer>,
-) -> Result<Json<HealthCheckResponse>> {
+) -> Result<Json<ApiResponse<HealthCheckResponse>>> {
     // Get secrets manager
     let secrets_manager = server.secrets_manager()
-        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+        .ok_or_else(|| ApiError::service_unavailable("Secrets manager not configured"))?;
     
     let status = secrets_manager.health_check()
         .await
-        .map_err(|e| {
-            tracing::error!("Secrets health check failed: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        .map_err(|e| ApiError::internal(format!("Secrets health check failed: {}", e)))?;
     
     let response = HealthCheckResponse {
         healthy: status.healthy,
@@ -357,5 +472,5 @@ pub async fn secrets_health_check(
         last_check: status.last_check.to_rfc3339(),
     };
     
-    Ok(Json(response))
+    Ok(Json(api_success(response)))
 }
