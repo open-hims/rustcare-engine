@@ -16,6 +16,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::server::RustCareServer;
+use crate::middleware::AuthContext;
+use crate::error::{ApiError, ApiResponse, api_success};
 
 /// Sync operation type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -99,7 +101,8 @@ pub struct ConflictInfo {
 pub async fn pull(
     State(_server): State<RustCareServer>,
     Json(request): Json<PullRequest>,
-) -> impl IntoResponse {
+    _auth: AuthContext,
+) -> Result<Json<ApiResponse<PullResponse>>, ApiError> {
     tracing::info!(
         node_id = %request.node_id,
         "Pull request received"
@@ -117,7 +120,7 @@ pub async fn pull(
         latest_timestamp: chrono::Utc::now().to_rfc3339(),
     };
 
-    (StatusCode::OK, Json(response))
+    Ok(Json(api_success(response)))
 }
 
 /// Push local operations to server
@@ -143,7 +146,8 @@ pub async fn pull(
 pub async fn push(
     State(_server): State<RustCareServer>,
     Json(request): Json<PushRequest>,
-) -> impl IntoResponse {
+    _auth: AuthContext,
+) -> Result<Json<ApiResponse<PushResponse>>, ApiError> {
     tracing::info!(
         node_id = %request.node_id,
         operations_count = request.operations.len(),
@@ -170,7 +174,7 @@ pub async fn push(
         conflicts: vec![],
     };
 
-    (StatusCode::OK, Json(response))
+    Ok(Json(api_success(response)))
 }
 
 #[cfg(test)]

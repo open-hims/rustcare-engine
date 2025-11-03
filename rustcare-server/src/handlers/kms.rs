@@ -14,8 +14,10 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use std::collections::HashMap;
 use crate::server::RustCareServer;
+use crate::middleware::AuthContext;
+use crate::error::{ApiError, ApiResponse, api_success};
 
-type Result<T> = std::result::Result<T, StatusCode>;
+type Result<T> = std::result::Result<T, ApiError>;
 
 // ============================================================================
 // Request/Response Types
@@ -212,10 +214,10 @@ pub struct OperationResponse {
 pub async fn generate_data_key(
     State(server): State<RustCareServer>,
     Json(request): Json<GenerateDataKeyRequest>,
-) -> Result<Json<GenerateDataKeyResponse>> {
+) -> Result<Json<ApiResponse<GenerateDataKeyResponse>>> {
     // Get KMS provider
     let kms = server.kms_provider()
-        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+        .ok_or_else(|| ApiError::service_unavailable("KMS provider not configured"))?;
     
     let context = if request.context.is_empty() {
         None
@@ -226,10 +228,7 @@ pub async fn generate_data_key(
     let (_plaintext_dek, encrypted_dek) = kms
         .generate_data_key(&request.kek_id, &request.key_spec, context)
         .await
-        .map_err(|e| {
-            tracing::error!("Failed to generate data key: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        .map_err(|e| ApiError::internal(format!("Failed to generate data key: {}", e)))?;
     
     let request_id = uuid::Uuid::new_v4().to_string();
     
@@ -237,11 +236,11 @@ pub async fn generate_data_key(
     use base64::{engine::general_purpose::STANDARD, Engine};
     let encrypted_dek_b64 = STANDARD.encode(&encrypted_dek);
     
-    Ok(Json(GenerateDataKeyResponse {
+    Ok(Json(api_success(GenerateDataKeyResponse {
         encrypted_dek: encrypted_dek_b64,
         key_id: request.kek_id,
         request_id,
-    }))
+    })))
 }
 
 /// Decrypt a Data Encryption Key
@@ -257,15 +256,15 @@ pub async fn generate_data_key(
 pub async fn decrypt_data_key(
     State(server): State<RustCareServer>,
     Json(request): Json<DecryptDataKeyRequest>,
-) -> Result<Json<DecryptDataKeyResponse>> {
+) -> Result<Json<ApiResponse<DecryptDataKeyResponse>>> {
     // Get KMS provider
     let kms = server.kms_provider()
-        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+        .ok_or_else(|| ApiError::service_unavailable("KMS provider not configured"))?;
     
     // Decode base64 encrypted DEK
     use base64::{engine::general_purpose::STANDARD, Engine};
     let encrypted_dek = STANDARD.decode(&request.encrypted_dek)
-        .map_err(|_| StatusCode::BAD_REQUEST)?;
+        .map_err(|_| ApiError::bad_request("Invalid base64 for encrypted_dek"))?;
     
     let context = if request.context.is_empty() {
         None
@@ -276,18 +275,15 @@ pub async fn decrypt_data_key(
     let _plaintext = kms
         .decrypt_data_key(&encrypted_dek, context)
         .await
-        .map_err(|e| {
-            tracing::error!("Failed to decrypt data key: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        .map_err(|e| ApiError::internal(format!("Failed to decrypt data key: {}", e)))?;
     
     let request_id = uuid::Uuid::new_v4().to_string();
     
-    Ok(Json(DecryptDataKeyResponse {
+    Ok(Json(api_success(DecryptDataKeyResponse {
         key_id: "extracted-from-ciphertext".to_string(),
         request_id,
         success: true,
-    }))
+    })))
 }
 
 // ============================================================================
@@ -306,7 +302,7 @@ pub async fn decrypt_data_key(
 pub async fn encrypt(
     State(_server): State<RustCareServer>,
     Json(request): Json<EncryptRequest>,
-) -> Result<Json<EncryptResponse>> {
+) -> Result<Json<ApiResponse<EncryptResponse>>> {
     // TODO: Integrate with KMS provider
     // let kms = server.kms_provider().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
     // let plaintext = base64::decode(&request.plaintext)
@@ -321,11 +317,11 @@ pub async fn encrypt(
     
     let request_id = uuid::Uuid::new_v4().to_string();
     
-    Ok(Json(EncryptResponse {
+    Ok(Json(api_success(EncryptResponse {
         ciphertext: "vault:v1:encrypted_data_here".to_string(),
         key_id: request.key_id,
         request_id,
-    }))
+    })))
 }
 
 /// Decrypt data encrypted with KMS
@@ -338,7 +334,7 @@ pub async fn encrypt(
 pub async fn decrypt(
     State(_server): State<RustCareServer>,
     Json(_request): Json<DecryptRequest>,
-) -> Result<Json<DecryptResponse>> {
+) -> Result<Json<ApiResponse<DecryptResponse>>> {
     // TODO: Integrate with KMS provider
     // let kms = server.kms_provider().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
     // let context = if request.context.is_empty() { None } else { Some(&request.context) };
@@ -351,11 +347,11 @@ pub async fn decrypt(
     
     let request_id = uuid::Uuid::new_v4().to_string();
     
-    Ok(Json(DecryptResponse {
+    Ok(Json(api_success(DecryptResponse {
         plaintext: "base64_encoded_plaintext".to_string(),
         key_id: "extracted-from-ciphertext".to_string(),
         request_id,
-    }))
+    })))
 }
 
 /// Re-encrypt data under a new key
@@ -370,7 +366,7 @@ pub async fn decrypt(
 pub async fn re_encrypt(
     State(_server): State<RustCareServer>,
     Json(request): Json<ReEncryptRequest>,
-) -> Result<Json<ReEncryptResponse>> {
+) -> Result<Json<ApiResponse<ReEncryptResponse>>> {
     // TODO: Integrate with KMS provider
     // let kms = server.kms_provider().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
     // let source_ctx = if request.source_context.is_empty() { None } else { Some(&request.source_context) };
@@ -389,11 +385,11 @@ pub async fn re_encrypt(
     
     let request_id = uuid::Uuid::new_v4().to_string();
     
-    Ok(Json(ReEncryptResponse {
+    Ok(Json(api_success(ReEncryptResponse {
         ciphertext: "vault:v2:re_encrypted_data_here".to_string(),
         key_id: request.new_key_id,
         request_id,
-    }))
+    })))
 }
 
 // ============================================================================
@@ -410,10 +406,10 @@ pub async fn re_encrypt(
 pub async fn create_key(
     State(_server): State<RustCareServer>,
     Json(request): Json<CreateKeyRequest>,
-) -> Result<Json<KeyMetadataResponse>> {
+) -> Result<Json<ApiResponse<KeyMetadataResponse>>> {
     // TODO: Integrate with KMS provider
     
-    Ok(Json(KeyMetadataResponse {
+    Ok(Json(api_success(KeyMetadataResponse {
         key_id: uuid::Uuid::new_v4().to_string(),
         alias: None,
         created_at: chrono::Utc::now().to_rfc3339(),
@@ -425,7 +421,7 @@ pub async fn create_key(
         next_rotation: None,
         description: Some(request.description),
         tags: request.tags,
-    }))
+    })))
 }
 
 /// Get key metadata
@@ -434,10 +430,10 @@ pub async fn create_key(
 pub async fn describe_key(
     State(_server): State<RustCareServer>,
     Path(key_id): Path<String>,
-) -> Result<Json<KeyMetadataResponse>> {
+) -> Result<Json<ApiResponse<KeyMetadataResponse>>> {
     // TODO: Integrate with KMS provider
     
-    Ok(Json(KeyMetadataResponse {
+    Ok(Json(api_success(KeyMetadataResponse {
         key_id: key_id.clone(),
         alias: Some(format!("alias/{}", key_id)),
         created_at: chrono::Utc::now().to_rfc3339(),
@@ -449,7 +445,7 @@ pub async fn describe_key(
         next_rotation: None,
         description: Some("Key Encryption Key".to_string()),
         tags: HashMap::new(),
-    }))
+    })))
 }
 
 /// List all keys
@@ -457,13 +453,13 @@ pub async fn describe_key(
 /// Returns metadata for all keys the caller has permission to view.
 pub async fn list_keys(
     State(_server): State<RustCareServer>,
-) -> Result<Json<KeyListResponse>> {
+) -> Result<Json<ApiResponse<KeyListResponse>>> {
     // TODO: Integrate with KMS provider
     
-    Ok(Json(KeyListResponse {
+    Ok(Json(api_success(KeyListResponse {
         keys: vec![],
         total: 0,
-    }))
+    })))
 }
 
 /// Enable automatic key rotation
@@ -473,47 +469,47 @@ pub async fn list_keys(
 pub async fn enable_key_rotation(
     State(_server): State<RustCareServer>,
     Path(key_id): Path<String>,
-) -> Result<Json<OperationResponse>> {
+) -> Result<Json<ApiResponse<OperationResponse>>> {
     // TODO: Integrate with KMS provider
     
     let request_id = uuid::Uuid::new_v4().to_string();
     
-    Ok(Json(OperationResponse {
+    Ok(Json(api_success(OperationResponse {
         success: true,
         message: format!("Key rotation enabled for {}", key_id),
         request_id,
-    }))
+    })))
 }
 
 /// Disable automatic key rotation
 pub async fn disable_key_rotation(
     State(_server): State<RustCareServer>,
     Path(key_id): Path<String>,
-) -> Result<Json<OperationResponse>> {
+) -> Result<Json<ApiResponse<OperationResponse>>> {
     // TODO: Integrate with KMS provider
     
     let request_id = uuid::Uuid::new_v4().to_string();
     
-    Ok(Json(OperationResponse {
+    Ok(Json(api_success(OperationResponse {
         success: true,
         message: format!("Key rotation disabled for {}", key_id),
         request_id,
-    }))
+    })))
 }
 
 /// Get key rotation status
 pub async fn get_key_rotation_status(
     State(_server): State<RustCareServer>,
     Path(_key_id): Path<String>,
-) -> Result<Json<KeyRotationPolicyResponse>> {
+) -> Result<Json<ApiResponse<KeyRotationPolicyResponse>>> {
     // TODO: Integrate with KMS provider
     
-    Ok(Json(KeyRotationPolicyResponse {
+    Ok(Json(api_success(KeyRotationPolicyResponse {
         enabled: false,
         rotation_period_days: Some(365),
         last_rotated: None,
         next_rotation: None,
-    }))
+    })))
 }
 
 /// Manually rotate a key
@@ -522,10 +518,10 @@ pub async fn get_key_rotation_status(
 pub async fn rotate_key(
     State(_server): State<RustCareServer>,
     Path(key_id): Path<String>,
-) -> Result<Json<KeyMetadataResponse>> {
+) -> Result<Json<ApiResponse<KeyMetadataResponse>>> {
     // TODO: Integrate with KMS provider
     
-    Ok(Json(KeyMetadataResponse {
+    Ok(Json(api_success(KeyMetadataResponse {
         key_id: key_id.clone(),
         alias: Some(format!("alias/{}", key_id)),
         created_at: chrono::Utc::now().to_rfc3339(),
@@ -537,23 +533,23 @@ pub async fn rotate_key(
         next_rotation: None,
         description: Some("Rotated Key".to_string()),
         tags: HashMap::new(),
-    }))
+    })))
 }
 
 /// Enable a key
 pub async fn enable_key(
     State(_server): State<RustCareServer>,
     Path(key_id): Path<String>,
-) -> Result<Json<OperationResponse>> {
+) -> Result<Json<ApiResponse<OperationResponse>>> {
     // TODO: Integrate with KMS provider
     
     let request_id = uuid::Uuid::new_v4().to_string();
     
-    Ok(Json(OperationResponse {
+    Ok(Json(api_success(OperationResponse {
         success: true,
         message: format!("Key {} enabled", key_id),
         request_id,
-    }))
+    })))
 }
 
 /// Disable a key
@@ -563,16 +559,16 @@ pub async fn enable_key(
 pub async fn disable_key(
     State(_server): State<RustCareServer>,
     Path(key_id): Path<String>,
-) -> Result<Json<OperationResponse>> {
+) -> Result<Json<ApiResponse<OperationResponse>>> {
     // TODO: Integrate with KMS provider
     
     let request_id = uuid::Uuid::new_v4().to_string();
     
-    Ok(Json(OperationResponse {
+    Ok(Json(api_success(OperationResponse {
         success: true,
         message: format!("Key {} disabled", key_id),
         request_id,
-    }))
+    })))
 }
 
 /// Schedule key deletion
@@ -582,33 +578,33 @@ pub async fn disable_key(
 pub async fn schedule_key_deletion(
     State(_server): State<RustCareServer>,
     Path(key_id): Path<String>,
-) -> Result<Json<OperationResponse>> {
+) -> Result<Json<ApiResponse<OperationResponse>>> {
     // TODO: Integrate with KMS provider
     
     let request_id = uuid::Uuid::new_v4().to_string();
     let deletion_date = chrono::Utc::now() + chrono::Duration::days(7);
     
-    Ok(Json(OperationResponse {
+    Ok(Json(api_success(OperationResponse {
         success: true,
         message: format!("Key {} scheduled for deletion on {}", key_id, deletion_date.to_rfc3339()),
         request_id,
-    }))
+    })))
 }
 
 /// Cancel scheduled key deletion
 pub async fn cancel_key_deletion(
     State(_server): State<RustCareServer>,
     Path(key_id): Path<String>,
-) -> Result<Json<OperationResponse>> {
+) -> Result<Json<ApiResponse<OperationResponse>>> {
     // TODO: Integrate with KMS provider
     
     let request_id = uuid::Uuid::new_v4().to_string();
     
-    Ok(Json(OperationResponse {
+    Ok(Json(api_success(OperationResponse {
         success: true,
         message: format!("Key {} deletion cancelled", key_id),
         request_id,
-    }))
+    })))
 }
 
 // ============================================================================
@@ -656,7 +652,7 @@ pub struct TestResult {
 pub async fn test_kms_integration(
     State(server): State<RustCareServer>,
     Json(req): Json<KmsTestRequest>,
-) -> Result<Json<KmsTestResponse>> {
+) -> Result<Json<ApiResponse<KmsTestResponse>>> {
     use std::time::Instant;
     
     let request_id = uuid::Uuid::new_v4().to_string();
@@ -667,12 +663,12 @@ pub async fn test_kms_integration(
     let kms_provider = match &server.kms_provider {
         Some(provider) => provider,
         None => {
-            return Ok(Json(KmsTestResponse {
+            return Ok(Json(api_success(KmsTestResponse {
                 success: false,
                 results: HashMap::new(),
                 message: "KMS is not enabled. Please start server with KMS_ENABLED=true".to_string(),
                 request_id,
-            }));
+            })));
         }
     };
 
@@ -798,10 +794,10 @@ pub async fn test_kms_integration(
         format!("❌ KMS tests failed: {}/{} passed", passed_tests, total_tests)
     };
 
-    Ok(Json(KmsTestResponse {
+    Ok(Json(api_success(KmsTestResponse {
         success: overall_success,
         results,
         message,
         request_id,
-    }))
+    })))
 }
