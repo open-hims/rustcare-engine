@@ -1180,11 +1180,48 @@ pub async fn create_notification(
 
 ## 🟢 LOW PRIORITY Refactorings
 
-### 11. Extract OpenAPI Documentation Helpers
+### 11. Ensure Complete OpenAPI Documentation (utoipa)
 
-**Problem**: Repetitive `#[utoipa::path(...)]` attribute patterns.
+**Problem**: Incomplete or missing `#[utoipa::path(...)]` documentation on API endpoints.
 
-**Solution**: Create macro for common endpoint patterns:
+**Current Status**: Many handlers have utoipa paths, but need:
+- Complete request/response body types
+- Proper parameter documentation
+- Security requirements
+- Example values
+- Error response documentation
+
+**Solution**: Standardize all endpoints with complete utoipa documentation:
+```rust
+#[utoipa::path(
+    get,
+    path = "/api/v1/{resource}",
+    params(
+        ("id" = Uuid, Path, description = "Resource ID"),
+        ("page" = Option<u32>, Query, description = "Page number"),
+        ("page_size" = Option<u32>, Query, description = "Page size")
+    ),
+    responses(
+        (status = 200, description = "Resource retrieved successfully", body = Resource),
+        (status = 404, description = "Resource not found"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "{module_name}",
+    security(("bearer_auth" = []))
+)]
+```
+
+**Migration**: Review all handlers and ensure:
+1. All endpoints have `#[utoipa::path(...)]` attributes
+2. Request/response bodies are properly typed
+3. Query parameters use `IntoParams`
+4. Path parameters are documented
+5. All possible status codes are listed
+6. Security requirements are specified
+7. Examples are provided where helpful
+
+**Additional**: Create macro for common endpoint patterns:
 ```rust
 // rustcare-server/src/macros.rs
 macro_rules! crud_endpoints {

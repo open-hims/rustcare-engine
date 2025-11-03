@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use utoipa::{ToSchema, IntoParams};
 use crate::server::RustCareServer;
+use crate::middleware::AuthContext;
 
 /// Geographic region with hierarchical structure
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -108,21 +109,28 @@ pub async fn list_geographic_regions(
     // Convert database models to API models
     let regions: Vec<GeographicRegion> = db_regions
         .into_iter()
-        .map(|db_region| GeographicRegion {
-            id: db_region.id,
-            code: db_region.code,
-            name: db_region.name,
-            region_type: db_region.region_type,
-            parent_region_id: db_region.parent_region_id,
-            path: db_region.path,
-            level: 0, // TODO: Calculate from path
-            iso_country_code: db_region.iso_country_code,
-            iso_subdivision_code: db_region.iso_subdivision_code,
-            timezone: db_region.timezone,
-            population: None, // TODO: Add to database model
-            area_sq_km: None, // TODO: Add to database model
-            is_active: db_region.is_active,
-            metadata: db_region.metadata.unwrap_or(serde_json::json!({})),
+        .map(|db_region| {
+            let level = db_region
+                .path
+                .as_ref()
+                .map(|p| p.matches('.').count() as i32)
+                .unwrap_or(0);
+            GeographicRegion {
+                id: db_region.id,
+                code: db_region.code,
+                name: db_region.name,
+                region_type: db_region.region_type,
+                parent_region_id: db_region.parent_region_id,
+                path: db_region.path,
+                level,
+                iso_country_code: db_region.iso_country_code,
+                iso_subdivision_code: db_region.iso_subdivision_code,
+                timezone: db_region.timezone,
+                population: None, // TODO: Add to database model
+                area_sq_km: None, // TODO: Add to database model
+                is_active: db_region.is_active,
+                metadata: db_region.metadata.unwrap_or(serde_json::json!({})),
+            }
         })
         .collect();
 
