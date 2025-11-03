@@ -77,8 +77,37 @@ pub struct Tool {
     pub name: String,
     /// Tool description
     pub description: String,
-    /// Input schema
+    /// Input schema (JSON Schema)
     pub input_schema: serde_json::Value,
+    /// Output schema (JSON Schema for response)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_schema: Option<serde_json::Value>,
+    /// Expected render type
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub render_type: Option<RenderType>,
+}
+
+/// Render type for tool responses
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RenderType {
+    /// JSON response (default)
+    Json,
+    /// Markdown formatted response
+    Markdown,
+    /// HTML response
+    Html,
+    /// Table format (for tabular data)
+    Table,
+    /// List format (for simple lists)
+    List,
+    /// Plain text
+    Text,
+    /// Structured data with specific format
+    Structured {
+        format: String,
+        schema: serde_json::Value,
+    },
 }
 
 /// Tool execution input
@@ -99,6 +128,25 @@ pub struct ToolResult {
     pub data: Option<serde_json::Value>,
     /// Error message (if any)
     pub error: Option<String>,
+    /// Response type information
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_type: Option<ResponseType>,
+    /// Rendered output (if different from data)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rendered: Option<String>,
+}
+
+/// Response type information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResponseType {
+    /// Type of response (e.g., "Patient", "Vec<Pharmacy>", "Appointment")
+    pub type_name: String,
+    /// Render type hint
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub render_type: Option<RenderType>,
+    /// JSON Schema for the response
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schema: Option<serde_json::Value>,
 }
 
 /// Tool execution status

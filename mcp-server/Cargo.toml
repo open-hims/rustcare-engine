@@ -26,6 +26,8 @@ tracing = { workspace = true }
 error-common = { path = "../error-common" }
 logger-redacted = { path = "../logger-redacted" }
 plugin-runtime-core = { path = "../plugin-runtime-core" }
+rustcare-server = { path = "../rustcare-server" }
+mcp-macros = { path = "../mcp-macros" }
 
 # HTTP server for MCP transport
 axum = { workspace = true }
@@ -35,3 +37,10 @@ tower-http = { workspace = true }
 # MCP protocol
 async-channel = "2.2"
 
+# Proc macro for decorator pattern
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full", "extra-traits"] }
+
+[dev-dependencies]
+rstest = "0.18"

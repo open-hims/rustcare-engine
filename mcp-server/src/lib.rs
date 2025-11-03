@@ -40,11 +40,17 @@ pub mod tools;
 pub mod capabilities;
 pub mod transport;
 pub mod error;
+pub mod tool_wrapper;
+pub mod sensitive_filter;
+pub mod render;
 
 pub use server::*;
 pub use protocol::*;
 pub use tools::*;
 pub use capabilities::*;
+pub use tool_wrapper::*;
+pub use sensitive_filter::*;
+pub use render::*;
 pub use error::{McpError as Error, McpResult as Result};
 
 /// MCP Server for RustCare

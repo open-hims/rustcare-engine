@@ -64,8 +64,36 @@ impl Server {
                 serde_json::to_value(self.tools.list())?
             }
             crate::protocol::methods::CALL_TOOL => {
-                let tool_input: crate::protocol::ToolInput = serde_json::from_value(request.params)?;
-                serde_json::to_value(self.tools.execute(tool_input).await?)?
+                let call_params: serde_json::Value = serde_json::from_value(request.params)?;
+                
+                // Extract tool input and auth context
+                let tool_input: crate::protocol::ToolInput = serde_json::from_value(
+                    call_params.get("input").cloned().unwrap_or_default()
+                )?;
+                
+                // Extract auth context (would come from MCP request headers/auth)
+                let auth_context = crate::tools::AuthContext {
+                    user_id: uuid::Uuid::nil(), // TODO: Extract from request
+                    organization_id: uuid::Uuid::nil(), // TODO: Extract from request
+                    roles: vec![],
+                    permissions: vec![],
+                    email: None,
+                };
+                
+                let result = self.tools.execute(tool_input, &auth_context, None).await?;
+                
+                // Render result if render_type is specified
+                let rendered_result = if let Some(render_type) = result.response_type.as_ref().and_then(|rt| rt.render_type.as_ref()) {
+                    let rendered = crate::render::render_result(&result, Some(render_type));
+                    crate::protocol::ToolResult {
+                        rendered: Some(rendered),
+                        ..result
+                    }
+                } else {
+                    result
+                };
+                
+                serde_json::to_value(rendered_result)?
             }
             _ => {
                 return Err(McpError::Protocol(
