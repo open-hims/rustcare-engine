@@ -11,6 +11,8 @@ use crate::error::{ApiError, ApiResponse, api_success};
 use crate::utils::query_builder::PaginatedQuery;
 use crate::types::pagination::PaginationParams;
 use crate::middleware::AuthContext;
+use crate::validation::RequestValidation;
+use crate::services::AuditService;
 use chrono::{DateTime, Utc};
 use sqlx::FromRow;
 
@@ -103,6 +105,45 @@ pub struct CreateNotificationRequest {
     pub icon: Option<String>,
     pub image_url: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
+}
+
+impl RequestValidation for CreateNotificationRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        validate_required!(self.title, "Title is required");
+        validate_required!(self.message, "Message is required");
+        validate_required!(self.notification_type, "Notification type is required");
+        validate_required!(self.priority, "Priority is required");
+        
+        validate_length!(self.title, 1, 200, "Title must be between 1 and 200 characters");
+        validate_length!(self.message, 1, 1000, "Message must be between 1 and 1000 characters");
+        
+        // Validate notification_type is one of valid values
+        let valid_types = ["info", "success", "warning", "error", "system"];
+        validate_field!(
+            self.notification_type,
+            valid_types.contains(&self.notification_type.as_str()),
+            format!("Notification type must be one of: {}", valid_types.join(", "))
+        );
+        
+        // Validate priority is one of valid values
+        let valid_priorities = ["low", "normal", "high", "urgent"];
+        validate_field!(
+            self.priority,
+            valid_priorities.contains(&self.priority.as_str()),
+            format!("Priority must be one of: {}", valid_priorities.join(", "))
+        );
+        
+        // Validate action_url format if provided
+        if let Some(ref url) = self.action_url {
+            validate_field!(
+                url,
+                url.starts_with("http://") || url.starts_with("https://") || url.starts_with("/"),
+                "Action URL must be a valid HTTP/HTTPS URL or relative path"
+            );
+        }
+        
+        Ok(())
+    }
 }
 
 /// Mark notification as read request
@@ -304,6 +345,9 @@ pub async fn create_notification(
     Json(req): Json<CreateNotificationRequest>,
     auth: AuthContext,
 ) -> Result<Json<ApiResponse<Notification>>, ApiError> {
+    // Validate request
+    req.validate()?;
+    
     let result = sqlx::query_as::<_, Notification>(
         r#"
         INSERT INTO notifications (
@@ -357,13 +401,12 @@ pub async fn create_notification(
     
     match result {
         Ok(notification) => {
-            // Log the creation in audit logs
-            let _ = log_notification_action(
-                &app_state,
+            // Log the creation using AuditService
+            let audit_service = AuditService::new(app_state.db_pool.clone());
+            let _ = audit_service.log_notification_action(
+                &auth,
                 notification.id,
-                auth.organization_id,
-                auth.user_id,
-                "created".to_string(),
+                "created",
                 None,
             ).await;
             
@@ -427,13 +470,13 @@ pub async fn mark_notification_read(
     
     match result {
         Ok(Some(notification)) => {
-            // Log the action in audit logs
-            let _ = log_notification_action(
-                &app_state,
+            // Log the action using AuditService
+            let audit_service = AuditService::new(app_state.db_pool.clone());
+            let action = if req.read { "read" } else { "unread" };
+            let _ = audit_service.log_notification_action(
+                &auth,
                 notification.id,
-                auth.organization_id,
-                auth.user_id,
-                if req.read { "read".to_string() } else { "unread".to_string() },
+                action,
                 Some(serde_json::json!({"read": req.read})),
             ).await;
             
@@ -480,14 +523,14 @@ pub async fn bulk_mark_read(
     
     match result {
         Ok(_) => {
-            // Log bulk actions
+            // Log bulk actions using AuditService
+            let audit_service = AuditService::new(app_state.db_pool.clone());
+            let action = if req.read { "bulk_read" } else { "bulk_unread" };
             for notification_id in req.notification_ids {
-                let _ = log_notification_action(
-                    &app_state,
+                let _ = audit_service.log_notification_action(
+                    &auth,
                     notification_id,
-                    auth.organization_id,
-                    auth.user_id,
-                    if req.read { "bulk_read".to_string() } else { "bulk_unread".to_string() },
+                    action,
                     None,
                 ).await;
             }
@@ -583,34 +626,7 @@ pub async fn list_audit_logs(
     }
 }
 
-/// Helper function to log notification actions to audit trail
-async fn log_notification_action(
-    app_state: &RustCareServer,
-    notification_id: Uuid,
-    organization_id: Uuid,
-    user_id: Uuid,
-    action: String,
-    action_details: Option<serde_json::Value>,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r#"
-        INSERT INTO notification_audit_logs (
-            notification_id,
-            organization_id,
-            user_id,
-            action,
-            action_details
-        ) VALUES ($1, $2, $3, $4, $5)
-        "#
-    )
-    .bind(notification_id)
-    .bind(organization_id)
-    .bind(user_id)
-    .bind(action)
-    .bind(action_details)
-    .execute(&app_state.db_pool)
-    .await?;
-    
-    Ok(())
-}
+// Note: Audit logging is now handled by AuditService
+// The old log_notification_action function has been removed
+// All audit logging now uses AuditService::log_notification_action()
 

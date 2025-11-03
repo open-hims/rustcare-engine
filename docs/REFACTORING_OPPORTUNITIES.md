@@ -51,10 +51,12 @@ This document consolidates all refactoring opportunities identified through comp
 - ✅ AuthContext integrated across all handlers
 - ✅ **Phase 3 Started**: RequestValidation trait implemented (`validation.rs`)
 - ✅ **Phase 3 Started**: Centralized AuditService created (`services/audit.rs`)
+- ✅ **Phase 3 Adoption**: Notifications handler migrated to use RequestValidation and AuditService
 
 Notes:
 - Database-related build errors seen in CI are due to environment (DB unavailable); code changes lint clean.
-- Phase 3 utilities (validation, audit) are ready for adoption in handlers.
+- Phase 3 utilities (validation, audit) successfully adopted in notifications handler.
+- All audit logging in notifications handler now uses centralized AuditService.
 
 ---
 
@@ -88,10 +90,12 @@ Notes:
 2. **Phase 3 - In Progress:**
    - ✅ `RequestValidation` trait implemented (`validation.rs`) with helper macros
    - ✅ Centralized `AuditService` created (`services/audit.rs`) with convenience methods
+   - ✅ Notifications handler migrated to use `RequestValidation` trait
+   - ✅ Notifications handler migrated to use `AuditService` (replaced ad-hoc logging)
    - ⏳ Add OpenAPI helper macros for common path patterns (next)
    - ⏳ Backfill tests for utilities and refactored modules (next)
-   - ⏳ Migrate handlers to use RequestValidation trait (adoption)
-   - ⏳ Replace ad-hoc audit logging with AuditService (adoption)
+   - ⏳ Migrate other handlers to use RequestValidation trait (adoption)
+   - ⏳ Replace ad-hoc audit logging in other handlers with AuditService (adoption)
 
 Owner: Platform Team  
 Status: Phase 2 complete - Ready for Phase 3
