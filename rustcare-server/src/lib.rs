@@ -20,12 +20,25 @@ pub use server::RustCareServer;
 pub use error::*;
 pub use security_state::SecurityState;
 
-use axum::{middleware::from_fn, Router};
+use axum::{middleware::from_fn, Router, Extension};
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
+use crate::middleware::{SecurityConfig, SecurityState};
 
 /// Create the main application router with all routes and middleware
 pub fn create_app(server: RustCareServer) -> Router {
+    // Initialize security state with configuration
+    let security_config = SecurityConfig {
+        rate_limit: Some(crate::middleware::RateLimitConfig {
+            max_requests: 100,
+            window_seconds: 60,
+            by_user: true,
+        }),
+        csrf: Some(crate::middleware::CsrfValidator::new()),
+        strict_same_site: false, // Set to true for strict same-site enforcement
+    };
+    let security_state = SecurityState::new(security_config);
+    
     routes::create_routes()
         .layer(
             ServiceBuilder::new()
@@ -33,6 +46,7 @@ pub fn create_app(server: RustCareServer) -> Router {
                 .layer(middleware::create_cors_layer())
                 .layer(from_fn(middleware::request_timing_middleware))
                 .layer(from_fn(middleware::audit_logging_middleware))
+                .layer(Extension(security_state)) // Make security state available to handlers
         )
         .with_state(server)
 }

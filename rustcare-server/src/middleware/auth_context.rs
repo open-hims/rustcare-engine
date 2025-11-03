@@ -4,23 +4,55 @@
 //! eliminating the need for manual token parsing and placeholder user IDs.
 
 use axum::extract::{FromRequestParts, RequestParts};
-use axum::http::{header::AUTHORIZATION, request::Parts};
+use axum::http::{header::AUTHORIZATION, request::Parts, Method, HeaderMap};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use async_trait::async_trait;
+use std::sync::Arc;
 use crate::error::ApiError;
+use crate::middleware::{RequestContext, SecurityState};
 
 /// Authentication context extracted from JWT token
 ///
 /// This struct contains the authenticated user's information and is automatically
 /// extracted from the Authorization header in requests.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// 
+/// **Automatically includes:**
+/// - JWT authentication and validation
+/// - Request context (ID, origin, headers)
+/// - Rate limiting checks
+/// - CSRF protection (for mutations)
+/// - Same-site validation
+/// - Zanzibar authorization integration for permission checks
+#[derive(Debug, Clone)]
 pub struct AuthContext {
     pub user_id: Uuid,
     pub organization_id: Uuid,
     pub roles: Vec<String>,
     pub permissions: Vec<String>,
     pub email: Option<String>,
+    /// Request context (automatically extracted)
+    pub request: RequestContext,
+    /// Zanzibar authorization engine (optional, for permission checks)
+    #[serde(skip)]
+    pub zanzibar_engine: Option<Arc<dyn ZanzibarCheck>>,
+    /// Rate limiter (for checking remaining requests)
+    #[serde(skip)]
+    pub(crate) rate_limiter: Option<Arc<crate::middleware::RateLimiter>>,
+}
+
+/// Trait for Zanzibar permission checks
+#[async_trait]
+pub trait ZanzibarCheck: Send + Sync {
+    /// Check if user has permission to perform action on resource
+    async fn check_permission(
+        &self,
+        user_id: Uuid,
+        resource_type: &str,
+        resource_id: Option<Uuid>,
+        permission: &str,
+        organization_id: Uuid,
+    ) -> Result<bool, String>;
 }
 
 impl AuthContext {
@@ -32,6 +64,9 @@ impl AuthContext {
             roles: Vec::new(),
             permissions: Vec::new(),
             email: None,
+            request: RequestContext::new(),
+            zanzibar_engine: None,
+            rate_limiter: None,
         }
     }
     
@@ -48,7 +83,83 @@ impl AuthContext {
             roles,
             permissions,
             email: None,
+            request: RequestContext::new(),
+            zanzibar_engine: None,
+            rate_limiter: None,
         }
+    }
+    
+    /// Get request ID (convenience method)
+    pub fn request_id(&self) -> &str {
+        &self.request.request_id
+    }
+    
+    /// Check if request is from same site
+    pub fn is_same_site(&self) -> bool {
+        self.request.is_same_site()
+    }
+    
+    /// Get remaining rate limit requests
+    pub async fn rate_limit_remaining(&self) -> u32 {
+        if let Some(ref limiter) = self.rate_limiter {
+            let key = limiter.config.by_user.then(|| self.user_id.to_string())
+                .unwrap_or_else(|| {
+                    self.request.remote_addr
+                        .clone()
+                        .unwrap_or_else(|| "unknown".to_string())
+                });
+            limiter.remaining(&key).await
+        } else {
+            u32::MAX
+        }
+    }
+    
+    /// Check permission using Zanzibar
+    /// 
+    /// Returns true if user has permission, false otherwise.
+    /// If Zanzibar engine is not available, falls back to checking permissions list.
+    pub async fn check_permission(
+        &self,
+        resource_type: &str,
+        resource_id: Option<Uuid>,
+        permission: &str,
+    ) -> Result<bool, ApiError> {
+        // If Zanzibar engine is available, use it
+        if let Some(ref engine) = self.zanzibar_engine {
+            engine
+                .check_permission(
+                    self.user_id,
+                    resource_type,
+                    resource_id,
+                    permission,
+                    self.organization_id,
+                )
+                .await
+                .map_err(|e| ApiError::authorization(format!("Zanzibar check failed: {}", e)))
+        } else {
+            // Fallback to simple permission check from JWT claims
+            let permission_str = format!("{}:{}", resource_type, permission);
+            Ok(self.permissions.contains(&permission_str) || 
+               self.permissions.contains(permission))
+        }
+    }
+    
+    /// Require permission - returns error if permission is not granted
+    pub async fn require_permission(
+        &self,
+        resource_type: &str,
+        resource_id: Option<Uuid>,
+        permission: &str,
+    ) -> Result<(), ApiError> {
+        let has_permission = self.check_permission(resource_type, resource_id, permission).await?;
+        if !has_permission {
+            return Err(ApiError::authorization(format!(
+                "Permission denied: {} on {}",
+                permission,
+                resource_type
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -145,6 +256,9 @@ fn validate_jwt_token(token: &str) -> Result<AuthContext, ApiError> {
         roles,
         permissions: claims.permissions.unwrap_or_default(),
         email: claims.email,
+        request: RequestContext::new(), // Will be replaced by FromRequestParts
+        zanzibar_engine: None, // Will be set up later if needed
+        rate_limiter: None, // Will be set by FromRequestParts if security state available
     })
 }
 
@@ -159,25 +273,62 @@ where
         parts: &mut RequestParts<'_, S>,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
+        // Extract RequestContext first (for same-site validation)
+        let request = RequestContext::from_request_parts(parts, _state).await?;
+        
         // Extract JWT token from Authorization header
         let token = extract_token(parts)?;
         
         // Validate and decode JWT
-        let claims = validate_jwt_token(&token)?;
+        let mut auth_ctx = validate_jwt_token(&token)?;
         
-        // Extract organization_id (default to nil if not present, but log warning)
-        let organization_id = claims.org_id.unwrap_or_else(|| {
-            tracing::warn!("JWT token missing organization_id claim");
-            Uuid::nil()
-        });
+        // Attach request context
+        auth_ctx.request = request;
         
-        Ok(AuthContext {
-            user_id: claims.sub,
-            organization_id,
-            roles: claims.roles.unwrap_or_default(),
-            permissions: claims.permissions.unwrap_or_default(),
-            email: claims.email,
-        })
+        // Get security state from extensions (if available)
+        let security_state = parts.extensions
+            .get::<SecurityState>()
+            .cloned();
+        
+        // Perform rate limiting check if security state is available
+        if let Some(ref state) = security_state {
+            if let Some(ref limiter) = state.rate_limiter {
+                let key = if limiter.config.by_user {
+                    auth_ctx.user_id.to_string()
+                } else {
+                    auth_ctx.request.remote_addr
+                        .clone()
+                        .unwrap_or_else(|| "unknown".to_string())
+                };
+                limiter.check(&key).await?;
+                
+                // Attach rate limiter for remaining() method
+                auth_ctx.rate_limiter = state.rate_limiter.clone();
+            }
+            
+            // Perform CSRF validation for state-changing methods
+            if let Some(ref validator) = state.csrf_validator {
+                let method = parts.method
+                    .ok_or_else(|| ApiError::internal("Method not available"))?;
+                let headers = parts.headers
+                    .as_ref()
+                    .ok_or_else(|| ApiError::internal("Headers not available"))?;
+                validator.validate(&method, headers, auth_ctx.request.origin.as_ref())?;
+            }
+            
+            // Enforce strict same-site if configured
+            if state.config.strict_same_site && !auth_ctx.request.is_same_site() {
+                return Err(ApiError::authentication(
+                    "Same-site validation failed - request rejected"
+                ));
+            }
+        }
+        
+        // Note: Zanzibar engine integration would be added here if available
+        // For now, we return the context without Zanzibar engine
+        // In production, you would get the engine from State or a service
+        
+        Ok(auth_ctx)
     }
 }
 

@@ -141,6 +141,12 @@ impl ApiError {
             message: message.into(),
         }
     }
+    
+    pub fn rate_limit(message: impl Into<String>) -> Self {
+        Self::RateLimit {
+            message: message.into(),
+        }
+    }
 
     /// Create a not found error
     pub fn not_found(resource_type: impl Into<String>) -> Self {
