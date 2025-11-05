@@ -26,7 +26,7 @@ tracing = { workspace = true }
 error-common = { path = "../error-common" }
 logger-redacted = { path = "../logger-redacted" }
 plugin-runtime-core = { path = "../plugin-runtime-core" }
-rustcare-server = { path = "../rustcare-server" }
+rustcare-server = { path = "../server/rustcare-server" }
 mcp-macros = { path = "../mcp-macros" }
 
 # HTTP server for MCP transport

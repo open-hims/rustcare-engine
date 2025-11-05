@@ -10,7 +10,7 @@ use uuid::Uuid;
 use async_trait::async_trait;
 use std::sync::Arc;
 use crate::error::ApiError;
-use crate::middleware::{RequestContext, SecurityState};
+use crate::middleware::{RequestContext, SecurityMiddlewareState};
 
 /// Authentication context extracted from JWT token
 ///
@@ -285,9 +285,9 @@ where
         // Attach request context
         auth_ctx.request = request;
         
-        // Get security state from extensions (if available)
+        // Get security middleware state from extensions (if available)
         let security_state = parts.extensions
-            .get::<SecurityState>()
+            .get::<SecurityMiddlewareState>()
             .cloned();
         
         // Perform rate limiting check if security state is available
@@ -324,9 +324,11 @@ where
             }
         }
         
-        // Note: Zanzibar engine integration would be added here if available
-        // For now, we return the context without Zanzibar engine
-        // In production, you would get the engine from State or a service
+        // Try to get Zanzibar engine from extensions (if available)
+        // The engine can be added to extensions by middleware or handlers
+        if let Some(engine) = parts.extensions.get::<Arc<dyn ZanzibarCheck>>().cloned() {
+            auth_ctx.zanzibar_engine = Some(engine);
+        }
         
         Ok(auth_ctx)
     }

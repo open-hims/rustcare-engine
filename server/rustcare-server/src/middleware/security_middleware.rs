@@ -9,7 +9,7 @@ use axum::{
     response::Response,
     http::{Method, HeaderMap},
 };
-use crate::middleware::{AuthContext, RequestContext, SecurityContext, SecurityState};
+use crate::middleware::{AuthContext, RequestContext, SecurityContext, SecurityMiddlewareState};
 use crate::error::ApiError;
 
 /// Security middleware that performs all security checks
@@ -17,11 +17,11 @@ pub async fn security_middleware(
     mut request: Request,
     next: Next,
 ) -> Result<Response, ApiError> {
-    // Extract security state from extensions (set during router initialization)
+    // Extract security middleware state from extensions (set during router initialization)
     let security_state = request.extensions()
-        .get::<SecurityState>()
+        .get::<SecurityMiddlewareState>()
         .cloned()
-        .unwrap_or_else(|| SecurityState::new(crate::middleware::SecurityConfig::default()));
+        .unwrap_or_else(|| SecurityMiddlewareState::new(crate::middleware::SecurityConfig::default()));
     
     // Extract method and headers before consuming request
     let method = request.method().clone();
@@ -34,8 +34,8 @@ pub async fn security_middleware(
     // For handlers, use SecurityContext::from_contexts_with_checks() instead
     // This middleware sets up the security state in extensions
     
-    // Add security state to extensions if not already present
-    if !request.extensions().contains::<SecurityState>() {
+    // Add security middleware state to extensions if not already present
+    if !request.extensions().contains::<SecurityMiddlewareState>() {
         request.extensions_mut().insert(security_state.clone());
     }
     

@@ -33,10 +33,10 @@ sqlx = { version = "0.7", features = [
     "json"
 ] }
 
-# Internal dependencies
-error-common = { path = "../error-common" }
-crypto = { path = "../crypto" }
-events-bus = { path = "../events-bus" }
+# Internal dependencies (paths updated for new structure)
+error-common = { path = "../../error-common" }
+crypto = { path = "../../crypto" }
+events-bus = { path = "../../external-services/events-bus" }
 
 # Sync-specific dependencies
 serde_cbor = "0.11"  # Compact binary serialization for sync

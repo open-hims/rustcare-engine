@@ -1,15 +1,14 @@
 [workspace]
 resolver = "2"
 members = [
+    # Core libraries and frameworks
     "error-common",
     "logger-redacted",
     "database-layer",
-    "email-service",
     "auth-identity",
     "auth-oauth", 
     "auth-zanzibar",
     "auth-gateway",
-    "events-bus",
     "config-engine",
     "workflow-engine", 
     "audit-engine",
@@ -19,13 +18,19 @@ members = [
     "ops-cli",
     "plugin-runtime-core",
     "plugins-registry-api",
-    "rustcare-server",
-    "rustcare-sync", "device-manager", "secrets-service",
+    "device-manager",
     "voice-recognition-service",
     "mcp-server",
     "billing-service",
     "insurance-service",
     "accounting-service",
+    # Server code (our own implementations)
+    "server/rustcare-server",
+    "server/rustcare-sync",
+    # External service integrations
+    "external-services/events-bus",
+    "external-services/email-service",
+    "external-services/secrets-service",
 ]
 [workspace.package]
 version = "0.1.0"

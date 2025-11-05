@@ -27,7 +27,7 @@ tracing = { workspace = true }
 auth-zanzibar = { path = "../auth-zanzibar" }
 audit-engine = { path = "../audit-engine" }
 crypto = { path = "../crypto" }
-events-bus = { path = "../events-bus" }
+events-bus = { path = "../external-services/events-bus" }
 
 # Governance specific dependencies
 regex = "1.10"

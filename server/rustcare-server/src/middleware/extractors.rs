@@ -7,7 +7,7 @@ use axum::extract::{FromRequestParts, RequestParts};
 use axum::http::{Method, HeaderMap};
 use async_trait::async_trait;
 use crate::error::ApiError;
-use crate::middleware::{AuthContext, RequestContext, SecurityContext, SecurityState};
+use crate::middleware::{AuthContext, RequestContext, SecurityContext, SecurityMiddlewareState};
 
 /// Extractor that automatically creates SecurityContext with all checks
 /// 
@@ -37,10 +37,10 @@ where
         let auth = AuthContext::from_request_parts(parts, _state).await?;
         let request = RequestContext::from_request_parts(parts, _state).await?;
         
-        // Get security state from extensions
+        // Get security middleware state from extensions
         let security_state = parts.extensions
-            .get::<SecurityState>()
-            .ok_or_else(|| ApiError::internal("Security state not configured"))?;
+            .get::<SecurityMiddlewareState>()
+            .ok_or_else(|| ApiError::internal("Security middleware state not configured"))?;
         
         // Get method and headers
         let method = parts.method

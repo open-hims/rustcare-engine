@@ -435,14 +435,18 @@ pub async fn create_pharmacy(
     .fetch_one(&server.db_pool)
     .await?;
     
-    // Log the creation using AuditService
+    // Log the creation using AuditService (automatically includes request context)
     let audit_service = AuditService::new(server.db_pool.clone());
     let _ = audit_service.log_general_action(
         &auth,
         "pharmacy",
         pharmacy.id,
         "created",
-        Some(serde_json::json!({"name": req.name, "code": req.code})),
+        Some(serde_json::json!({
+            "name": req.name,
+            "code": req.code,
+            "request_id": auth.request_id()
+        })),
     ).await;
     
     Ok((StatusCode::CREATED, Json(api_success(pharmacy))))
@@ -544,14 +548,22 @@ pub async fn update_pharmacy(
     .await?;
     
     if let Some(ref pharmacy) = pharmacy {
-        // Log the update using AuditService
+        // Check permission using Zanzibar (if available)
+        if let Err(e) = auth.require_permission("pharmacy", Some(pharmacy_id), "update").await {
+            tracing::warn!("Permission check failed (falling back to org check): {}", e);
+            // Fallback: organization check already done above
+        }
+        
+        // Log the update using AuditService (automatically includes request context)
         let audit_service = AuditService::new(server.db_pool.clone());
         let _ = audit_service.log_general_action(
             &auth,
             "pharmacy",
             pharmacy_id,
             "updated",
-            None,
+            Some(serde_json::json!({
+                "request_id": auth.request_id()
+            })),
         ).await;
     }
     

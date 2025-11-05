@@ -39,26 +39,26 @@ hyper = { version = "1.0", features = ["full"] }
 http-body-util = "0.1"  # For response body manipulation in masking middleware
 futures = "0.3"
 
-# Internal dependencies
-error-common = { path = "../error-common" }
-auth-gateway = { path = "../auth-gateway" }
-auth-identity = { path = "../auth-identity" }
-auth-oauth = { path = "../auth-oauth" }
-auth-zanzibar = { path = "../auth-zanzibar" }
-events-bus = { path = "../events-bus" }
-config-engine = { path = "../config-engine" }
-workflow-engine = { path = "../workflow-engine" }
-audit-engine = { path = "../audit-engine" }
-crypto = { path = "../crypto" }
-object-governance = { path = "../object-governance" }
-telemetry = { path = "../telemetry" }
-plugin-runtime-core = { path = "../plugin-runtime-core" }
-plugins-registry-api = { path = "../plugins-registry-api" }
-logger-redacted = { path = "../logger-redacted" }
-email-service = { path = "../email-service" }
-database-layer = { path = "../database-layer" }
-secrets-service = { path = "../secrets-service" }
-mcp-macros = { path = "../mcp-macros", optional = true }
+# Internal dependencies (paths updated for new structure)
+error-common = { path = "../../error-common" }
+auth-gateway = { path = "../../auth-gateway" }
+auth-identity = { path = "../../auth-identity" }
+auth-oauth = { path = "../../auth-oauth" }
+auth-zanzibar = { path = "../../auth-zanzibar" }
+events-bus = { path = "../../external-services/events-bus" }
+config-engine = { path = "../../config-engine" }
+workflow-engine = { path = "../../workflow-engine" }
+audit-engine = { path = "../../audit-engine" }
+crypto = { path = "../../crypto" }
+object-governance = { path = "../../object-governance" }
+telemetry = { path = "../../telemetry" }
+plugin-runtime-core = { path = "../../plugin-runtime-core" }
+plugins-registry-api = { path = "../../plugins-registry-api" }
+logger-redacted = { path = "../../logger-redacted" }
+email-service = { path = "../../external-services/email-service" }
+database-layer = { path = "../../database-layer" }
+secrets-service = { path = "../../external-services/secrets-service" }
+mcp-macros = { path = "../../mcp-macros", optional = true }
 
 # Database
 sqlx = { workspace = true }

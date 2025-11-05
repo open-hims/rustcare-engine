@@ -25,7 +25,7 @@ tracing = { workspace = true }
 
 # Internal dependencies
 auth-zanzibar = { path = "../auth-zanzibar" }
-events-bus = { path = "../events-bus" }
+events-bus = { path = "../external-services/events-bus" }
 config-engine = { path = "../config-engine" }
 audit-engine = { path = "../audit-engine" }
 

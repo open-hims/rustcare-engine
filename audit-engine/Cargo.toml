@@ -24,7 +24,7 @@ chrono = { workspace = true }
 tracing = { workspace = true }
 
 # Internal dependencies
-events-bus = { path = "../events-bus" }
+events-bus = { path = "../external-services/events-bus" }
 crypto = { path = "../crypto" }
 
 # Audit specific dependencies

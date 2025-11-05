@@ -5,6 +5,8 @@ use sqlx::{Pool, Postgres};
 use database_layer::{GeographicRepository, ComplianceRepository};
 use secrets_service::SecretsManager;
 use crypto::kms::KeyManagementService;
+use auth_zanzibar::{AuthorizationEngine, repository::PostgresTupleRepository};
+use crate::middleware::ZanzibarEngineWrapper;
 
 /// Main RustCare server state
 #[derive(Clone)]
@@ -31,6 +33,8 @@ pub struct RustCareServer {
     pub database: Arc<()>,
     /// Email service instance (placeholder)
     pub email_service: Arc<()>,
+    /// Zanzibar authorization engine (optional)
+    pub zanzibar_engine: Option<Arc<ZanzibarEngineWrapper>>,
 }
 
 /// Server configuration
@@ -111,6 +115,9 @@ impl RustCareServer {
         // Initialize KMS provider (optional - requires provider configuration)
         let kms_provider = Self::initialize_kms_provider().await.ok();
 
+        // Initialize Zanzibar authorization engine (optional)
+        let zanzibar_engine = Self::initialize_zanzibar_engine(db_pool.clone()).await.ok();
+
         Ok(Self {
             config,
             db_pool,
@@ -123,6 +130,7 @@ impl RustCareServer {
             audit_engine,
             database,
             email_service,
+            zanzibar_engine,
         })
     }
 
@@ -316,6 +324,39 @@ impl RustCareServer {
     /// Get KMS provider if available
     pub fn kms_provider(&self) -> Option<&Arc<dyn KeyManagementService>> {
         self.kms_provider.as_ref()
+    }
+
+    /// Initialize Zanzibar authorization engine from database
+    async fn initialize_zanzibar_engine(db_pool: Pool<Postgres>) -> Result<Arc<ZanzibarEngineWrapper>> {
+        // Check if Zanzibar is enabled
+        let enabled = std::env::var("ZANZIBAR_ENABLED")
+            .unwrap_or_else(|_| "true".to_string())
+            .parse::<bool>()
+            .unwrap_or(true);
+
+        if !enabled {
+            tracing::info!("Zanzibar authorization engine is disabled. Set ZANZIBAR_ENABLED=true to enable.");
+            return Err(anyhow::anyhow!("Zanzibar authorization engine is disabled"));
+        }
+
+        // Create PostgreSQL tuple repository
+        let repository = Arc::new(PostgresTupleRepository::new(db_pool.clone()));
+        
+        // Create authorization engine
+        let engine = AuthorizationEngine::new(repository.clone())
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to initialize Zanzibar engine: {}", e))?;
+        
+        // Wrap in ZanzibarEngineWrapper
+        let wrapper = ZanzibarEngineWrapper::new(Arc::new(engine));
+        
+        tracing::info!("Zanzibar authorization engine initialized successfully");
+        Ok(Arc::new(wrapper))
+    }
+
+    /// Get Zanzibar engine if available
+    pub fn zanzibar_engine(&self) -> Option<&Arc<ZanzibarEngineWrapper>> {
+        self.zanzibar_engine.as_ref()
     }
 }
 

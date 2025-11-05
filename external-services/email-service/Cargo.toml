@@ -23,12 +23,12 @@ anyhow = { workspace = true }
 chrono = { workspace = true }
 tracing = { workspace = true }
 
-# Internal dependencies
-error-common = { path = "../error-common" }
-logger-redacted = { path = "../logger-redacted" }
-crypto = { path = "../crypto" }
+# Internal dependencies (paths updated for new structure)
+error-common = { path = "../../error-common" }
+logger-redacted = { path = "../../logger-redacted" }
+crypto = { path = "../../crypto" }
 events-bus = { path = "../events-bus" }
-audit-engine = { path = "../audit-engine" }
+audit-engine = { path = "../../audit-engine" }
 
 # Stalwart Labs email libraries (production-grade SMTP)
 mail-send = "0.4"

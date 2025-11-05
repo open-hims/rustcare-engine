@@ -29,13 +29,13 @@ impl AuditService {
     ///
     /// # Arguments
     ///
-    /// * `auth` - Authentication context containing user and organization info
+    /// * `auth` - Authentication context containing user, organization, and request info
     /// * `entity_type` - Type of entity being audited (e.g., "notification", "medical_record")
     /// * `entity_id` - UUID of the entity being audited
     /// * `action` - Action being performed (e.g., "create", "update", "delete", "view")
     /// * `details` - Optional JSON details about the action
-    /// * `ip_address` - Optional IP address of the requester
-    /// * `user_agent` - Optional user agent string
+    /// * `ip_address` - Optional IP address (if None, uses auth.request.remote_addr)
+    /// * `user_agent` - Optional user agent (if None, uses auth.request.user_agent)
     ///
     /// # Example
     ///
@@ -46,8 +46,8 @@ impl AuditService {
     ///     notification_id,
     ///     "create",
     ///     Some(serde_json::json!({"type": "email", "recipient": "user@example.com"})),
-    ///     Some("192.168.1.1".to_string()),
-    ///     Some("Mozilla/5.0...".to_string()),
+    ///     None, // Will use auth.request.remote_addr automatically
+    ///     None, // Will use auth.request.user_agent automatically
     /// ).await?;
     /// ```
     pub async fn log_action(
@@ -60,6 +60,18 @@ impl AuditService {
         ip_address: Option<String>,
         user_agent: Option<String>,
     ) -> Result<(), ApiError> {
+        // Use request context from auth if not provided
+        let ip_address = ip_address.or_else(|| auth.request.remote_addr.clone());
+        let user_agent = user_agent.or_else(|| auth.request.user_agent.clone());
+        
+        // Include request ID in details for traceability
+        let mut details = details.unwrap_or_else(|| serde_json::json!({}));
+        if let Some(obj) = details.as_object_mut() {
+            obj.insert("request_id".to_string(), serde_json::json!(auth.request_id()));
+            if !auth.is_same_site() {
+                obj.insert("same_site_warning".to_string(), serde_json::json!(true));
+            }
+        }
         // Determine audit table based on entity type
         let table_name = match entity_type {
             "notification" => "notification_audit_logs",
@@ -79,8 +91,8 @@ impl AuditService {
             r#"
             INSERT INTO {} (
                 entity_type, entity_id, organization_id, user_id,
-                action, action_details, ip_address, user_agent, created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                action, action_details, ip_address, user_agent, request_id, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             "#,
             table_name
         ))
@@ -92,6 +104,7 @@ impl AuditService {
         .bind(details)
         .bind(ip_address)
         .bind(user_agent)
+        .bind(auth.request_id()) // Include request ID for traceability
         .bind(Utc::now())
         .execute(&self.db_pool)
         .await

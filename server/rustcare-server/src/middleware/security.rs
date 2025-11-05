@@ -291,15 +291,16 @@ impl Default for SecurityConfig {
     }
 }
 
-/// Security state stored in Axum State
-/// This would be initialized when creating the router
-pub struct SecurityState {
+/// Security middleware state stored in Axum extensions
+/// This is initialized when creating the router and provides
+/// rate limiting, CSRF validation, and security configuration
+pub struct SecurityMiddlewareState {
     pub rate_limiter: Option<Arc<RateLimiter>>,
     pub csrf_validator: Option<Arc<CsrfValidator>>,
     pub config: SecurityConfig,
 }
 
-impl SecurityState {
+impl SecurityMiddlewareState {
     pub fn new(config: SecurityConfig) -> Self {
         Self {
             rate_limiter: config.rate_limit.as_ref()
@@ -342,7 +343,7 @@ impl SecurityContext {
         request: RequestContext,
         method: &Method,
         headers: &HeaderMap,
-        security_state: &SecurityState,
+        security_state: &SecurityMiddlewareState,
     ) -> Result<Self, ApiError> {
         // Perform rate limiting check
         let rate_limiter = security_state.rate_limiter.clone();

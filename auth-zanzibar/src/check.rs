@@ -4,23 +4,39 @@ use crate::{
     repository::TupleRepository,
     schema::Schema,
 };
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::sync::Arc;
 use tracing::debug;
+use petgraph::{Graph, Directed, Direction};
+use petgraph::graph::NodeIndex;
 
 /// Permission checker performs authorization checks with support for:
 /// - Direct permissions
 /// - Inherited permissions
 /// - Userset references (e.g., "all editors are viewers")
 /// - Recursive permission resolution
+/// - Graph-based traversal using petgraph for efficient path finding
 pub struct PermissionChecker {
     repository: Arc<dyn TupleRepository>,
     schema: Arc<Schema>,
+    /// Graph cache for relationship traversal (optional optimization)
+    use_graph_cache: bool,
 }
 
 impl PermissionChecker {
     pub fn new(repository: Arc<dyn TupleRepository>, schema: Arc<Schema>) -> Self {
-        Self { repository, schema }
+        Self {
+            repository,
+            schema,
+            use_graph_cache: false, // Graph caching disabled by default
+        }
+    }
+    
+    /// Enable graph-based caching for relationship traversal
+    /// This can improve performance for complex permission hierarchies
+    pub fn with_graph_cache(mut self, enable: bool) -> Self {
+        self.use_graph_cache = enable;
+        self
     }
     
     /// Check if subject has the specified relation to object
