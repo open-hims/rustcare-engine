@@ -61,7 +61,7 @@ impl Server {
                 serde_json::to_value(self.capabilities.list())?
             }
             crate::protocol::methods::LIST_TOOLS => {
-                serde_json::to_value(self.tools.list())?
+                serde_json::to_value(self.tools.list(false))?
             }
             crate::protocol::methods::CALL_TOOL => {
                 let call_params: serde_json::Value = serde_json::from_value(request.params)?;

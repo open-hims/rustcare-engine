@@ -125,9 +125,9 @@ impl McpToolRegistryService {
             description: row.description.unwrap_or_default(),
             category: row.category,
             response_type: row.response_type,
-            render_type: row.render_type.and_then(|rt| parse_render_type(&rt)),
+            render_type: row.render_type.as_deref().and_then(parse_render_type),
             requires_permission: row.requires_permission,
-            sensitive: row.sensitive,
+            sensitive: row.sensitive.unwrap_or(false),
             input_schema: row.input_schema,
             output_schema: row.output_schema,
         }).collect())

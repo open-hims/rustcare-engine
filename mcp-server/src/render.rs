@@ -96,7 +96,8 @@ fn render_table(result: &ToolResult) -> String {
             
             // Header
             table.push_str("| ");
-            table.push_str(&columns.join(" | "));
+            let column_strs: Vec<&str> = columns.iter().map(|s| s.as_str()).collect();
+            table.push_str(&column_strs.join(" | "));
             table.push_str(" |\n");
             
             // Separator
@@ -177,7 +178,8 @@ fn render_csv(result: &ToolResult) -> String {
             let mut csv = String::new();
             
             // Header
-            csv.push_str(&columns.join(","));
+            let column_strs: Vec<&str> = columns.iter().map(|s| s.as_str()).collect();
+            csv.push_str(&column_strs.join(","));
             csv.push('\n');
             
             // Rows
@@ -217,7 +219,8 @@ fn render_tsv(result: &ToolResult) -> String {
             let mut tsv = String::new();
             
             // Header
-            tsv.push_str(&columns.join("\t"));
+            let column_strs: Vec<&str> = columns.iter().map(|s| s.as_str()).collect();
+            tsv.push_str(&column_strs.join("\t"));
             tsv.push('\n');
             
             // Rows

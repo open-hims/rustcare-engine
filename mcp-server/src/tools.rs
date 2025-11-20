@@ -147,26 +147,39 @@ impl ToolsRegistry {
         organization_id: Uuid,
         registered_by: Option<Uuid>,
     ) -> McpResult<()> {
+        // Extract metadata before moving tool
+        let tool_name = tool.name().to_string();
+        let is_sensitive = tool.is_sensitive();
+        let handler_function = tool.handler_function().to_string();
+        let handler_file = tool.handler_file().to_string();
+        let description = tool.description().to_string();
+        let category = tool.category().to_string();
+        let response_type = tool.response_type_name().map(|s| s.to_string());
+        let render_type = tool.render_type();
+        let requires_permission = tool.required_permission().map(|s| s.to_string());
+        let input_schema = Some(tool.input_schema());
+        let output_schema = tool.output_schema();
+        
         // Store in memory
-        if tool.is_sensitive() {
-            self.sensitive_tools.push(tool.name().to_string());
+        if is_sensitive {
+            self.sensitive_tools.push(tool_name.clone());
         }
-        self.tools.insert(tool.name().to_string(), tool);
+        self.tools.insert(tool_name.clone(), tool);
         
         // Auto-register to database if registry service is available
         if let Some(ref registry_service) = self.registry_service {
             let tool_registry = crate::registry::McpToolRegistry {
-                tool_name: tool.name().to_string(),
-                handler_function: tool.handler_function().to_string(),
-                handler_file: tool.handler_file().to_string(),
-                description: tool.description().to_string(),
-                category: tool.category().to_string(),
-                response_type: tool.response_type_name().map(|s| s.to_string()),
-                render_type: tool.render_type(),
-                requires_permission: tool.required_permission().map(|s| s.to_string()),
-                sensitive: tool.is_sensitive(),
-                input_schema: Some(tool.input_schema()),
-                output_schema: tool.output_schema(),
+                tool_name,
+                handler_function,
+                handler_file,
+                description,
+                category,
+                response_type,
+                render_type,
+                requires_permission,
+                sensitive: is_sensitive,
+                input_schema,
+                output_schema,
             };
             
             registry_service.register_tool(&tool_registry, organization_id, registered_by).await?;

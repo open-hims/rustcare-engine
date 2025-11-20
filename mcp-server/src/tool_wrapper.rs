@@ -3,7 +3,8 @@
 //! This module provides utilities to wrap RustCare handler functions
 //! and expose them as MCP tools with automatic auth/Zanzibar integration.
 
-use crate::tools::{McpTool, ToolInput, ToolResult, AuthContext, ZanzibarClient};
+use crate::tools::{McpTool, AuthContext, ZanzibarClient};
+use crate::protocol::{ToolInput, ToolResult};
 use crate::error::{McpResult, McpError};
 use async_trait::async_trait;
 use serde_json::Value;
@@ -76,6 +77,14 @@ impl McpTool for HandlerToolWrapper {
     
     fn render_type(&self) -> Option<crate::protocol::RenderType> {
         self.render_type.clone()
+    }
+    
+    fn handler_function(&self) -> &str {
+        "handler_wrapper"
+    }
+    
+    fn handler_file(&self) -> &str {
+        "tool_wrapper.rs"
     }
     
     fn response_type_name(&self) -> Option<&str> {

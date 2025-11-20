@@ -29,6 +29,9 @@ plugin-runtime-core = { path = "../plugin-runtime-core" }
 rustcare-server = { path = "../server/rustcare-server" }
 mcp-macros = { path = "../mcp-macros" }
 
+# Database
+sqlx = { workspace = true, features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json", "macros"] }
+
 # HTTP server for MCP transport
 axum = { workspace = true }
 tower = { workspace = true }

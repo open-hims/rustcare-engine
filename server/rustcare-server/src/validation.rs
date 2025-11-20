@@ -131,7 +131,7 @@ macro_rules! validate_email {
 #[macro_export]
 macro_rules! validate_range {
     ($field:expr, $min:expr, $max:expr, $message:expr) => {
-        $crate::validate_field!($field, *$field >= $min && *$field <= $max, $message);
+        $crate::validate_field!($field, $field >= $min && $field <= $max, $message);
     };
 }
 
