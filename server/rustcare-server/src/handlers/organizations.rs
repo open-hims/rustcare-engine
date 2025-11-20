@@ -880,9 +880,14 @@ pub async fn list_organization_employees(
         Employee,
         r#"SELECT 
             id, user_id, organization_id, employee_id, first_name, last_name, email,
-            phone, department, position, ARRAY[]::uuid[] as roles, ARRAY[]::text[] as direct_permissions,
-            to_char(start_date, 'YYYY-MM-DD') as start_date, NULL::text as end_date, is_active,
-            NULL::text as last_login, '' as zanzibar_subject_id
+            phone, department, position, 
+            ARRAY[]::uuid[] as "roles!: Vec<Uuid>", 
+            ARRAY[]::text[] as "direct_permissions!: Vec<String>",
+            to_char(start_date, 'YYYY-MM-DD') as "start_date!", 
+            NULL::text as end_date, 
+            is_active,
+            NULL::text as last_login, 
+            '' as "zanzibar_subject_id!"
           FROM organization_employees
           WHERE organization_id = $1 AND (is_deleted = false OR is_deleted IS NULL)
           ORDER BY created_at DESC"#,
@@ -1047,10 +1052,12 @@ pub async fn list_organization_patients(
         Patient,
         r#"SELECT 
             id, organization_id, patient_id, first_name, last_name,
-            to_char(date_of_birth, 'YYYY-MM-DD') as date_of_birth,
-            email, phone, assigned_department, primary_provider, access_level,
-            consent_status, to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as created_at,
-            to_char(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as updated_at
+            to_char(date_of_birth, 'YYYY-MM-DD') as "date_of_birth!",
+            email, phone, assigned_department, primary_provider, 
+            access_level as "access_level!",
+            consent_status as "consent_status!",
+            to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "created_at!",
+            to_char(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as "updated_at!"
           FROM patients
           WHERE organization_id = $1 AND (is_deleted = false OR is_deleted IS NULL)
           ORDER BY created_at DESC"#,

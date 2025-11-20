@@ -335,14 +335,14 @@ pub async fn list_components(
           AND ($4::uuid IS NULL OR parent_component_id = $4)
         ORDER BY category, component_name
         LIMIT $5 OFFSET $6
-        "#
+        "#,
+        auth.organization_id,
+        params.component_type.as_deref(),
+        params.category.as_deref(),
+        params.parent_component.as_ref().and_then(|_| None::<uuid::Uuid>),
+        params.pagination.limit() as i64,
+        params.pagination.offset() as i64
     )
-    .bind(auth.organization_id)
-    .bind(params.component_type.as_deref())
-    .bind(params.category.as_deref())
-    .bind(params.parent_component.and_then(|_| None::<uuid::Uuid>))
-    .bind(params.pagination.limit() as i64)
-    .bind(params.pagination.offset() as i64)
     .fetch_all(&server.db_pool)
     .await
     .map_err(|e| ApiError::internal(format!("Failed to list components: {}", e)))?;
@@ -381,7 +381,7 @@ pub async fn list_components(
     .bind(auth.organization_id)
     .bind(params.component_type.as_deref())
     .bind(params.category.as_deref())
-    .bind(params.parent_component.and_then(|_| None::<uuid::Uuid>))
+    .bind(params.parent_component.as_ref().and_then(|_| None::<uuid::Uuid>))
     .fetch_one(&server.db_pool)
     .await
     .map_err(|e| ApiError::internal(format!("Failed to count components: {}", e)))?;
