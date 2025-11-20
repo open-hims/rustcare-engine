@@ -79,4 +79,5 @@ pub use runtime::*;
 pub use loader::*;
 pub use sandbox::*;
 pub use api::*;
+pub use lifecycle::*;
 pub use error::*;

@@ -10,6 +10,12 @@ documentation.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "RustCare Engine HTTP Server - HIPAA-compliant healthcare platform API"
+default-run = "rustcare-server"
+
+# Inherit workspace lints for strict production code quality
+[lints]
+workspace = true
+
 
 [lib]
 name = "rustcare_server"
@@ -35,7 +41,7 @@ tracing = { workspace = true }
 axum = { version = "0.7", features = ["macros", "tower-log", "ws"] }
 tower = { version = "0.4", features = ["full"] }
 tower-http = { version = "0.5", features = ["cors", "trace"] }
-hyper = { version = "1.0", features = ["full"] }
+hyper = { workspace = true }
 http-body-util = "0.1"  # For response body manipulation in masking middleware
 futures = "0.3"
 
@@ -68,19 +74,19 @@ ipnetwork = { version = "0.20", features = ["serde"] }
 jsonwebtoken = "9.2"
 rsa = "0.9"
 sha2 = "0.10"
-base64 = "0.21"
+base64 = { workspace = true }
 rand = "0.8"
 
 # Password hashing and MFA
-argon2 = "0.5"               # Argon2id password hashing
+argon2 = { workspace = true }               # Argon2id password hashing
 totp-lite = "2.0"            # TOTP for MFA
 data-encoding = "2.5"        # Base32 encoding for TOTP secrets
 subtle = "2.5"               # Constant-time comparisons
 hex = "0.4"                  # Hex encoding for backup codes
 
 # OAuth2 and HTTP client
-oauth2 = "4.4"               # OAuth2 client implementation
-reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+oauth2 = { workspace = true }               # OAuth2 client implementation
+reqwest = { workspace = true, default-features = false }
 
 # Session management
 redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
@@ -96,30 +102,36 @@ webpki-roots = "0.26"        # Mozilla root certificates
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "ansi", "chrono"] }
 tracing-tree = "0.3"         # Beautiful hierarchical logging
 tracing-appender = "0.2"     # File logging with rotation
-console-subscriber = "0.2"   # Tokio console integration
+console-subscriber = "0.4"   # Tokio console integration
 indicatif = "0.17"           # Progress bars and spinners
 colored = "2.0"              # Colored terminal output
 atty = "0.2"                 # Terminal detection
-clap = { version = "4.4", features = ["derive", "env"] }
-config = "0.14"
+clap = { workspace = true }
+config = { workspace = true }
 toml = "0.8"
 urlencoding = "2.1"
 
 # OpenAPI documentation
-utoipa = { version = "4.2", features = ["axum_extras", "chrono", "uuid"] }
-utoipa-swagger-ui = { version = "6.0", features = ["axum"] }
+utoipa = { version = "5.4", features = ["axum_extras", "chrono", "uuid"] }
+utoipa-swagger-ui = { version = "8.0", features = ["axum"] }
 
 # gRPC support
-tonic = { version = "0.10", features = ["tls", "tls-roots"] }
-prost = "0.12"
-prost-types = "0.12"
+tonic = { workspace = true }
+prost = { workspace = true }
+prost-types = "0.13"
 
 # WebSocket support
 axum-extra = { version = "0.9", features = ["typed-header"] }
-tokio-tungstenite = "0.21"
+tokio-tungstenite = "0.24"
 tokio-stream = "0.1"
 
 
+
+[features]
+default = []
+aws-kms = []
+vault-kms = []
+mcp-macros = ["dep:mcp-macros"]
 
 [build-dependencies]
 tonic-build = "0.10"

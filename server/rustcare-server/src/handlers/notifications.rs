@@ -1,20 +1,21 @@
+use crate::error::{api_success, ApiError, ApiResponse};
+use crate::middleware::AuthContext;
+use crate::server::RustCareServer;
+use crate::services::AuditService;
+use crate::types::pagination::PaginationParams;
+use crate::utils::query_builder::PaginatedQuery;
+use crate::validation::RequestValidation;
+use crate::{validate_field, validate_length, validate_required};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use utoipa::{ToSchema, IntoParams};
-use crate::server::RustCareServer;
-use crate::error::{ApiError, ApiResponse, api_success};
-use crate::utils::query_builder::PaginatedQuery;
-use crate::types::pagination::PaginationParams;
-use crate::middleware::AuthContext;
-use crate::validation::RequestValidation;
-use crate::services::AuditService;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use utoipa::{IntoParams, ToSchema};
+use uuid::Uuid;
 
 // ============================================================================
 // DATA STRUCTURES
@@ -26,29 +27,29 @@ pub struct Notification {
     pub id: Uuid,
     pub organization_id: Option<Uuid>,
     pub user_id: Option<Uuid>,
-    
+
     // Notification content
     pub title: String,
     pub message: String,
     pub notification_type: String,
     pub priority: String,
-    
+
     // Metadata
     pub category: Option<String>,
     pub action_url: Option<String>,
     pub action_label: Option<String>,
-    
+
     // Tracking
     pub is_read: bool,
     pub read_at: Option<DateTime<Utc>>,
-    
+
     // Rich content
     pub icon: Option<String>,
     pub image_url: Option<String>,
-    
+
     // Expiration
     pub expires_at: Option<DateTime<Utc>>,
-    
+
     // Timestamps
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -60,22 +61,22 @@ pub struct NotificationAuditLog {
     pub id: Uuid,
     pub notification_id: Uuid,
     pub organization_id: Option<Uuid>,
-    
+
     // User who performed the action
     pub user_id: Option<Uuid>,
     pub user_email: Option<String>,
-    
+
     // Action details
     pub action: String,
     pub action_details: Option<serde_json::Value>,
-    
+
     // Timestamp
     pub created_at: DateTime<Utc>,
-    
+
     // Context
     pub ip_address: Option<String>,
     pub user_agent: Option<String>,
-    
+
     // Metadata
     pub metadata: Option<serde_json::Value>,
 }
@@ -113,18 +114,31 @@ impl RequestValidation for CreateNotificationRequest {
         validate_required!(self.message, "Message is required");
         validate_required!(self.notification_type, "Notification type is required");
         validate_required!(self.priority, "Priority is required");
-        
-        validate_length!(self.title, 1, 200, "Title must be between 1 and 200 characters");
-        validate_length!(self.message, 1, 1000, "Message must be between 1 and 1000 characters");
-        
+
+        validate_length!(
+            self.title,
+            1,
+            200,
+            "Title must be between 1 and 200 characters"
+        );
+        validate_length!(
+            self.message,
+            1,
+            1000,
+            "Message must be between 1 and 1000 characters"
+        );
+
         // Validate notification_type is one of valid values
         let valid_types = ["info", "success", "warning", "error", "system"];
         validate_field!(
             self.notification_type,
             valid_types.contains(&self.notification_type.as_str()),
-            format!("Notification type must be one of: {}", valid_types.join(", "))
+            format!(
+                "Notification type must be one of: {}",
+                valid_types.join(", ")
+            )
         );
-        
+
         // Validate priority is one of valid values
         let valid_priorities = ["low", "normal", "high", "urgent"];
         validate_field!(
@@ -132,7 +146,7 @@ impl RequestValidation for CreateNotificationRequest {
             valid_priorities.contains(&self.priority.as_str()),
             format!("Priority must be one of: {}", valid_priorities.join(", "))
         );
-        
+
         // Validate action_url format if provided
         if let Some(ref url) = self.action_url {
             validate_field!(
@@ -141,7 +155,7 @@ impl RequestValidation for CreateNotificationRequest {
                 "Action URL must be a valid HTTP/HTTPS URL or relative path"
             );
         }
-        
+
         Ok(())
     }
 }
@@ -206,27 +220,25 @@ pub async fn list_notifications(
             n.created_at,
             n.updated_at
         FROM notifications n
-        "#
+        "#,
     );
-    
+
     query
         .add_base_filter("n.user_id", auth.user_id)
         .query_builder()
         .push(" AND (n.expires_at IS NULL OR n.expires_at > NOW())");
-    
+
     query
         .filter_eq("n.is_read", params.is_read)
-        .filter_eq("n.notification_type", params.notification_type.as_ref())
-        .filter_eq("n.priority", params.priority.as_ref())
-        .filter_eq("n.category", params.category.as_ref())
+        .filter_eq("n.notification_type", params.notification_type.as_deref().map(str::to_owned))
+        .filter_eq("n.priority", params.priority.as_deref().map(str::to_owned))
+        .filter_eq("n.category", params.category.as_deref().map(str::to_owned))
         .order_by("n.created_at", "DESC")
-        .paginate(
-            params.pagination.page,
-            params.pagination.page_size
-        );
-    
-    let notifications: Vec<Notification> = query.build_query_as().fetch_all(&app_state.db_pool).await?;
-    
+        .paginate(params.pagination.page, params.pagination.page_size);
+
+    let notifications: Vec<Notification> =
+        query.build_query_as().fetch_all(&app_state.db_pool).await?;
+
     // Get total count for pagination metadata
     let total_count = sqlx::query_scalar::<_, i64>(
         r#"
@@ -237,7 +249,7 @@ pub async fn list_notifications(
             AND ($3::text IS NULL OR notification_type = $3)
             AND ($4::text IS NULL OR priority = $4)
             AND ($5::text IS NULL OR category = $5)
-        "#
+        "#,
     )
     .bind(auth.user_id)
     .bind(params.is_read)
@@ -246,9 +258,12 @@ pub async fn list_notifications(
     .bind(params.category.as_deref())
     .fetch_one(&app_state.db_pool)
     .await?;
-    
+
     let metadata = params.pagination.to_metadata(total_count);
-    Ok(Json(crate::error::api_success_with_meta(notifications, metadata)))
+    Ok(Json(crate::error::api_success_with_meta(
+        notifications,
+        metadata,
+    )))
 }
 
 /// Get notification by ID
@@ -290,17 +305,20 @@ pub async fn get_notification(
         FROM notifications n
         WHERE n.id = $1
           AND n.user_id = $2
-        "#
+        "#,
     )
     .bind(id)
     .bind(auth.user_id) // Ensure user can only access their own notifications
     .fetch_optional(&app_state.db_pool)
     .await;
-    
+
     match result {
         Ok(Some(notification)) => Ok(Json(api_success(notification))),
         Ok(None) => Err(ApiError::not_found("Notification not found")),
-        Err(e) => Err(ApiError::internal(format!("Failed to fetch notification: {}", e)))
+        Err(e) => Err(ApiError::internal(format!(
+            "Failed to fetch notification: {}",
+            e
+        ))),
     }
 }
 
@@ -315,12 +333,12 @@ pub async fn get_notification(
 )]
 pub async fn create_notification(
     State(app_state): State<RustCareServer>,
-    Json(req): Json<CreateNotificationRequest>,
     auth: AuthContext,
+    Json(req): Json<CreateNotificationRequest>,
 ) -> Result<Json<ApiResponse<Notification>>, ApiError> {
     // Validate request
     req.validate()?;
-    
+
     let result = sqlx::query_as::<_, Notification>(
         r#"
         INSERT INTO notifications (
@@ -355,7 +373,7 @@ pub async fn create_notification(
             expires_at,
             created_at,
             updated_at
-        "#
+        "#,
     )
     .bind(auth.organization_id) // Use actual auth context
     .bind(req.user_id.or(Some(auth.user_id))) // Use request user_id or default to auth user_id
@@ -371,21 +389,21 @@ pub async fn create_notification(
     .bind(req.expires_at)
     .fetch_one(&app_state.db_pool)
     .await;
-    
+
     match result {
         Ok(notification) => {
             // Log the creation using AuditService
             let audit_service = AuditService::new(app_state.db_pool.clone());
-            let _ = audit_service.log_notification_action(
-                &auth,
-                notification.id,
-                "created",
-                None,
-            ).await;
-            
+            let _ = audit_service
+                .log_notification_action(&auth, notification.id, "created", None)
+                .await;
+
             Ok(Json(api_success(notification)))
-        },
-        Err(e) => Err(ApiError::internal(format!("Failed to create notification: {}", e)))
+        }
+        Err(e) => Err(ApiError::internal(format!(
+            "Failed to create notification: {}",
+            e
+        ))),
     }
 }
 
@@ -402,10 +420,10 @@ pub async fn create_notification(
     )
 )]
 pub async fn mark_notification_read(
-    Path(id): Path<Uuid>,
     State(app_state): State<RustCareServer>,
-    Json(req): Json<MarkReadRequest>,
     auth: AuthContext,
+    Path(id): Path<Uuid>,
+    Json(req): Json<MarkReadRequest>,
 ) -> Result<Json<ApiResponse<Notification>>, ApiError> {
     let result = sqlx::query_as::<_, Notification>(
         r#"
@@ -433,30 +451,35 @@ pub async fn mark_notification_read(
             expires_at,
             created_at,
             updated_at
-        "#
+        "#,
     )
     .bind(req.read)
     .bind(id)
     .bind(auth.user_id) // Ensure user can only update their own notifications
     .fetch_optional(&app_state.db_pool)
     .await;
-    
+
     match result {
         Ok(Some(notification)) => {
             // Log the action using AuditService
             let audit_service = AuditService::new(app_state.db_pool.clone());
             let action = if req.read { "read" } else { "unread" };
-            let _ = audit_service.log_notification_action(
-                &auth,
-                notification.id,
-                action,
-                Some(serde_json::json!({"read": req.read})),
-            ).await;
-            
+            let _ = audit_service
+                .log_notification_action(
+                    &auth,
+                    notification.id,
+                    action,
+                    Some(serde_json::json!({"read": req.read})),
+                )
+                .await;
+
             Ok(Json(api_success(notification)))
-        },
+        }
         Ok(None) => Err(ApiError::not_found("Notification not found")),
-        Err(e) => Err(ApiError::internal(format!("Failed to update notification: {}", e)))
+        Err(e) => Err(ApiError::internal(format!(
+            "Failed to update notification: {}",
+            e
+        ))),
     }
 }
 
@@ -471,13 +494,13 @@ pub async fn mark_notification_read(
 )]
 pub async fn bulk_mark_read(
     State(app_state): State<RustCareServer>,
-    Json(req): Json<BulkMarkReadRequest>,
     auth: AuthContext,
+    Json(req): Json<BulkMarkReadRequest>,
 ) -> Result<Json<ApiResponse<()>>, ApiError> {
     if req.notification_ids.is_empty() {
         return Ok(Json(api_success(())));
     }
-    
+
     let result = sqlx::query(
         r#"
         UPDATE notifications
@@ -486,31 +509,31 @@ pub async fn bulk_mark_read(
             read_at = CASE WHEN $1 THEN NOW() ELSE NULL END,
             updated_at = NOW()
         WHERE id = ANY($2) AND user_id = $3
-        "#
+        "#,
     )
     .bind(req.read)
     .bind(&req.notification_ids)
     .bind(auth.user_id) // Ensure user can only update their own notifications
     .execute(&app_state.db_pool)
     .await;
-    
+
     match result {
         Ok(_) => {
             // Log bulk actions using AuditService
             let audit_service = AuditService::new(app_state.db_pool.clone());
             let action = if req.read { "bulk_read" } else { "bulk_unread" };
             for notification_id in req.notification_ids {
-                let _ = audit_service.log_notification_action(
-                    &auth,
-                    notification_id,
-                    action,
-                    None,
-                ).await;
+                let _ = audit_service
+                    .log_notification_action(&auth, notification_id, action, None)
+                    .await;
             }
-            
+
             Ok(Json(api_success(())))
-        },
-        Err(e) => Err(ApiError::internal(format!("Failed to bulk update notifications: {}", e)))
+        }
+        Err(e) => Err(ApiError::internal(format!(
+            "Failed to bulk update notifications: {}",
+            e
+        ))),
     }
 }
 
@@ -533,15 +556,18 @@ pub async fn get_unread_count(
         WHERE user_id = $1
             AND is_read = false
             AND (expires_at IS NULL OR expires_at > NOW())
-        "#
+        "#,
     )
     .bind(auth.user_id) // Use actual auth context
     .fetch_one(&app_state.db_pool)
     .await;
-    
+
     match result {
         Ok(count) => Ok(Json(api_success(count))),
-        Err(e) => Err(ApiError::internal(format!("Failed to fetch unread count: {}", e)))
+        Err(e) => Err(ApiError::internal(format!(
+            "Failed to fetch unread count: {}",
+            e
+        ))),
     }
 }
 
@@ -554,18 +580,18 @@ pub async fn get_unread_count(
     ),
     params(
         ("id" = Uuid, Path, description = "Notification ID"),
-        ("limit" = Option<i64>, Query, description = "Number of results to return"),
-        ("offset" = Option<i64>, Query, description = "Number of results to skip"),
+        ("page" = Option<u32>, Query, description = "Page number"),
+        ("page_size" = Option<u32>, Query, description = "Items per page"),
     )
 )]
 pub async fn list_audit_logs(
     Path(id): Path<Uuid>,
-    Query(params): Query<ListNotificationsParams>,
+    Query(params): Query<PaginationParams>,
     State(app_state): State<RustCareServer>,
 ) -> Result<Json<ApiResponse<Vec<NotificationAuditLog>>>, ApiError> {
-    let limit = params.limit.unwrap_or(50);
-    let offset = params.offset.unwrap_or(0);
-    
+    let limit = params.limit() as i64;
+    let offset = params.offset() as i64;
+
     let result = sqlx::query_as::<_, NotificationAuditLog>(
         r#"
         SELECT 
@@ -585,21 +611,23 @@ pub async fn list_audit_logs(
         ORDER BY nal.created_at DESC
         LIMIT $2
         OFFSET $3
-        "#
+        "#,
     )
     .bind(id)
     .bind(limit)
     .bind(offset)
     .fetch_all(&app_state.db_pool)
     .await;
-    
+
     match result {
         Ok(logs) => Ok(Json(api_success(logs))),
-        Err(e) => Err(ApiError::internal(format!("Failed to fetch audit logs: {}", e)))
+        Err(e) => Err(ApiError::internal(format!(
+            "Failed to fetch audit logs: {}",
+            e
+        ))),
     }
 }
 
 // Note: Audit logging is now handled by AuditService
 // The old log_notification_action function has been removed
 // All audit logging now uses AuditService::log_notification_action()
-

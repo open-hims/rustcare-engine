@@ -1,16 +1,17 @@
+use crate::error::{api_success, ApiError, ApiResponse};
+use crate::middleware::AuthContext;
+use crate::server::RustCareServer;
+use crate::services::AuditService;
+use crate::types::pagination::PaginationParams;
+use crate::utils::query_builder::PaginatedQuery;
+use crate::{validate_length, validate_required, validate_email, validate_field, validation::RequestValidation};
 use axum::{
     extract::{Path, State},
     Json,
 };
 use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
-use utoipa::{ToSchema, IntoParams};
-use crate::server::RustCareServer;
-use crate::middleware::AuthContext;
-use crate::types::pagination::PaginationParams;
-use crate::utils::query_builder::PaginatedQuery;
-use crate::validation::RequestValidation;
-use crate::services::AuditService;
 
 /// Organization with setup configuration
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -154,7 +155,12 @@ pub struct CreateRoleRequest {
 impl RequestValidation for CreateRoleRequest {
     fn validate(&self) -> Result<(), ApiError> {
         validate_required!(self.name, "Role name is required");
-        validate_length!(self.name, 1, 100, "Role name must be between 1 and 100 characters");
+        validate_length!(
+            self.name,
+            1,
+            100,
+            "Role name must be between 1 and 100 characters"
+        );
         Ok(())
     }
 }
@@ -165,22 +171,30 @@ impl RequestValidation for OrganizationSetupRequest {
         validate_required!(self.organization_type, "Organization type is required");
         validate_required!(self.country, "Country is required");
         validate_required!(self.timezone, "Timezone is required");
-        
-        validate_length!(self.name, 1, 200, "Name must be between 1 and 200 characters");
-        
+
+        validate_length!(
+            self.name,
+            1,
+            200,
+            "Name must be between 1 and 200 characters"
+        );
+
         // Validate organization_type
         let valid_types = ["clinic", "hospital", "practice", "pharmacy", "lab", "other"];
         validate_field!(
             self.organization_type,
             valid_types.contains(&self.organization_type.as_str()),
-            format!("Organization type must be one of: {}", valid_types.join(", "))
+            format!(
+                "Organization type must be one of: {}",
+                valid_types.join(", ")
+            )
         );
-        
+
         // Validate email if provided
         if let Some(ref email) = self.email {
             validate_email!(email, "Invalid email format");
         }
-        
+
         Ok(())
     }
 }
@@ -219,6 +233,29 @@ pub struct ListOrganizationsParams {
     pub pagination: PaginationParams,
 }
 
+/// Internal struct for database row mapping
+#[derive(sqlx::FromRow)]
+struct OrganizationRow {
+    id: Uuid,
+    name: String,
+    slug: String,
+    description: Option<String>,
+    contact_email: Option<String>,
+    contact_phone: Option<String>,
+    website_url: Option<String>,
+    address_line1: Option<String>,
+    city: Option<String>,
+    state_province: Option<String>,
+    postal_code: Option<String>,
+    country: Option<String>,
+    settings: serde_json::Value,
+    #[allow(dead_code)]
+    subscription_tier: String,
+    is_active: bool,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+}
+
 /// List organizations
 #[utoipa::path(
     get,
@@ -237,15 +274,15 @@ pub async fn list_organizations(
     State(server): State<RustCareServer>,
     auth: AuthContext,
 ) -> Result<Json<crate::error::ApiResponse<Vec<Organization>>>, crate::error::ApiError> {
-    use crate::error::{ApiError, api_success};
-    
+    use crate::error::{api_success, ApiError};
+
     let mut query_builder = PaginatedQuery::new(
         "SELECT \
             id, name, slug, description, contact_email, contact_phone, \
             website_url, address_line1, city, state_province, postal_code, country, \
             settings, subscription_tier, is_active, created_at, updated_at \
          FROM organizations \
-         WHERE deleted_at IS NULL"
+         WHERE deleted_at IS NULL",
     );
 
     query_builder
@@ -253,15 +290,15 @@ pub async fn list_organizations(
         .order_by("created_at", "DESC")
         .paginate(None, None);
 
-    let orgs = query_builder.build_query_as::<(Uuid, String, String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, serde_json::Value, String, bool, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)>()
+    let orgs = query_builder
+        .build_query_as::<OrganizationRow>()
         .fetch_all(&server.db_pool)
         .await
         .map_err(|e| ApiError::internal(format!("Failed to fetch organizations: {}", e)))?;
 
     let mut organizations = Vec::new();
     for org in orgs {
-        let (id, name, slug, description, contact_email, contact_phone, website_url, address_line1, city, state_province, postal_code, country, settings, _subscription_tier, is_active, created_at, updated_at) = org;
-        let settings_obj = settings.as_object();
+        let settings_obj = org.settings.as_object();
         let org_type = settings_obj
             .and_then(|s| s.get("organization_type"))
             .and_then(|v| v.as_str())
@@ -272,37 +309,46 @@ pub async fn list_organizations(
             .and_then(|v| v.as_str())
             .unwrap_or("UTC")
             .to_string();
-        let license_number = settings_obj.and_then(|s| s.get("license_number")).and_then(|v| v.as_str()).map(|s| s.to_string());
-        let license_authority = settings_obj.and_then(|s| s.get("license_authority")).and_then(|v| v.as_str()).map(|s| s.to_string());
-        let license_valid_until = settings_obj.and_then(|s| s.get("license_valid_until")).and_then(|v| v.as_str()).map(|s| s.to_string());
+        let license_number = settings_obj
+            .and_then(|s| s.get("license_number"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let license_authority = settings_obj
+            .and_then(|s| s.get("license_authority"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let license_valid_until = settings_obj
+            .and_then(|s| s.get("license_valid_until"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
 
         organizations.push(Organization {
-            id,
-            name,
-            slug,
+            id: org.id,
+            name: org.name,
+            slug: org.slug,
             organization_type: org_type,
-            description,
-            email: contact_email,
-            phone: contact_phone,
-            website: website_url,
-            address: address_line1,
-            city,
-            state: state_province,
-            postal_code,
-            country: country.unwrap_or_else(|| "US".to_string()),
+            description: org.description,
+            email: org.contact_email,
+            phone: org.contact_phone,
+            website: org.website_url,
+            address: org.address_line1,
+            city: org.city,
+            state: org.state_province,
+            postal_code: org.postal_code,
+            country: org.country.unwrap_or_else(|| "US".to_string()),
             timezone,
             license_number,
             license_authority,
             license_valid_until,
             compliance_frameworks: Vec::new(),
             geographic_regions: Vec::new(),
-            settings,
-            is_active,
-            created_at: created_at.to_rfc3339(),
-            updated_at: updated_at.to_rfc3339(),
+            settings: org.settings,
+            is_active: org.is_active,
+            created_at: org.created_at.to_rfc3339(),
+            updated_at: org.updated_at.to_rfc3339(),
         });
     }
-    
+
     Ok(Json(api_success(organizations)))
 }
 
@@ -324,23 +370,24 @@ pub async fn list_organizations(
 )]
 pub async fn create_organization(
     State(server): State<RustCareServer>,
-    Json(request): Json<OrganizationSetupRequest>,
     auth: AuthContext,
+    Json(request): Json<OrganizationSetupRequest>,
 ) -> Result<Json<crate::error::ApiResponse<Organization>>, crate::error::ApiError> {
-    use crate::error::{ApiError, api_success};
-    
+    use crate::error::{api_success, ApiError};
+
     // Validate request
     request.validate()?;
-    
+
     // Generate slug from name
-    let slug = request.name
+    let slug = request
+        .name
         .to_lowercase()
         .trim()
         .replace(|c: char| !c.is_alphanumeric() && c != '-', "-")
         .replace("--", "-")
         .trim_matches('-')
         .to_string();
-    
+
     // Validate slug uniqueness
     let existing_org = sqlx::query!(
         "SELECT id FROM organizations WHERE slug = $1 AND deleted_at IS NULL",
@@ -349,23 +396,37 @@ pub async fn create_organization(
     .fetch_optional(&server.db_pool)
     .await
     .map_err(|e| ApiError::internal(format!("Failed to check existing organization: {}", e)))?;
-    
+
     if existing_org.is_some() {
-        return Err(ApiError::conflict("An organization with this name already exists"));
+        return Err(ApiError::conflict(
+            "An organization with this name already exists",
+        ));
     }
-    
+
     let org_id = Uuid::new_v4();
-    
+
     // Prepare settings with organization type
     let mut settings = request.settings.unwrap_or_else(|| serde_json::json!({}));
     if let Some(obj) = settings.as_object_mut() {
-        obj.insert("organization_type".to_string(), serde_json::json!(request.organization_type));
-        obj.insert("license_number".to_string(), serde_json::json!(request.license_number));
-        obj.insert("license_authority".to_string(), serde_json::json!(request.license_authority));
-        obj.insert("license_valid_until".to_string(), serde_json::json!(request.license_valid_until));
+        obj.insert(
+            "organization_type".to_string(),
+            serde_json::json!(request.organization_type),
+        );
+        obj.insert(
+            "license_number".to_string(),
+            serde_json::json!(request.license_number),
+        );
+        obj.insert(
+            "license_authority".to_string(),
+            serde_json::json!(request.license_authority),
+        );
+        obj.insert(
+            "license_valid_until".to_string(),
+            serde_json::json!(request.license_valid_until),
+        );
         obj.insert("timezone".to_string(), serde_json::json!(request.timezone));
     }
-    
+
     // Create organization
     sqlx::query!(
         r#"
@@ -393,7 +454,7 @@ pub async fn create_organization(
     .execute(&server.db_pool)
     .await
     .map_err(|e| ApiError::internal(format!("Failed to create organization: {}", e)))?;
-    
+
     // Auto-detect geographic regions based on country
     let mut geographic_regions = Vec::new();
     if request.auto_assign_compliance {
@@ -412,10 +473,10 @@ pub async fn create_organization(
         .fetch_all(&server.db_pool)
         .await
         .unwrap_or_default();
-        
+
         geographic_regions = regions.into_iter().map(|r| r.id).collect();
     }
-    
+
     // Auto-assign compliance frameworks based on country jurisdiction
     let mut compliance_frameworks = Vec::new();
     if request.auto_assign_compliance {
@@ -433,10 +494,10 @@ pub async fn create_organization(
         .fetch_all(&server.db_pool)
         .await
         .unwrap_or_default();
-        
+
         compliance_frameworks = frameworks.into_iter().map(|f| f.id).collect();
     }
-    
+
     tracing::info!(
         org_id = %org_id,
         slug = %slug,
@@ -444,12 +505,12 @@ pub async fn create_organization(
         frameworks = compliance_frameworks.len(),
         "Successfully created organization with auto-assigned compliance"
     );
-    
+
     let organization = Organization {
         id: org_id,
-        name: request.name,
+        name: request.name.clone(),
         slug,
-        organization_type: request.organization_type,
+        organization_type: request.organization_type.clone(),
         description: request.description,
         email: request.email,
         phone: request.phone,
@@ -473,13 +534,15 @@ pub async fn create_organization(
 
     // Log the creation using AuditService
     let audit_service = AuditService::new(server.db_pool.clone());
-    let _ = audit_service.log_general_action(
-        &auth,
-        "organization",
-        org_id,
-        "created",
-        Some(serde_json::json!({"name": request.name, "type": request.organization_type})),
-    ).await;
+    let _ = audit_service
+        .log_general_action(
+            &auth,
+            "organization",
+            org_id,
+            "created",
+            Some(serde_json::json!({"name": request.name, "type": request.organization_type})),
+        )
+        .await;
 
     Ok(Json(api_success(organization)))
 }
@@ -505,8 +568,8 @@ pub async fn list_organization_roles(
     State(server): State<RustCareServer>,
     Path(org_id): Path<Uuid>,
 ) -> Result<Json<crate::error::ApiResponse<Vec<Role>>>, crate::error::ApiError> {
-    use crate::error::{ApiError, api_success};
-    
+    use crate::error::{api_success, ApiError};
+
     // Query roles for the organization
     let roles_data = sqlx::query!(
         r#"
@@ -520,7 +583,7 @@ pub async fn list_organization_roles(
     .fetch_all(&server.db_pool)
     .await
     .map_err(|e| ApiError::internal(format!("Failed to fetch roles: {}", e)))?;
-    
+
     let mut roles = Vec::new();
     for role_data in roles_data {
         // Fetch permissions for this role
@@ -537,9 +600,9 @@ pub async fn list_organization_roles(
         .await
         .map(|perms| perms.into_iter().map(|p| p.name).collect())
         .unwrap_or_default();
-        
+
         let code = role_data.name.to_lowercase().replace(' ', "_");
-        
+
         roles.push(Role {
             id: role_data.id,
             organization_id: role_data.organization_id.unwrap_or(org_id),
@@ -559,7 +622,7 @@ pub async fn list_organization_roles(
             updated_at: role_data.created_at.to_rfc3339(),
         });
     }
-    
+
     Ok(Json(api_success(roles)))
 }
 
@@ -584,15 +647,15 @@ pub async fn list_organization_roles(
 )]
 pub async fn create_organization_role(
     State(server): State<RustCareServer>,
+    auth: AuthContext,
     Path(org_id): Path<Uuid>,
     Json(request): Json<CreateRoleRequest>,
-    auth: AuthContext,
 ) -> Result<Json<crate::error::ApiResponse<Role>>, crate::error::ApiError> {
-    use crate::error::{ApiError, api_success};
-    
+    use crate::error::{api_success, ApiError};
+
     // Validate request
     request.validate()?;
-    
+
     // Check for duplicate role name in organization
     let existing_role = sqlx::query!(
         "SELECT id FROM roles WHERE name = $1 AND organization_id = $2",
@@ -602,13 +665,15 @@ pub async fn create_organization_role(
     .fetch_optional(&server.db_pool)
     .await
     .map_err(|e| ApiError::internal(format!("Failed to check existing role: {}", e)))?;
-    
+
     if existing_role.is_some() {
-        return Err(ApiError::conflict("A role with this name already exists in the organization"));
+        return Err(ApiError::conflict(
+            "A role with this name already exists in the organization",
+        ));
     }
-    
+
     let role_id = Uuid::new_v4();
-    
+
     // Create role
     let role_record = sqlx::query!(
         r#"
@@ -624,7 +689,7 @@ pub async fn create_organization_role(
     .fetch_one(&server.db_pool)
     .await
     .map_err(|e| ApiError::internal(format!("Failed to create role: {}", e)))?;
-    
+
     // Create/fetch permissions and associate with role
     let mut created_permissions = Vec::new();
     for perm_name in &request.permissions {
@@ -642,7 +707,7 @@ pub async fn create_organization_role(
         .fetch_one(&server.db_pool)
         .await
         .map_err(|e| ApiError::internal(format!("Failed to create permission: {}", e)))?;
-        
+
         // Associate permission with role
         sqlx::query!(
             r#"
@@ -655,11 +720,13 @@ pub async fn create_organization_role(
         )
         .execute(&server.db_pool)
         .await
-        .map_err(|e| ApiError::internal(format!("Failed to associate permission with role: {}", e)))?;
-        
+        .map_err(|e| {
+            ApiError::internal(format!("Failed to associate permission with role: {}", e))
+        })?;
+
         created_permissions.push(perm.name);
     }
-    
+
     tracing::info!(
         role_id = %role_id,
         role_name = %request.name,
@@ -667,9 +734,9 @@ pub async fn create_organization_role(
         permissions_count = created_permissions.len(),
         "Successfully created role with permissions"
     );
-    
+
     let code = request.name.to_lowercase().replace(' ', "_");
-    
+
     let role = Role {
         id: role_record.id,
         organization_id: role_record.organization_id.unwrap_or(org_id),
@@ -691,13 +758,15 @@ pub async fn create_organization_role(
 
     // Log the creation using AuditService
     let audit_service = AuditService::new(server.db_pool.clone());
-    let _ = audit_service.log_general_action(
-        &auth,
-        "role",
-        role_id,
-        "created",
-        Some(serde_json::json!({"name": request.name, "org_id": org_id})),
-    ).await;
+    let _ = audit_service
+        .log_general_action(
+            &auth,
+            "role",
+            role_id,
+            "created",
+            Some(serde_json::json!({"name": request.name, "org_id": org_id})),
+        )
+        .await;
 
     Ok(Json(api_success(role)))
 }
@@ -716,7 +785,7 @@ pub async fn get_role_templates(
     State(_server): State<RustCareServer>,
 ) -> Result<Json<crate::error::ApiResponse<Vec<serde_json::Value>>>, crate::error::ApiError> {
     use crate::error::api_success;
-    
+
     let templates = vec![
         serde_json::json!({
             "name": "Physician",
@@ -775,7 +844,7 @@ pub async fn get_role_templates(
             ]
         }),
     ];
-    
+
     Ok(Json(api_success(templates)))
 }
 
@@ -801,7 +870,7 @@ pub async fn list_organization_employees(
     Path(org_id): Path<Uuid>,
     auth: AuthContext,
 ) -> Result<Json<crate::error::ApiResponse<Vec<Employee>>>, crate::error::ApiError> {
-    use crate::error::{ApiError, api_success};
+    use crate::error::{api_success, ApiError};
 
     if auth.organization_id != org_id {
         return Err(ApiError::authorization("Access denied"));
@@ -852,8 +921,8 @@ pub async fn assign_employee_role(
     Path((org_id, employee_id)): Path<(Uuid, Uuid)>,
     Json(request): Json<AssignRoleRequest>,
 ) -> Result<Json<crate::error::ApiResponse<Vec<ZanzibarTuple>>>, crate::error::ApiError> {
-    use crate::error::{ApiError, api_success};
-    
+    use crate::error::{api_success, ApiError};
+
     // Validate that role exists and belongs to the organization
     let role = sqlx::query!(
         "SELECT id, name FROM roles WHERE id = $1 AND organization_id = $2",
@@ -862,14 +931,9 @@ pub async fn assign_employee_role(
     )
     .fetch_optional(&server.db_pool)
     .await
-    .map_err(|e| ApiError::internal(format!("Failed to fetch role: {}", e)))?;
-    
-    if role.is_none() {
-        return Err(ApiError::not_found("role"));
-    }
-    
-    let role = role.unwrap();
-    
+    .map_err(|e| ApiError::internal(format!("Failed to fetch role: {}", e)))?
+    .ok_or_else(|| ApiError::not_found("role"))?;
+
     // Validate that user/employee exists
     let user = sqlx::query!(
         "SELECT id, email FROM users WHERE id = $1",
@@ -877,23 +941,22 @@ pub async fn assign_employee_role(
     )
     .fetch_optional(&server.db_pool)
     .await
-    .map_err(|e| ApiError::internal(format!("Failed to fetch user: {}", e)))?;
-    
-    if user.is_none() {
-        return Err(ApiError::not_found("employee"));
-    }
-    
-    let user = user.unwrap();
-    
+    .map_err(|e| ApiError::internal(format!("Failed to fetch user: {}", e)))?
+    .ok_or_else(|| ApiError::not_found("employee"))?;
+
     // Parse optional expiration date
-    let expires_at = request.valid_until.as_ref()
+    let expires_at = request
+        .valid_until
+        .as_ref()
         .map(|date_str| {
             chrono::DateTime::parse_from_rfc3339(date_str)
                 .map(|dt| dt.with_timezone(&chrono::Utc))
-                .map_err(|_| ApiError::validation("Invalid valid_until date format. Expected RFC3339."))
+                .map_err(|_| {
+                    ApiError::validation("Invalid valid_until date format. Expected RFC3339.")
+                })
         })
         .transpose()?;
-    
+
     // Create Zanzibar tuple for role membership
     // Pattern: user:USER_ID#member@role:ROLE_ID
     let tuple_id = Uuid::new_v4();
@@ -927,7 +990,7 @@ pub async fn assign_employee_role(
     .fetch_one(&server.db_pool)
     .await
     .map_err(|e| ApiError::internal(format!("Failed to create Zanzibar tuple: {}", e)))?;
-    
+
     tracing::info!(
         tuple_id = %tuple_id,
         user_id = %user.id,
@@ -935,7 +998,7 @@ pub async fn assign_employee_role(
         org_id = %org_id,
         "Successfully assigned role to user via Zanzibar tuple"
     );
-    
+
     // Return created tuple
     let tuples = vec![ZanzibarTuple {
         subject_namespace: "user".to_string(),
@@ -948,7 +1011,7 @@ pub async fn assign_employee_role(
         object_id: role.id.to_string(),
         expires_at: expires_at.map(|dt| dt.to_rfc3339()),
     }];
-    
+
     Ok(Json(api_success(tuples)))
 }
 
@@ -974,7 +1037,7 @@ pub async fn list_organization_patients(
     Path(org_id): Path<Uuid>,
     auth: AuthContext,
 ) -> Result<Json<crate::error::ApiResponse<Vec<Patient>>>, crate::error::ApiError> {
-    use crate::error::{ApiError, api_success};
+    use crate::error::{api_success, ApiError};
 
     if auth.organization_id != org_id {
         return Err(ApiError::authorization("Access denied"));
@@ -1024,7 +1087,7 @@ pub async fn create_organization_patient(
     Json(_request): Json<serde_json::Value>, // TODO: Define proper request type
 ) -> Result<Json<crate::error::ApiResponse<Patient>>, crate::error::ApiError> {
     use crate::error::api_success;
-    
+
     // TODO: Implement patient creation with Zanzibar access control setup
     let patient = Patient {
         id: Uuid::new_v4(),

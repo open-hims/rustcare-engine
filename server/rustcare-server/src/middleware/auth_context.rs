@@ -3,7 +3,7 @@
 //! This module provides automatic extraction of authentication context from JWT tokens,
 //! eliminating the need for manual token parsing and placeholder user IDs.
 
-use axum::extract::{FromRequestParts, RequestParts};
+use axum::extract::FromRequestParts;
 use axum::http::{header::AUTHORIZATION, request::Parts, Method, HeaderMap};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -34,16 +34,16 @@ pub struct AuthContext {
     /// Request context (automatically extracted)
     pub request: RequestContext,
     /// Zanzibar authorization engine (optional, for permission checks)
-    #[serde(skip)]
+    // #[serde(skip)] - removed as not derived
     pub zanzibar_engine: Option<Arc<dyn ZanzibarCheck>>,
     /// Rate limiter (for checking remaining requests)
-    #[serde(skip)]
+    // #[serde(skip)] - removed as not derived
     pub(crate) rate_limiter: Option<Arc<crate::middleware::RateLimiter>>,
 }
 
 /// Trait for Zanzibar permission checks
 #[async_trait]
-pub trait ZanzibarCheck: Send + Sync {
+pub trait ZanzibarCheck: Send + Sync + std::fmt::Debug {
     /// Check if user has permission to perform action on resource
     async fn check_permission(
         &self,
@@ -140,7 +140,7 @@ impl AuthContext {
             // Fallback to simple permission check from JWT claims
             let permission_str = format!("{}:{}", resource_type, permission);
             Ok(self.permissions.contains(&permission_str) || 
-               self.permissions.contains(permission))
+               self.permissions.iter().any(|p| p == permission))
         }
     }
     
@@ -165,8 +165,7 @@ impl AuthContext {
 
 /// Extract and validate JWT token from Authorization header
 fn extract_token(parts: &Parts) -> Result<String, ApiError> {
-    let headers = parts.headers
-        .ok_or_else(|| ApiError::authentication("No headers available"))?;
+        let headers = &parts.headers;
     
     let auth_header = headers
         .get(AUTHORIZATION)
@@ -270,7 +269,7 @@ where
     type Rejection = ApiError;
     
     async fn from_request_parts(
-        parts: &mut RequestParts<'_, S>,
+        parts: &mut Parts,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
         // Extract RequestContext first (for same-site validation)
@@ -308,12 +307,9 @@ where
             
             // Perform CSRF validation for state-changing methods
             if let Some(ref validator) = state.csrf_validator {
-                let method = parts.method
-                    .ok_or_else(|| ApiError::internal("Method not available"))?;
-                let headers = parts.headers
-                    .as_ref()
-                    .ok_or_else(|| ApiError::internal("Headers not available"))?;
-                validator.validate(&method, headers, auth_ctx.request.origin.as_ref())?;
+                let method = &parts.method;
+                let headers = &parts.headers;
+                validator.validate(method, headers, auth_ctx.request.origin.as_ref())?;
             }
             
             // Enforce strict same-site if configured

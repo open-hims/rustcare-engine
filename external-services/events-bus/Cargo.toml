@@ -29,8 +29,8 @@ async-nats = "0.33"
 # Event bus specific dependencies
 tokio-stream = "0.1"
 futures = "0.3"
-dashmap = "5.5"
+dashmap = { workspace = true }
 crossbeam-channel = "0.5"
 rdkafka = { version = "0.36", features = ["cmake-build"] }
 lapin = "2.3"
-redis = { version = "0.24", features = ["aio", "tokio-comp"] }
+redis = { workspace = true }

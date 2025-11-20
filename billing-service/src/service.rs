@@ -1,6 +1,5 @@
-use crate::error::{BillingError, BillingResult};
+use crate::error::BillingResult;
 use crate::models::*;
-use rust_decimal::Decimal;
 use uuid::Uuid;
 
 /// Billing service

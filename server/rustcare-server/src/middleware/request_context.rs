@@ -6,7 +6,7 @@
 //! - Request metadata collection
 //! - Security headers validation
 
-use axum::extract::{FromRequestParts, RequestParts};
+use axum::extract::FromRequestParts;
 use axum::http::{header, request::Parts, HeaderMap};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -44,7 +44,7 @@ impl RequestContext {
             remote_addr: None,
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs(),
             same_site_valid: true, // Default to true, will be validated
         }
@@ -86,7 +86,7 @@ impl RequestContext {
             remote_addr,
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs(),
             same_site_valid,
         }
@@ -180,12 +180,10 @@ where
     type Rejection = ApiError;
     
     async fn from_request_parts(
-        parts: &mut RequestParts<'_, S>,
+        parts: &mut Parts,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let headers = parts.headers
-            .as_ref()
-            .ok_or_else(|| ApiError::internal("No headers available"))?;
+        let headers = &parts.headers;
         
         // Extract remote address from extensions or headers
         let remote_addr = parts

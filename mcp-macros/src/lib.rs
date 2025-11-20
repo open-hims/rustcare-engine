@@ -5,7 +5,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, ItemFn, Meta, Lit, NestedMeta};
+use syn::{parse_macro_input, ItemFn, Meta, Lit, punctuated::Punctuated, Token};
 
 /// Decorator macro to mark a handler function as an MCP tool
 ///
@@ -27,7 +27,7 @@ use syn::{parse_macro_input, ItemFn, Meta, Lit, NestedMeta};
 #[proc_macro_attribute]
 pub fn mcp_tool(args: TokenStream, input: TokenStream) -> TokenStream {
     let input_fn = parse_macro_input!(input as ItemFn);
-    let attr_args = parse_macro_input!(args as syn::AttributeArgs);
+    let attr_args = parse_macro_input!(args with Punctuated<Meta, Token![,]>::parse_terminated);
     
     // Parse the mcp_tool attributes
     let mut tool_name = None;
@@ -39,7 +39,7 @@ pub fn mcp_tool(args: TokenStream, input: TokenStream) -> TokenStream {
     let mut render_type = None;
     
     for arg in attr_args {
-        if let NestedMeta::Meta(Meta::NameValue(meta)) = arg {
+        if let Meta::NameValue(meta) = arg {
             let ident = meta.path.get_ident().map(|i| i.to_string());
             
             if let Some(ident_str) = ident {

@@ -7,11 +7,11 @@
 //! - Query rewriting to enforce security policies
 
 use auth_zanzibar::{
-    AuthorizationEngine, Subject, Relation, Object, FieldVisibility, RlsContextData,
+    AuthorizationEngine, Subject, Relation, Object, FieldVisibility,
 };
 use crate::{
     rls::RlsContext,
-    encryption::{SensitivityLevel, MaskPattern, SensitiveField},
+    encryption::MaskPattern,
 };
 use std::sync::Arc;
 use uuid::Uuid;

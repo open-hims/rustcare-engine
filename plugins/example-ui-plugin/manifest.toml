@@ -1,0 +1,77 @@
+# Plugin Manifest for Example UI Plugin
+# This manifest describes the plugin metadata and configuration
+
+[plugin]
+id = "550e8400-e29b-41d4-a716-446655440000"
+name = "example-ui-plugin"
+version = "0.1.0"
+description = "Example WASM plugin that registers UI components and provides health calculation functions"
+author = "RustCare Team"
+api_version = "1.0.0"
+plugin_type = "wasm"
+entry_point = "example_ui_plugin.wasm"
+
+[permissions]
+# Permissions required by this plugin
+- "ui.components.register"
+- "ui.components.read"
+- "health.data.read"
+- "health.data.calculate"
+
+[dependencies]
+# Plugin dependencies (other plugins or system components)
+# None for this example
+
+[ui_components]
+# UI components this plugin registers
+[[ui_components.component]]
+name = "PatientDashboardWidget"
+type = "widget"
+category = "dashboard"
+route = "/dashboard/patient-widget"
+icon = "Users"
+description = "Custom patient dashboard widget"
+
+[[ui_components.component]]
+name = "HealthMetricsChart"
+type = "component"
+category = "analytics"
+icon = "Activity"
+description = "Interactive health metrics visualization"
+
+[[ui_components.component]]
+name = "QuickActionButton"
+type = "button"
+category = "actions"
+icon = "Zap"
+description = "Quick action button for common tasks"
+
+[functions]
+# Functions exposed by this plugin
+[[functions.function]]
+name = "calculate_bmi"
+description = "Calculate Body Mass Index from weight and height"
+parameters = { weight_kg = "f64", height_m = "f64" }
+returns = { bmi = "f64", category = "string" }
+
+[[functions.function]]
+name = "format_health_data"
+description = "Format health metrics data for display"
+parameters = { systolic = "u32", diastolic = "u32", heart_rate = "u32", temperature = "f64" }
+returns = { formatted = "object" }
+
+[[functions.function]]
+name = "validate_patient_data"
+description = "Validate patient data for errors and warnings"
+parameters = { age = "u32", weight_kg = "f64", height_cm = "f64", email = "string" }
+returns = { valid = "bool", errors = "array", warnings = "array" }
+
+[security]
+trust_level = "verified"
+signature_required = true
+sandbox_enabled = true
+
+[resources]
+max_memory_mb = 64
+max_execution_time_ms = 5000
+

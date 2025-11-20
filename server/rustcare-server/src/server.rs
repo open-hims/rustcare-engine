@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use sqlx::{Pool, Postgres};
-use database_layer::{GeographicRepository, ComplianceRepository};
+use database_layer::{GeographicRepository, ComplianceRepository, QueryExecutor, DatabasePool, RlsContext};
 use secrets_service::SecretsManager;
 use crypto::kms::KeyManagementService;
 use auth_zanzibar::{AuthorizationEngine, repository::PostgresTupleRepository};
@@ -25,8 +25,8 @@ pub struct RustCareServer {
     pub kms_provider: Option<Arc<dyn KeyManagementService>>,
     /// Authentication gateway instance (placeholder)
     pub auth_gateway: Arc<()>,
-    /// Plugin runtime instance (placeholder)
-    pub plugin_runtime: Arc<RwLock<()>>,
+    /// Plugin runtime instance
+    pub plugin_runtime: Arc<plugin_runtime_core::LifecycleManager>,
     /// Audit engine instance (placeholder)
     pub audit_engine: Arc<()>,
     /// Database layer instance (placeholder)
@@ -97,8 +97,14 @@ impl RustCareServer {
         // Initialize auth gateway (placeholder)
         let auth_gateway = Arc::new(());
 
-        // Initialize plugin runtime (placeholder)
-        let plugin_runtime = Arc::new(RwLock::new(()));
+        // Initialize plugin runtime
+        let plugin_runtime_config = plugin_runtime_core::LifecycleConfig {
+            max_concurrent_plugins: 10,
+            lifecycle_timeout_seconds: 30,
+            auto_cleanup_enabled: true,
+            cleanup_interval_seconds: 300,
+        };
+        let plugin_runtime = Arc::new(plugin_runtime_core::LifecycleManager::new(plugin_runtime_config));
 
         // Initialize audit engine (placeholder)
         let audit_engine = Arc::new(());
@@ -144,14 +150,22 @@ impl RustCareServer {
         self.config.hipaa_compliance
     }
 
-    /// Get plugin runtime instance (placeholder)
-    pub async fn get_plugin_runtime(&self) -> tokio::sync::RwLockReadGuard<'_, ()> {
-        self.plugin_runtime.read().await
+    /// Get plugin runtime instance
+    pub fn get_plugin_runtime(&self) -> Arc<plugin_runtime_core::LifecycleManager> {
+        self.plugin_runtime.clone()
     }
 
-    /// Get mutable plugin runtime instance (placeholder)
-    pub async fn get_plugin_runtime_mut(&self) -> tokio::sync::RwLockWriteGuard<'_, ()> {
-        self.plugin_runtime.write().await
+    /// Get QueryExecutor with optional RLS context
+    /// This is the preferred way to execute database queries
+    pub fn query_executor(&self) -> QueryExecutor {
+        let db_pool = DatabasePool::from_pool(self.db_pool.clone());
+        QueryExecutor::new(db_pool)
+    }
+
+    /// Get QueryExecutor with RLS context
+    pub fn query_executor_with_rls(&self, rls_context: RlsContext) -> QueryExecutor {
+        let db_pool = DatabasePool::from_pool(self.db_pool.clone());
+        QueryExecutor::new(db_pool).with_rls_context(rls_context)
     }
 
     /// Initialize secrets manager from environment configuration

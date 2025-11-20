@@ -84,7 +84,7 @@ pub fn lock_memory(data: &[u8]) -> MemoryResult<()> {
         if result == 0 {
             Ok(())
         } else {
-            let errno = *libc::__error();
+            let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
             match errno {
                 libc::ENOMEM => Err(MemoryError::PermissionDenied),
                 libc::EPERM => Err(MemoryError::PermissionDenied),
@@ -130,7 +130,8 @@ pub fn unlock_memory(data: &[u8]) -> MemoryResult<()> {
         if result == 0 {
             Ok(())
         } else {
-            Err(MemoryError::UnlockFailed(format!("errno: {}", *libc::__error())))
+            let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
+            Err(MemoryError::UnlockFailed(format!("errno: {}", errno)))
         }
     }
 }
@@ -177,7 +178,8 @@ pub fn protect_readonly(data: &[u8]) -> MemoryResult<()> {
         if result == 0 {
             Ok(())
         } else {
-            Err(MemoryError::ProtectFailed(format!("errno: {}", *libc::__error())))
+            let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
+            Err(MemoryError::ProtectFailed(format!("errno: {}", errno)))
         }
     }
 }
@@ -203,7 +205,8 @@ pub fn protect_readwrite(data: &mut [u8]) -> MemoryResult<()> {
         if result == 0 {
             Ok(())
         } else {
-            Err(MemoryError::ProtectFailed(format!("errno: {}", *libc::__error())))
+            let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
+            Err(MemoryError::ProtectFailed(format!("errno: {}", errno)))
         }
     }
 }

@@ -14,6 +14,14 @@ pub struct ZanzibarEngineWrapper {
     engine: Arc<AuthorizationEngine>,
 }
 
+impl std::fmt::Debug for ZanzibarEngineWrapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ZanzibarEngineWrapper")
+            .field("engine", &"<AuthorizationEngine>")
+            .finish()
+    }
+}
+
 impl ZanzibarEngineWrapper {
     /// Create a new wrapper around an AuthorizationEngine
     pub fn new(engine: Arc<AuthorizationEngine>) -> Self {

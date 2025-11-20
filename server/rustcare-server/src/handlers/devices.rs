@@ -9,13 +9,7 @@ use chrono::{DateTime, Utc};
 use utoipa::{ToSchema, IntoParams};
 
 use crate::{
-    error::{ApiError, ApiResponse, api_success},
-    server::RustCareServer,
-    middleware::AuthContext,
-    types::pagination::PaginationParams,
-    utils::query_builder::PaginatedQuery,
-    validation::RequestValidation,
-    services::AuditService,
+    error::{ApiError, ApiResponse, api_success}, middleware::AuthContext, server::RustCareServer, services::AuditService, types::pagination::PaginationParams, utils::query_builder::PaginatedQuery, validate_length, validate_required, validation::RequestValidation
 };
 
 // ============================================================================
@@ -95,7 +89,7 @@ pub struct GetDataQuery {
     pub limit: Option<i64>,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct DeviceResponse {
     pub id: Uuid,
     pub name: String,
@@ -179,8 +173,8 @@ pub async fn list_devices(
     );
     
     query_builder
-        .filter_eq("device_type", query.device_type.as_ref().map(|s| s.as_str()))
-        .filter_eq("status", query.status.as_ref().map(|s| s.as_str()))
+        .filter_eq("device_type", query.device_type.as_deref().map(str::to_owned))
+        .filter_eq("status", query.status.as_deref().map(str::to_owned))
         .order_by("created_at", "DESC")
         .paginate(query.pagination.page, query.pagination.page_size);
     
@@ -226,8 +220,8 @@ pub async fn list_devices(
 )]
 pub async fn register_device(
     State(server): State<RustCareServer>,
-    Json(req): Json<RegisterDeviceRequest>,
     auth: AuthContext,
+    Json(req): Json<RegisterDeviceRequest>,
 ) -> Result<(StatusCode, Json<ApiResponse<DeviceResponse>>), ApiError> {
     // Validate request
     req.validate()?;
@@ -298,8 +292,8 @@ pub async fn register_device(
             // Fallback if table doesn't exist yet
             let response = DeviceResponse {
                 id: device_id,
-                name: req.name,
-                device_type: req.device_type,
+                name: req.name.clone(),
+                device_type: req.device_type.clone(),
                 manufacturer: req.manufacturer,
                 model: req.model,
                 serial_number: req.serial_number,
@@ -387,9 +381,9 @@ pub async fn get_device(
 )]
 pub async fn update_device(
     State(server): State<RustCareServer>,
+    auth: AuthContext,
     Path(device_id): Path<Uuid>,
     Json(req): Json<UpdateDeviceRequest>,
-    auth: AuthContext,
 ) -> Result<Json<ApiResponse<DeviceResponse>>, ApiError> {
     // Validate request
     req.validate()?;
@@ -657,9 +651,9 @@ pub async fn get_device_data_history(
 )]
 pub async fn send_device_command(
     State(server): State<RustCareServer>,
+    auth: AuthContext,
     Path(device_id): Path<Uuid>,
     Json(req): Json<SendCommandRequest>,
-    auth: AuthContext,
 ) -> Result<(StatusCode, Json<ApiResponse<CommandResponse>>), ApiError> {
     // Verify device exists and belongs to organization
     let exists = sqlx::query_scalar::<_, bool>(

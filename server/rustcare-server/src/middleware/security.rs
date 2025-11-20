@@ -8,10 +8,8 @@
 //! - Adds security headers
 //! - Logs security events
 
-use axum::extract::{FromRequestParts, RequestParts};
 use axum::http::{header, HeaderMap, Method};
 use uuid::Uuid;
-use async_trait::async_trait;
 use std::sync::Arc;
 use std::collections::HashMap;
 use std::time::Instant;
@@ -49,9 +47,10 @@ struct RateLimitEntry {
 
 /// In-memory rate limiter (for single-instance deployments)
 /// For distributed systems, use Redis or similar
+#[derive(Debug)]
 pub struct RateLimiter {
     entries: Arc<RwLock<HashMap<String, RateLimitEntry>>>,
-    config: RateLimitConfig,
+    pub config: RateLimitConfig,
 }
 
 impl RateLimiter {
@@ -116,6 +115,7 @@ impl RateLimiter {
 }
 
 /// CSRF token validator
+#[derive(Debug, Clone)]
 pub struct CsrfValidator {
     /// Expected CSRF token header name
     pub header_name: String,
@@ -294,6 +294,7 @@ impl Default for SecurityConfig {
 /// Security middleware state stored in Axum extensions
 /// This is initialized when creating the router and provides
 /// rate limiting, CSRF validation, and security configuration
+#[derive(Clone)]
 pub struct SecurityMiddlewareState {
     pub rate_limiter: Option<Arc<RateLimiter>>,
     pub csrf_validator: Option<Arc<CsrfValidator>>,

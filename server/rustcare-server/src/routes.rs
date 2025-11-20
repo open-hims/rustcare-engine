@@ -5,7 +5,7 @@ use axum::{
     Router,
 };
 use crate::{
-    handlers::{health, auth, workflow, sync, permissions, geographic, compliance, organizations, devices, secrets, kms, healthcare, pharmacy, vendors, notifications, onboarding, ui_components}, // websocket temporarily disabled
+    handlers::{health, auth, workflow, sync, permissions, geographic, compliance, organizations, devices, secrets, kms, healthcare, pharmacy, vendors, notifications, onboarding, ui_components, plugins, forms}, // websocket temporarily disabled
     server::RustCareServer,
     openapi,
 };
@@ -309,6 +309,45 @@ pub fn ui_components_routes() -> Router<RustCareServer> {
         .route(paths::ui_components::COMPONENTS, get(ui_components::list_components))
 }
 
+/// Create plugin management routes
+/// 
+/// Plugin lifecycle and execution:
+/// - List installed plugins
+/// - Install new plugins
+/// - Load/unload plugins
+/// - Execute plugin functions
+/// - Plugin health checks
+pub fn plugin_routes() -> Router<RustCareServer> {
+    Router::new()
+        .route(paths::api_v1::PLUGINS, get(plugins::list_plugins))
+        .route(paths::api_v1::PLUGINS, post(plugins::install_plugin))
+        .route(paths::api_v1::PLUGIN_BY_ID, get(plugins::get_plugin))
+        .route(paths::api_v1::PLUGIN_BY_ID, delete(plugins::uninstall_plugin))
+        .route(paths::api_v1::PLUGIN_LOAD, post(plugins::load_plugin))
+        .route(paths::api_v1::PLUGIN_EXECUTE, post(plugins::execute_plugin))
+        .route(paths::api_v1::PLUGIN_STOP, post(plugins::stop_plugin))
+        .route(paths::api_v1::PLUGIN_HEALTH, get(plugins::plugin_health))
+}
+
+/// Create form builder routes
+/// 
+/// Dynamic form definitions and submissions:
+/// - Create/update/delete form definitions
+/// - List forms by module/entity type
+/// - Submit form data
+/// - Manage form submissions
+pub fn form_routes() -> Router<RustCareServer> {
+    Router::new()
+        .route(paths::api_v1::FORMS, get(forms::list_form_definitions))
+        .route(paths::api_v1::FORMS, post(forms::create_form_definition))
+        .route(paths::api_v1::FORM_BY_ID, get(forms::get_form_definition))
+        .route(paths::api_v1::FORM_BY_ID, put(forms::update_form_definition))
+        .route(paths::api_v1::FORM_BY_ID, delete(forms::delete_form_definition))
+        .route(paths::api_v1::FORM_BY_SLUG, get(forms::get_form_definition_by_slug))
+        .route(paths::api_v1::FORM_SUBMIT, post(forms::submit_form))
+        .route(paths::api_v1::FORM_SUBMISSIONS, get(forms::list_form_submissions))
+}
+
 /// Create API v1 routes
 pub fn api_v1_routes() -> Router<RustCareServer> {
     Router::new()
@@ -328,8 +367,9 @@ pub fn api_v1_routes() -> Router<RustCareServer> {
         .merge(notification_routes())
         .merge(onboarding_routes())
         .merge(ui_components_routes())
+        .merge(plugin_routes())
+        .merge(form_routes())
         // TODO: Add more API routes here:
-        // .nest("/plugins", plugin_routes())
         // .nest("/audit", audit_routes())
         // .nest("/patients", patient_routes())
         // .nest("/staff", staff_routes())

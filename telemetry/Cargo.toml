@@ -24,12 +24,12 @@ chrono = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 opentelemetry = { workspace = true }
-opentelemetry-jaeger = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+opentelemetry-otlp = { workspace = true }
 
 # Telemetry specific dependencies
-metrics = "0.21"
-metrics-exporter-prometheus = "0.13"
-opentelemetry-otlp = "0.14"
-opentelemetry-semantic-conventions = "0.13"
-sysinfo = "0.29"
+metrics = "0.23"
+metrics-exporter-prometheus = "0.15"
+opentelemetry-semantic-conventions = "0.16"
+sysinfo = "0.30"
 tokio-metrics = "0.3"

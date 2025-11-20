@@ -172,7 +172,7 @@ impl LocalDatabase {
         let user_id = config.user_id.clone();
         let user_email = config.user_email.clone();
         
-        let mut db = Self {
+        let db = Self {
             pool,
             node_id: config.node_id,
             audit_logger,

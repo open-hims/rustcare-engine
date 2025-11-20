@@ -33,6 +33,6 @@ auth-zanzibar = { path = "../auth-zanzibar" }
 telemetry = { path = "../telemetry" }
 
 # Gateway specific dependencies
-hyper = "1.0"
+hyper = { workspace = true }
 http = "1.0"
 headers = "0.4"

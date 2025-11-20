@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
+use utoipa::ToSchema;
 
 /// Main plugin API interface
 #[async_trait]
@@ -69,7 +70,7 @@ pub struct ApiInput {
 }
 
 /// API output data
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ApiOutput {
     /// Request ID (matches input)
     pub request_id: Uuid,
@@ -95,7 +96,7 @@ pub struct ExecutionContext {
 }
 
 /// Execution statistics
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ExecutionStatistics {
     /// Execution duration (milliseconds)
     pub duration_ms: u64,

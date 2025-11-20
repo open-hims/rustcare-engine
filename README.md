@@ -1,4 +1,127 @@
-# RustCare Engine Core
+# RustCare Engine
+
+[![Build Status](https://github.com/Open-Hims-HQ/rustcare-engine/workflows/CI/badge.svg)](https://github.com/Open-Hims-HQ/rustcare-engine/actions)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://opensource.org/licenses/AGPL-3.0)
+
+**HIPAA-compliant healthcare platform built with Rust**
+
+RustCare Engine is a high-performance, secure healthcare management system designed for hospitals, clinics, and healthcare organizations. Built with Rust for safety and performance, it provides a complete backend API for managing patients, appointments, medical records, billing, and more.
+
+## 🚀 Quick Start
+
+### Docker Compose (Recommended)
+
+```bash
+# Clone all repositories
+git clone https://github.com/Open-Hims-HQ/rustcare-engine.git
+git clone https://github.com/Open-Hims-HQ/rustcare-ui.git
+git clone https://github.com/Open-Hims-HQ/rustcare-infra.git
+
+# Navigate to infra directory
+cd rustcare-infra
+cp .env.example .env
+docker-compose up -d
+```
+
+See [QUICKSTART.md](QUICKSTART.md) for more options.
+
+## 📦 Installation
+
+### Binary Installation
+
+Download pre-built binaries from [Releases](https://github.com/Open-Hims-HQ/rustcare-engine/releases):
+
+```bash
+wget https://github.com/Open-Hims-HQ/rustcare-engine/releases/download/v0.1.0/rustcare-server-0.1.0-linux-x86_64.tar.gz
+tar -xzf rustcare-server-*.tar.gz
+cd rustcare-server-*/
+sudo ./scripts/install.sh
+```
+
+### Build from Source
+
+```bash
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Build release
+make release
+# or
+./scripts/build-release.sh
+```
+
+## 🏥 Features
+
+- **Multi-tenant Architecture**: Support for multiple organizations
+- **HIPAA Compliance**: Built-in security and audit logging
+- **Dynamic Form Builder**: Create custom forms for any workflow
+- **Plugin System**: Extend functionality with WASM plugins
+- **Role-Based Access Control**: Fine-grained permissions with Zanzibar
+- **Medical Records Management**: Secure EMR storage and retrieval
+- **Billing & Insurance**: Integrated billing and claims processing
+- **Pharmacy Management**: Prescription and inventory management
+- **Audit Trail**: Complete audit logging for compliance
+
+## 📚 Documentation
+
+- [Quick Start Guide](QUICKSTART.md)
+- [Deployment Guide](docs/DEPLOYMENT.md)
+- [API Reference](docs/API_REFERENCE.md)
+- [Form Builder Guide](docs/FORM_BUILDER_GUIDE.md)
+- [Security Guide](docs/SECURITY_DEPLOYMENT_GUIDE.md)
+
+## 🛠️ Development
+
+```bash
+# Run tests
+make test
+
+# Format code
+make fmt
+
+# Run linter
+make lint
+
+# Start development server
+make dev
+```
+
+## 📋 Requirements
+
+- **Rust**: 1.75+
+- **PostgreSQL**: 14+ (16 recommended)
+- **Redis**: 6+ (7 recommended)
+- **Linux/macOS**: x86_64 or ARM64
+
+## 🔒 Security
+
+RustCare Engine is designed with security as a top priority:
+
+- End-to-end encryption for sensitive data
+- Row-level security (RLS) for data isolation
+- Audit logging for all operations
+- HIPAA-compliant architecture
+- Regular security audits
+
+See [Security Guide](docs/SECURITY_DEPLOYMENT_GUIDE.md) for details.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## 📄 License
+
+This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+- **Issues**: [GitHub Issues](https://github.com/Open-Hims-HQ/rustcare-engine/issues)
+- **Documentation**: https://docs.rustcare.dev
+- **Email**: support@rustcare.dev
+
+---
+
+Built with ❤️ by the RustCare Team Core
 
 A comprehensive, enterprise-grade healthcare technology platform built in Rust, designed for security, scalability, and compliance in healthcare environments.
 

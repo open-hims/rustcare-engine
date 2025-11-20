@@ -15,6 +15,9 @@ use axum::{
     http::{StatusCode, header::{AUTHORIZATION, COOKIE}},
     body::Body,
 };
+use axum::extract::FromRequestParts;
+use axum::http::request::Parts;
+use async_trait::async_trait;
 use std::sync::Arc;
 use uuid::Uuid;
 use serde::{Serialize, Deserialize};
@@ -80,6 +83,24 @@ impl AuthContext {
     /// Check if step-up authentication is active
     pub fn has_step_up(&self) -> bool {
         self.step_up.unwrap_or(false)
+    }
+}
+
+// Implement FromRequestParts for AuthContext to allow using it as an extractor
+// This fixes the "Handler trait not satisfied" errors in route definitions
+#[async_trait]
+impl<S> FromRequestParts<S> for AuthContext
+where
+    S: Send + Sync,
+{
+    type Rejection = AuthError;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        parts
+            .extensions
+            .get::<AuthContext>()
+            .cloned()
+            .ok_or(AuthError::Unauthenticated)
     }
 }
 
@@ -217,28 +238,28 @@ pub async fn optional_auth_middleware(
             let validation = build_session_validation(&request);
             
             if let Ok(result) = auth_service.session_manager.validate_session(session_id, validation).await {
-                if result.valid && result.session.is_some() {
-                    let session = result.session.unwrap();
-                    
-                    if let Ok(user_id) = Uuid::parse_str(&session.user_id) {
-                        let permissions = load_user_permissions(&auth_service.permission_repo, user_id).await.unwrap_or_default();
-                        let roles = load_user_roles(&auth_service.permission_repo, user_id).await.unwrap_or_default();
-                        
-                        let auth_ctx = AuthContext {
-                            user_id,
-                            username: claims.sub.clone(),
-                            email: claims.email.clone(),
-                            organization_id: parse_uuid_opt(&session.metadata.get("organization_id")),
-                            roles,
-                            permissions,
-                            session_id: session.session_id.clone(),
-                            auth_method: session.auth_method.clone(),
-                            cert_serial: claims.cert_serial.clone(),
-                            step_up: claims.step_up,
-                        };
-                        
-                        request.extensions_mut().insert(auth_ctx);
-                        request.extensions_mut().insert(token_data.claims.clone());
+                if result.valid {
+                    if let Some(session) = result.session {
+                        if let Ok(user_id) = Uuid::parse_str(&session.user_id) {
+                            let permissions = load_user_permissions(&auth_service.permission_repo, user_id).await.unwrap_or_default();
+                            let roles = load_user_roles(&auth_service.permission_repo, user_id).await.unwrap_or_default();
+                            
+                            let auth_ctx = AuthContext {
+                                user_id,
+                                username: claims.sub.clone(),
+                                email: claims.email.clone(),
+                                organization_id: parse_uuid_opt(&session.metadata.get("organization_id")),
+                                roles,
+                                permissions,
+                                session_id: session.session_id.clone(),
+                                auth_method: session.auth_method.clone(),
+                                cert_serial: claims.cert_serial.clone(),
+                                step_up: claims.step_up,
+                            };
+                            
+                            request.extensions_mut().insert(auth_ctx);
+                            request.extensions_mut().insert(token_data.claims.clone());
+                        }
                     }
                 }
             }

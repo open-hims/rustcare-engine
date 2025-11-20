@@ -335,6 +335,21 @@ pub mod api_v1 {
     // Sync
     pub const SYNC_PULL: &str = "/api/v1/sync/pull";
     pub const SYNC_PUSH: &str = "/api/v1/sync/push";
+    
+    // Plugins
+    pub const PLUGINS: &str = "/api/v1/plugins";
+    pub const PLUGIN_BY_ID: &str = "/api/v1/plugins/{plugin_id}";
+    pub const PLUGIN_LOAD: &str = "/api/v1/plugins/{plugin_id}/load";
+    pub const PLUGIN_EXECUTE: &str = "/api/v1/plugins/{plugin_id}/execute";
+    pub const PLUGIN_STOP: &str = "/api/v1/plugins/{plugin_id}/stop";
+    pub const PLUGIN_HEALTH: &str = "/api/v1/plugins/{plugin_id}/health";
+    
+    // Forms
+    pub const FORMS: &str = "/api/v1/forms";
+    pub const FORM_BY_ID: &str = "/api/v1/forms/{form_id}";
+    pub const FORM_BY_SLUG: &str = "/api/v1/forms/slug/{form_slug}";
+    pub const FORM_SUBMIT: &str = "/api/v1/forms/submit";
+    pub const FORM_SUBMISSIONS: &str = "/api/v1/forms/{form_id}/submissions";
 }
 
 #[cfg(test)]

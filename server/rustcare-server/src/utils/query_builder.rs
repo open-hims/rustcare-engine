@@ -4,6 +4,7 @@
 //! across handlers, particularly for filtering, ordering, and pagination.
 
 use sqlx::{QueryBuilder, Postgres};
+use sqlx::query::QueryAs;
 use uuid::Uuid;
 
 /// Paginated query builder for consistent query construction
@@ -40,7 +41,7 @@ impl<'a> PaginatedQuery<'a> {
     /// Useful for queries that need a required parameter like `WHERE user_id = $1`
     pub fn new_with_base_filter<T>(base_query: &'static str, column: &str, value: T) -> Self
     where
-        T: sqlx::Encode<'_, Postgres> + Send + Sync,
+        T: for<'q> sqlx::Encode<'q, Postgres> + sqlx::Type<Postgres> + Send + Sync + 'static,
     {
         let mut query = QueryBuilder::new(base_query);
         query.push(format!(" WHERE {} = ", column));
@@ -55,7 +56,7 @@ impl<'a> PaginatedQuery<'a> {
     /// Add a required base filter (appends to existing WHERE clause)
     pub fn add_base_filter<T>(&mut self, column: &str, value: T) -> &mut Self
     where
-        T: sqlx::Encode<'_, Postgres> + Send + Sync,
+        T: for<'q> sqlx::Encode<'q, Postgres> + sqlx::Type<Postgres> + Send + Sync + 'static,
     {
         self.query.push(format!(" AND {} = ", column));
         self.query.push_bind(value);
@@ -65,7 +66,7 @@ impl<'a> PaginatedQuery<'a> {
     /// Add an equality filter (only if value is Some)
     pub fn filter_eq<T>(&mut self, column: &str, value: Option<T>) -> &mut Self
     where
-        T: sqlx::Encode<'_, Postgres> + Send + Sync,
+        T: for<'q> sqlx::Encode<'q, Postgres> + sqlx::Type<Postgres> + Send + Sync + 'static,
     {
         if let Some(val) = value {
             self.query.push(format!(" AND {} = ", column));
@@ -77,7 +78,7 @@ impl<'a> PaginatedQuery<'a> {
     /// Add a not-equal filter (only if value is Some)
     pub fn filter_ne<T>(&mut self, column: &str, value: Option<T>) -> &mut Self
     where
-        T: sqlx::Encode<'_, Postgres> + Send + Sync,
+        T: for<'q> sqlx::Encode<'q, Postgres> + sqlx::Type<Postgres> + Send + Sync + 'static,
     {
         if let Some(val) = value {
             self.query.push(format!(" AND {} != ", column));
@@ -89,7 +90,8 @@ impl<'a> PaginatedQuery<'a> {
     /// Add an IN filter (only if values is Some and non-empty)
     pub fn filter_in<T>(&mut self, column: &str, values: Option<Vec<T>>) -> &mut Self
     where
-        T: sqlx::Encode<'_, Postgres> + Send + Sync + Clone,
+        T: for<'q> sqlx::Encode<'q, Postgres> + sqlx::Type<Postgres> + Send + Sync + Clone + sqlx::postgres::PgHasArrayType + 'static,
+        for<'b> &'b [T]: sqlx::Encode<'b, Postgres> + sqlx::Type<Postgres>,
     {
         if let Some(vals) = values {
             if !vals.is_empty() {
@@ -142,7 +144,7 @@ impl<'a> PaginatedQuery<'a> {
     }
     
     /// Build the final query as a typed query for fetching specific types
-    pub fn build_query_as<T>(&mut self) -> sqlx::QueryAs<'_, Postgres, T, sqlx::postgres::PgArguments>
+    pub fn build_query_as<T>(&mut self) -> QueryAs<'_, Postgres, T, sqlx::postgres::PgArguments>
     where
         T: for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow>,
     {
@@ -150,7 +152,7 @@ impl<'a> PaginatedQuery<'a> {
     }
     
     /// Get the underlying query builder for advanced use cases
-    pub fn query_builder(&mut self) -> &mut QueryBuilder<'_, Postgres> {
+    pub fn query_builder(&mut self) -> &mut QueryBuilder<'a, Postgres> {
         &mut self.query
     }
     

@@ -24,4 +24,4 @@ tracing = { workspace = true }
 # Error handling specific dependencies
 backtrace = "0.3"
 miette = { version = "5.10", features = ["fancy"] }
-color-eyre = "0.6"
+color-eyre = { workspace = true }

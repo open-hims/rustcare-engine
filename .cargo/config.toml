@@ -1,38 +1,90 @@
-# Cargo configuration for coverage and testing
-# ---------------------------------------------
-# Applies globally to all cargo commands inside this workspace
+# Cargo configuration for optimized builds and development
+# =============================================================================
 
 [env]
-# ✅ Ensure all coverage data is written into the correct target directory
-LLVM_PROFILE_FILE = "target/llvm-cov-target/cargo-test-%p-%m.profraw"
+# SQLx offline mode for development (no DB needed at compile-time)
+SQLX_OFFLINE = "false"
 
-# ✅ Disable incremental builds for consistent coverage data
-CARGO_INCREMENTAL = "0"
+# Coverage settings (only when running coverage)
+# LLVM_PROFILE_FILE = "target/llvm-cov-target/cargo-test-%p-%m.profraw"
+# CARGO_INCREMENTAL = "0"
+# RUSTFLAGS = "-C instrument-coverage -C link-dead-code"
 
-# ✅ Force debug info to be included (needed for coverage)
-RUSTFLAGS = "-C instrument-coverage -C link-dead-code"
+# =============================================================================
+# Build Optimization - Faster Compilation
+# =============================================================================
+[build]
+# Use all available CPU cores for parallel compilation
+jobs = 8  # Adjust based on your CPU (use `nproc` or sysctl -n hw.ncpu)
 
-# (Optional) If you want to include dependencies in coverage:
-# CARGO_LLVM_COV_FLAGS = "--include-deps"
+# Incremental compilation for faster rebuilds (disabled during coverage)
+incremental = true
 
-# -----------------------------------------------------------------------------
-# Platform-specific flags
+# Use faster linker for development builds
+# Uncomment based on your platform:
 [target.x86_64-apple-darwin]
-rustflags = ["-C", "instrument-coverage", "-C", "link-dead-code"]
+# rustflags = ["-C", "link-arg=-fuse-ld=lld"]  # If you have lld installed
 
 [target.aarch64-apple-darwin]
-rustflags = ["-C", "instrument-coverage", "-C", "link-dead-code"]
+# rustflags = ["-C", "link-arg=-fuse-ld=lld"]  # If you have lld installed
 
-[target.x86_64-unknown-linux-gnu]
-rustflags = ["-C", "instrument-coverage", "-C", "link-dead-code"]
+# =============================================================================
+# Profile Optimization
+# =============================================================================
 
-# -----------------------------------------------------------------------------
-[build]
-# Enable parallel compilation for faster builds
-jobs = 4
+# Development profile - optimized for compile speed
+[profile.dev]
+# Faster compilation, less optimization
+opt-level = 0
+# Keep debug info
+debug = true
+# Incremental compilation
+incremental = true
+# Faster linking
+codegen-units = 256
+# Don't split debuginfo
+split-debuginfo = "unpacked"
 
-# -----------------------------------------------------------------------------
-[test]
-# Example: you can add default test args if needed
-# (e.g., run single-threaded or skip integration tests)
-# args = ["--test-threads=1"]
+# Fast dev profile - some optimization, still fast to compile
+[profile.dev-opt]
+inherits = "dev"
+opt-level = 1
+codegen-units = 16
+
+# Release profile - maximum performance
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+# Enable fat LTO for final production builds (slower compile, faster runtime)
+# lto = "fat"
+
+# Release with debug info for profiling
+[profile.release-with-debug]
+inherits = "release"
+debug = true
+strip = "none"
+
+# =============================================================================
+# Cargo settings for faster dependency resolution
+# =============================================================================
+[net]
+# Use sparse registry for faster dependency downloads
+git-fetch-with-cli = false
+
+[registries.crates-io]
+protocol = "sparse"
+
+# =============================================================================
+# Platform-specific coverage flags (only when needed)
+# =============================================================================
+# [target.x86_64-apple-darwin]
+# rustflags = ["-C", "instrument-coverage", "-C", "link-dead-code"]
+
+# [target.aarch64-apple-darwin]
+# rustflags = ["-C", "instrument-coverage", "-C", "link-dead-code"]
+
+# [target.x86_64-unknown-linux-gnu]
+# rustflags = ["-C", "instrument-coverage", "-C", "link-dead-code"]

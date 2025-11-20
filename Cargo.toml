@@ -1,3 +1,5 @@
+# Note: edition2024 is stabilized in Rust 1.85+, so no cargo-features needed
+
 [workspace]
 resolver = "2"
 members = [
@@ -53,10 +55,15 @@ serde_json = "1.0"
 serde_yaml = "0.9"
 
 # HTTP and networking
-reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 axum = { version = "0.7", features = ["macros"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "trace"] }
+hyper = { version = "1.0", features = ["full"] }
+utoipa = { version = "5.4", features = ["axum_extras", "chrono", "uuid"] }
+utoipa-swagger-ui = { version = "8.0", features = ["axum"] }
+tonic = { version = "0.12", features = ["tls", "tls-roots"] }
+prost = "0.13"
 
 # Database
 sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "ipnetwork"] }
@@ -64,19 +71,27 @@ sea-orm = { version = "0.12", features = ["sqlx-postgres", "runtime-tokio-rustls
 
 # Cryptography and security
 ring = "0.17"
+aes-gcm = "0.10"
 jwt = "0.16"
 bcrypt = "0.15"
 uuid = { version = "1.0", features = ["v4", "serde"] }
+sha2 = "0.10"
+argon2 = "0.5"
+oauth2 = "4.4"
 
-# Logging and observability
+rand = "0.8"
+
+# Password hashing and MFAobservability
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-opentelemetry = "0.21"
-opentelemetry-jaeger = "0.20"
+opentelemetry = "0.24"
+opentelemetry_sdk = "0.24"
+opentelemetry-otlp = "0.17"
+base64 = "0.22"
 
 # Configuration
-config = "0.13"
-clap = { version = "4.0", features = ["derive"] }
+config = "0.14"
+clap = { version = "4.4", features = ["derive", "env"] }
 
 # Error handling
 thiserror = "1.0"
@@ -99,6 +114,7 @@ zeroize = "1.7" # Secure memory clearing
 dashmap = "5.5" # High-performance concurrent HashMap
 parking_lot = "0.12" # Faster mutex/rwlock implementations
 smallvec = { version = "1.11", features = ["serde"] } # Stack-allocated vectors for small collections
+redis = { version = "0.24", features = ["tokio-comp", "connection-manager", "aio"] }
 
 # Development and debugging
 color-eyre = "0.6" # Beautiful error reports
@@ -107,3 +123,100 @@ tracing-error = "0.2" # Enhanced error context with tracing
 # Testing
 mockall = "0.11"
 proptest = "1.4" # Property-based testing for robust validation
+
+# Workspace-level lints
+[workspace.lints.clippy]
+# ============================================================================
+# CRITICAL: Prevent panics in production code
+# ============================================================================
+# DENY unwrap usage in production code (critical for reliability)
+unwrap_used = "deny"
+# DENY expect_used - use proper error handling instead
+expect_used = "deny"
+# DENY unwrap_err - same issue as unwrap
+unwrap_err_used = "deny"
+# DENY panic! macro in production
+panic = "deny"
+# DENY unimplemented! macro in production
+unimplemented = "deny"
+# DENY todo! macro in production
+todo = "deny"
+# DENY unreachable! macro - use proper error handling
+unreachable = "deny"
+# DENY indexing that could panic
+indexing_slicing = "deny"
+
+# ============================================================================
+# Error Handling & Safety
+# ============================================================================
+# Encourage better error handling
+result_large_err = "warn"
+# Warn on missing error documentation
+missing_errors_doc = "warn"
+# Multiple unwrap calls in sequence
+multiple_unwraps = "deny"
+# Warn on fallible conversions that might panic
+fallible_impl_from = "warn"
+# Warn on `.get().unwrap()` patterns
+get_unwrap = "deny"
+
+# ============================================================================
+# Integer Safety (prevent overflow panics)
+# ============================================================================
+# Warn on integer arithmetic that might overflow
+integer_arithmetic = "warn"
+# Deny cast that might truncate
+cast_possible_truncation = "warn"
+# Deny cast that might wrap
+cast_possible_wrap = "warn"
+# Warn on lossy casts
+cast_precision_loss = "warn"
+
+# ============================================================================
+# Memory & Performance
+# ============================================================================
+# Performance lints
+large_enum_variant = "warn"
+# Warn on inefficient string operations
+inefficient_to_string = "warn"
+# Warn on unnecessary allocations
+unnecessary_box = "warn"
+# Memory leaks
+mem_forget = "deny"
+# Box leak
+box_leak = "deny"
+
+# ============================================================================
+# Code Quality & Clarity
+# ============================================================================
+# General code quality
+all = "warn"
+pedantic = "warn"
+# Warn on complexity
+cognitive_complexity = "warn"
+# Warn on shadowing
+shadow_unrelated = "warn"
+
+# ============================================================================
+# Allow some pedantic lints that are too noisy
+# ============================================================================
+module_name_repetitions = "allow"
+missing_panics_doc = "allow"
+# Allow single char names in iterators
+single_char_lifetime_names = "allow"
+# Allow struct field ordering
+struct_field_names = "allow"
+
+[workspace.lints.rust]
+# Deny unsafe code by default (can be overridden in specific crates)
+unsafe_code = "warn"
+# Require documentation for public items
+missing_docs = "allow"  # Can be tightened later
+# Warn on unused results (especially from I/O operations)
+unused_must_use = "warn"
+# Warn on unused imports to keep codebase clean
+unused_imports = "warn"
+# Warn on unused variables
+unused_variables = "warn"
+# Warn on dead code
+dead_code = "warn"

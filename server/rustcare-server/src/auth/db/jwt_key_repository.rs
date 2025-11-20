@@ -12,7 +12,7 @@ pub struct JwtKeyRepository {
     pool: DbPool,
     rls_context: Option<RlsContext>,
     audit_logger: Option<Arc<AuditLogger>>,
-    encryption: Option<Arc<database_layer::encryption::DatabaseEncryption>>,
+    encryption: Option<Arc<database_layer::DatabaseEncryption>>,
 }
 
 impl JwtKeyRepository {
@@ -35,7 +35,7 @@ impl JwtKeyRepository {
         self
     }
 
-    pub fn with_encryption(mut self, enc: Arc<database_layer::encryption::DatabaseEncryption>) -> Self {
+    pub fn with_encryption(mut self, enc: Arc<database_layer::DatabaseEncryption>) -> Self {
         self.encryption = Some(enc);
         self
     }

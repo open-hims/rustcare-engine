@@ -14,7 +14,7 @@ use crate::{
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Row};
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 use uuid::Uuid;
 
 /// PostgreSQL-backed tuple repository
@@ -44,7 +44,7 @@ impl TupleRepository for PostgresTupleRepository {
         debug!("Writing tuple to PostgreSQL: {}", tuple);
 
         // Use a default organization ID if none is set (for tests and single-tenant setups)
-        let org_id = Some(Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap());
+        let org_id = Some(Uuid::nil());
 
         sqlx::query(
             r#"
@@ -119,7 +119,7 @@ impl TupleRepository for PostgresTupleRepository {
         debug!("Batch write: {} writes, {} deletes", request.writes.len(), request.deletes.len());
 
         // Use a default organization ID if none is set (for tests and single-tenant setups)
-        let org_id = Some(Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap());
+        let org_id = Some(Uuid::nil());
 
         // Start transaction for atomicity
         let mut tx = self.pool

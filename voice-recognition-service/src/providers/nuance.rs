@@ -2,9 +2,7 @@ use async_trait::async_trait;
 use crate::error::{VoiceError, VoiceResult};
 use crate::config::VoiceProvider;
 use crate::providers::VoiceProviderTrait;
-use crate::transcription::{TranscriptionResult, TranscriptionMetadata, DetectedTerm, TermCategory};
-use uuid::Uuid;
-use chrono::Utc;
+use crate::transcription::TranscriptionResult;
 
 pub struct NuanceProvider {
     config: VoiceProvider,

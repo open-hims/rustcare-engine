@@ -14,6 +14,7 @@ pub mod security_state;
 pub mod utils;
 pub mod types;
 pub mod validation;
+pub mod services;
 
 // Re-export commonly used types
 pub use server::RustCareServer;

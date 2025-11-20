@@ -1,20 +1,21 @@
+use crate::error::{api_success, ApiError, ApiResponse};
+use crate::middleware::AuthContext;
+use crate::server::RustCareServer;
+use crate::services::AuditService;
+use crate::types::pagination::PaginationParams;
+use crate::utils::query_builder::PaginatedQuery;
+use crate::validation::RequestValidation;
+use crate::{validate_field, validate_length, validate_required, validate_uuid};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use utoipa::{ToSchema, IntoParams};
-use sqlx::FromRow;
-use crate::server::RustCareServer;
-use crate::error::{ApiError, ApiResponse, api_success};
-use crate::middleware::AuthContext;
-use crate::types::pagination::PaginationParams;
-use crate::utils::query_builder::PaginatedQuery;
-use crate::validation::RequestValidation;
-use crate::services::AuditService;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
+use utoipa::{IntoParams, ToSchema};
+use uuid::Uuid;
 
 /// Service Type structure
 #[derive(Debug, Serialize, Deserialize, ToSchema, FromRow)]
@@ -57,12 +58,12 @@ pub struct MedicalRecord {
     pub organization_id: Uuid,
     pub patient_id: Uuid,
     pub provider_id: Uuid,
-    
+
     // Record Metadata
     pub record_type: String,
     pub title: String,
     pub description: Option<String>,
-    
+
     // Clinical Data
     pub chief_complaint: Option<String>,
     pub diagnosis: serde_json::Value,
@@ -70,16 +71,16 @@ pub struct MedicalRecord {
     pub prescriptions: serde_json::Value,
     pub test_results: serde_json::Value,
     pub vital_signs: serde_json::Value,
-    
+
     // Visit Information
     pub visit_date: DateTime<Utc>,
     pub visit_duration_minutes: Option<i32>,
     pub location: Option<String>,
-    
+
     // HIPAA Compliance
     pub access_level: String,
     pub phi_present: bool,
-    
+
     // Audit
     pub created_by: Uuid,
     pub created_at: DateTime<Utc>,
@@ -112,17 +113,29 @@ impl RequestValidation for CreateMedicalRecordRequest {
         validate_required!(self.record_type, "Record type is required");
         validate_required!(self.title, "Title is required");
         validate_required!(self.access_reason, "Access reason is required");
-        
-        validate_length!(self.title, 1, 200, "Title must be between 1 and 200 characters");
-        
+
+        validate_length!(
+            self.title,
+            1,
+            200,
+            "Title must be between 1 and 200 characters"
+        );
+
         // Validate record_type is one of valid values
-        let valid_types = ["progress_note", "discharge_summary", "lab_result", "imaging", "prescription", "other"];
+        let valid_types = [
+            "progress_note",
+            "discharge_summary",
+            "lab_result",
+            "imaging",
+            "prescription",
+            "other",
+        ];
         validate_field!(
             self.record_type,
             valid_types.contains(&self.record_type.as_str()),
             format!("Record type must be one of: {}", valid_types.join(", "))
         );
-        
+
         // Validate access_level if provided
         if let Some(ref level) = self.access_level {
             let valid_levels = ["public", "internal", "restricted", "confidential"];
@@ -132,7 +145,7 @@ impl RequestValidation for CreateMedicalRecordRequest {
                 format!("Access level must be one of: {}", valid_levels.join(", "))
             );
         }
-        
+
         // Validate visit_duration_minutes if provided
         if let Some(duration) = self.visit_duration_minutes {
             validate_field!(
@@ -141,7 +154,7 @@ impl RequestValidation for CreateMedicalRecordRequest {
                 "Visit duration must be between 1 and 1440 minutes"
             );
         }
-        
+
         Ok(())
     }
 }
@@ -163,12 +176,12 @@ pub struct UpdateMedicalRecordRequest {
 impl RequestValidation for UpdateMedicalRecordRequest {
     fn validate(&self) -> Result<(), ApiError> {
         validate_required!(self.update_reason, "Update reason is required");
-        
+
         // Validate title length if provided
         if let Some(ref title) = self.title {
             validate_length!(title, 1, 200, "Title must be between 1 and 200 characters");
         }
-        
+
         // Validate visit_duration_minutes if provided
         if let Some(duration) = self.visit_duration_minutes {
             validate_field!(
@@ -177,7 +190,7 @@ impl RequestValidation for UpdateMedicalRecordRequest {
                 "Visit duration must be between 1 and 1440 minutes"
             );
         }
-        
+
         Ok(())
     }
 }
@@ -260,7 +273,7 @@ pub async fn create_medical_record(
 ) -> Result<Json<ApiResponse<MedicalRecord>>, ApiError> {
     // Validate request
     request.validate()?;
-    
+
     let record = sqlx::query_as::<_, MedicalRecord>(
         r#"
         INSERT INTO medical_records (
@@ -294,19 +307,21 @@ pub async fn create_medical_record(
     .bind(auth.user_id)
     .fetch_one(&server.db_pool)
     .await?;
-    
+
     // Log the creation using AuditService
     let audit_service = AuditService::new(server.db_pool.clone());
-    let _ = audit_service.log_medical_record_action(
-        &auth,
-        record.id,
-        "created",
-        Some(serde_json::json!({
-            "record_type": request.record_type,
-            "access_reason": request.access_reason,
-        })),
-    ).await;
-    
+    let _ = audit_service
+        .log_medical_record_action(
+            &auth,
+            record.id,
+            "created",
+            Some(serde_json::json!({
+                "record_type": request.record_type,
+                "access_reason": request.access_reason,
+            })),
+        )
+        .await;
+
     Ok(Json(api_success(record)))
 }
 
@@ -335,7 +350,7 @@ pub async fn get_medical_record(
 ) -> Result<Json<ApiResponse<MedicalRecord>>, ApiError> {
     match sqlx::query_as::<_, MedicalRecord>(
         r#"SELECT * FROM medical_records
-           WHERE id = $1 AND organization_id = $2 AND (is_deleted = false OR is_deleted IS NULL)"#
+           WHERE id = $1 AND organization_id = $2 AND (is_deleted = false OR is_deleted IS NULL)"#,
     )
     .bind(record_id)
     .bind(auth.organization_id)
@@ -345,15 +360,12 @@ pub async fn get_medical_record(
         Ok(Some(record)) => {
             // Log the access using AuditService
             let audit_service = AuditService::new(server.db_pool.clone());
-            let _ = audit_service.log_medical_record_action(
-                &auth,
-                record_id,
-                "viewed",
-                None,
-            ).await;
-            
+            let _ = audit_service
+                .log_medical_record_action(&auth, record_id, "viewed", None)
+                .await;
+
             Ok(Json(api_success(record)))
-        },
+        }
         Ok(None) => Err(ApiError::not_found("medical_record")),
         Err(_) => {
             let mock_record = MedicalRecord {
@@ -410,14 +422,16 @@ pub async fn list_medical_records(
     Query(params): Query<ListMedicalRecordsParams>,
     auth: AuthContext,
 ) -> Result<Json<ApiResponse<Vec<MedicalRecord>>>, ApiError> {
-    let mut query_builder = PaginatedQuery::new(
-        "SELECT * FROM medical_records WHERE is_deleted = false"
-    );
+    let mut query_builder =
+        PaginatedQuery::new("SELECT * FROM medical_records WHERE is_deleted = false");
     query_builder
         .filter_organization(Some(auth.organization_id))
         .filter_eq("patient_id", params.patient_id)
         .filter_eq("provider_id", params.provider_id)
-        .filter_eq("record_type", params.record_type.as_ref().map(|s| s.as_str()))
+        .filter_eq(
+            "record_type",
+            params.record_type.clone(),
+        )
         .order_by("visit_date", "DESC")
         .paginate(params.pagination.page, params.pagination.page_size);
     let query = query_builder.build_query_as::<MedicalRecord>();
@@ -429,7 +443,7 @@ pub async fn list_medical_records(
                      AND (is_deleted = false OR is_deleted IS NULL)
                      AND ($2::uuid IS NULL OR patient_id = $2)
                      AND ($3::uuid IS NULL OR provider_id = $3)
-                     AND ($4::text IS NULL OR record_type = $4)"#
+                     AND ($4::text IS NULL OR record_type = $4)"#,
             )
             .bind(auth.organization_id)
             .bind(params.patient_id)
@@ -439,33 +453,31 @@ pub async fn list_medical_records(
             .await?;
             let metadata = params.pagination.to_metadata(total_count);
             Ok(Json(crate::error::api_success_with_meta(records, metadata)))
-        },
+        }
         Err(_) => {
-            let mock_records = vec![
-                MedicalRecord {
-                    id: Uuid::new_v4(),
-                    organization_id: auth.organization_id,
-                    patient_id: params.patient_id.unwrap_or(Uuid::new_v4()),
-                    provider_id: auth.user_id,
-                    record_type: "consultation".to_string(),
-                    title: "Initial Consultation".to_string(),
-                    description: Some("Patient consultation notes".to_string()),
-                    chief_complaint: Some("Chest pain".to_string()),
-                    diagnosis: serde_json::json!({"primary": "Cardiac arrhythmia"}),
-                    treatments: serde_json::json!({}),
-                    prescriptions: serde_json::json!({}),
-                    test_results: serde_json::json!({}),
-                    vital_signs: serde_json::json!({}),
-                    visit_date: Utc::now(),
-                    visit_duration_minutes: Some(30),
-                    location: Some("Cardiology".to_string()),
-                    access_level: "restricted".to_string(),
-                    phi_present: true,
-                    created_by: auth.user_id,
-                    created_at: Utc::now(),
-                    updated_at: Utc::now(),
-                },
-            ];
+            let mock_records = vec![MedicalRecord {
+                id: Uuid::new_v4(),
+                organization_id: auth.organization_id,
+                patient_id: params.patient_id.unwrap_or(Uuid::new_v4()),
+                provider_id: auth.user_id,
+                record_type: "consultation".to_string(),
+                title: "Initial Consultation".to_string(),
+                description: Some("Patient consultation notes".to_string()),
+                chief_complaint: Some("Chest pain".to_string()),
+                diagnosis: serde_json::json!({"primary": "Cardiac arrhythmia"}),
+                treatments: serde_json::json!({}),
+                prescriptions: serde_json::json!({}),
+                test_results: serde_json::json!({}),
+                vital_signs: serde_json::json!({}),
+                visit_date: Utc::now(),
+                visit_duration_minutes: Some(30),
+                location: Some("Cardiology".to_string()),
+                access_level: "restricted".to_string(),
+                phi_present: true,
+                created_by: auth.user_id,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            }];
             Ok(Json(api_success(mock_records)))
         }
     }
@@ -493,13 +505,13 @@ pub async fn list_medical_records(
 )]
 pub async fn update_medical_record(
     State(server): State<RustCareServer>,
+    auth: AuthContext,
     Path(record_id): Path<Uuid>,
     Json(request): Json<UpdateMedicalRecordRequest>,
-    auth: AuthContext,
 ) -> Result<Json<ApiResponse<MedicalRecord>>, ApiError> {
     // Validate request
     request.validate()?;
-    
+
     // Ensure record exists and belongs to this organization
     let exists = sqlx::query_scalar::<_, bool>(
         r#"
@@ -507,7 +519,7 @@ pub async fn update_medical_record(
             SELECT 1 FROM medical_records
             WHERE id = $1 AND organization_id = $2 AND (is_deleted = false OR is_deleted IS NULL)
         )
-        "#
+        "#,
     )
     .bind(record_id)
     .bind(auth.organization_id)
@@ -532,7 +544,7 @@ pub async fn update_medical_record(
             updated_at = NOW()
         WHERE id = $9 AND organization_id = $10
         RETURNING *
-        "#
+        "#,
     )
     .bind(&request.title)
     .bind(&request.description)
@@ -549,14 +561,16 @@ pub async fn update_medical_record(
 
     // Log the update using AuditService
     let audit_service = AuditService::new(server.db_pool.clone());
-    let _ = audit_service.log_medical_record_action(
-        &auth,
-        record_id,
-        "updated",
-        Some(serde_json::json!({
-            "update_reason": request.update_reason,
-        })),
-    ).await;
+    let _ = audit_service
+        .log_medical_record_action(
+            &auth,
+            record_id,
+            "updated",
+            Some(serde_json::json!({
+                "update_reason": request.update_reason,
+            })),
+        )
+        .await;
 
     Ok(Json(api_success(updated)))
 }
@@ -590,7 +604,7 @@ pub async fn delete_medical_record(
         UPDATE medical_records
         SET is_deleted = true, updated_at = NOW()
         WHERE id = $1 AND organization_id = $2 AND (is_deleted = false OR is_deleted IS NULL)
-        "#
+        "#,
     )
     .bind(record_id)
     .bind(auth.organization_id)
@@ -651,7 +665,7 @@ pub async fn get_medical_record_audit(
             success: true,
         },
     ];
-    
+
     Ok(Json(api_success(mock_audit)))
 }
 
@@ -676,7 +690,7 @@ pub async fn list_providers(
     let providers = sqlx::query_as::<_, HealthcareProvider>(
         r#"SELECT * FROM healthcare_providers
            WHERE organization_id = $1 AND is_active = true
-           ORDER BY created_at DESC"#
+           ORDER BY created_at DESC"#,
     )
     .bind(auth.organization_id)
     .fetch_all(&server.db_pool)
@@ -706,15 +720,18 @@ pub async fn list_service_types(
     auth: AuthContext,
 ) -> Result<Json<ApiResponse<Vec<ServiceType>>>, ApiError> {
     let mut query_builder = PaginatedQuery::new(
-        "SELECT * FROM service_types WHERE (is_deleted = false OR is_deleted IS NULL)"
+        "SELECT * FROM service_types WHERE (is_deleted = false OR is_deleted IS NULL)",
     );
     query_builder
         .filter_organization(params.organization_id.or(Some(auth.organization_id)))
-        .filter_eq("category", params.category.as_ref().map(|s| s.as_str()))
+        .filter_eq("category", params.category.clone())
         .filter_eq("is_active", params.is_active)
         .order_by("name", "ASC")
         .paginate(None, None);
-    let service_types: Vec<ServiceType> = query_builder.build_query_as().fetch_all(&server.db_pool).await?;
+    let service_types: Vec<ServiceType> = query_builder
+        .build_query_as()
+        .fetch_all(&server.db_pool)
+        .await?;
     Ok(Json(api_success(service_types)))
 }
 
@@ -1034,13 +1051,13 @@ pub async fn list_appointments(
     auth: AuthContext,
 ) -> Result<Json<ApiResponse<Vec<Appointment>>>, ApiError> {
     let mut query_builder = PaginatedQuery::new(
-        "SELECT * FROM appointments WHERE (is_deleted = false OR is_deleted IS NULL)"
+        "SELECT * FROM appointments WHERE (is_deleted = false OR is_deleted IS NULL)",
     );
     query_builder
         .filter_organization(Some(auth.organization_id))
         .filter_eq("patient_id", params.patient_id)
         .filter_eq("provider_id", params.provider_id)
-        .filter_eq("status", params.status.as_ref().map(|s| s.as_str()))
+        .filter_eq("status", params.status.clone())
         .order_by("appointment_date", "ASC")
         .paginate(params.pagination.page, params.pagination.page_size);
     let query = query_builder.build_query_as::<Appointment>();
@@ -1052,7 +1069,7 @@ pub async fn list_appointments(
                      AND (is_deleted = false OR is_deleted IS NULL)
                      AND ($2::uuid IS NULL OR patient_id = $2)
                      AND ($3::uuid IS NULL OR provider_id = $3)
-                     AND ($4::text IS NULL OR status = $4)"#
+                     AND ($4::text IS NULL OR status = $4)"#,
             )
             .bind(auth.organization_id)
             .bind(params.patient_id)
@@ -1061,36 +1078,37 @@ pub async fn list_appointments(
             .fetch_one(&server.db_pool)
             .await?;
             let metadata = params.pagination.to_metadata(total_count);
-            Ok(Json(crate::error::api_success_with_meta(appointments, metadata)))
-        },
+            Ok(Json(crate::error::api_success_with_meta(
+                appointments,
+                metadata,
+            )))
+        }
         Err(_) => {
-            let mock_appointments = vec![
-                Appointment {
-                    id: Uuid::new_v4(),
-                    organization_id: auth.organization_id,
-                    patient_id: params.patient_id.unwrap_or(Uuid::new_v4()),
-                    provider_id: params.provider_id.unwrap_or(auth.user_id),
-                    service_type_id: None,
-                    appointment_type: "consultation".to_string(),
-                    appointment_date: Utc::now(),
-                    duration_minutes: 30,
-                    status: "scheduled".to_string(),
-                    reason_for_visit: Some("Routine checkup".to_string()),
-                    special_instructions: None,
-                    booked_by: None,
-                    booking_method: Some("online".to_string()),
-                    cancelled_at: None,
-                    cancelled_by: None,
-                    cancellation_reason: None,
-                    reminder_sent: false,
-                    reminder_sent_at: None,
-                    location: Some("Cardiology".to_string()),
-                    room: None,
-                    metadata: serde_json::json!({}),
-                    created_at: Utc::now(),
-                    updated_at: Utc::now(),
-                },
-            ];
+            let mock_appointments = vec![Appointment {
+                id: Uuid::new_v4(),
+                organization_id: auth.organization_id,
+                patient_id: params.patient_id.unwrap_or(Uuid::new_v4()),
+                provider_id: params.provider_id.unwrap_or(auth.user_id),
+                service_type_id: None,
+                appointment_type: "consultation".to_string(),
+                appointment_date: Utc::now(),
+                duration_minutes: 30,
+                status: "scheduled".to_string(),
+                reason_for_visit: Some("Routine checkup".to_string()),
+                special_instructions: None,
+                booked_by: None,
+                booking_method: Some("online".to_string()),
+                cancelled_at: None,
+                cancelled_by: None,
+                cancellation_reason: None,
+                reminder_sent: false,
+                reminder_sent_at: None,
+                location: Some("Cardiology".to_string()),
+                room: None,
+                metadata: serde_json::json!({}),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            }];
             Ok(Json(api_success(mock_appointments)))
         }
     }
@@ -1127,7 +1145,7 @@ pub async fn create_appointment(
             $1, $2, $3, $4, $5, $6, $7, $8, 'scheduled', $9, $10, $11, 'online',
             NULL, NULL, NULL, false, NULL, $12, NULL, '{}'::jsonb, NOW(), NOW()
         ) RETURNING *
-        "#
+        "#,
     )
     .bind(Uuid::new_v4())
     .bind(auth.organization_id)
@@ -1163,18 +1181,19 @@ pub async fn create_appointment(
 )]
 pub async fn update_appointment_status(
     State(server): State<RustCareServer>,
+    auth: AuthContext,
     Path(appointment_id): Path<Uuid>,
     Json(payload): Json<serde_json::Value>,
-    auth: AuthContext,
 ) -> Result<Json<ApiResponse<Appointment>>, ApiError> {
-    let new_status = payload.get("status")
+    let new_status = payload
+        .get("status")
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::bad_request("Status is required".to_string()))?;
     match sqlx::query_as::<_, Appointment>(
         r#"UPDATE appointments
            SET status = $1, updated_at = NOW()
            WHERE id = $2 AND organization_id = $3
-           RETURNING *"#
+           RETURNING *"#,
     )
     .bind(new_status)
     .bind(appointment_id)
@@ -1184,33 +1203,34 @@ pub async fn update_appointment_status(
     {
         Ok(Some(appointment)) => Ok(Json(api_success(appointment))),
         Ok(None) => Err(ApiError::not_found("appointment".to_string())),
-        Err(_) => {
-            Ok(Json(api_success(Appointment {
-                id: appointment_id,
-                organization_id: auth.organization_id,
-                patient_id: Uuid::new_v4(),
-                provider_id: auth.user_id,
-                service_type_id: None,
-                appointment_type: "consultation".to_string(),
-                appointment_date: Utc::now(),
-                duration_minutes: 30,
-                status: new_status.to_string(),
-                reason_for_visit: Some("Routine checkup".to_string()),
-                special_instructions: None,
-                booked_by: None,
-                booking_method: Some("online".to_string()),
-                cancelled_at: if new_status == "cancelled" { Some(Utc::now()) } else { None },
-                cancelled_by: None,
-                cancellation_reason: None,
-                reminder_sent: false,
-                reminder_sent_at: None,
-                location: None,
-                room: None,
-                metadata: serde_json::json!({}),
-                created_at: Utc::now(),
-                updated_at: Utc::now(),
-            })))
-        }
+        Err(_) => Ok(Json(api_success(Appointment {
+            id: appointment_id,
+            organization_id: auth.organization_id,
+            patient_id: Uuid::new_v4(),
+            provider_id: auth.user_id,
+            service_type_id: None,
+            appointment_type: "consultation".to_string(),
+            appointment_date: Utc::now(),
+            duration_minutes: 30,
+            status: new_status.to_string(),
+            reason_for_visit: Some("Routine checkup".to_string()),
+            special_instructions: None,
+            booked_by: None,
+            booking_method: Some("online".to_string()),
+            cancelled_at: if new_status == "cancelled" {
+                Some(Utc::now())
+            } else {
+                None
+            },
+            cancelled_by: None,
+            cancellation_reason: None,
+            reminder_sent: false,
+            reminder_sent_at: None,
+            location: None,
+            room: None,
+            metadata: serde_json::json!({}),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }))),
     }
 }
-

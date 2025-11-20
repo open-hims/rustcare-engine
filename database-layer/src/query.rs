@@ -1,12 +1,12 @@
 // Query builder and executor with RLS support
-use crate::error::{DatabaseError, DatabaseResult};
-use crate::rls::RlsContext;
 use crate::connection::DatabasePool;
 use crate::encryption::DatabaseEncryption;
-use std::sync::Arc;
-use sqlx::{Row, FromRow};
-use tracing::{debug, error};
+use crate::error::{DatabaseError, DatabaseResult};
+use crate::rls::RlsContext;
 use serde_json::Value as JsonValue;
+use sqlx::{FromRow, Row};
+use std::sync::Arc;
+use tracing::{debug, error};
 
 /// Query executor with automatic RLS context application
 pub struct QueryExecutor {
@@ -41,6 +41,19 @@ impl QueryExecutor {
     where
         T: for<'r> FromRow<'r, sqlx::postgres::PgRow> + Send + Unpin,
     {
+        self.fetch_one_with(sql, |q| q).await
+    }
+
+    /// Execute a parameterized query and return a single row
+    /// Uses a closure to bind parameters (since sqlx requires method chaining)
+    pub async fn fetch_one_with<F, T>(&self, sql: &str, bind_fn: F) -> DatabaseResult<T>
+    where
+        T: for<'r> FromRow<'r, sqlx::postgres::PgRow> + Send + Unpin,
+        F: FnOnce(
+            sqlx::query::QueryAs<'_, sqlx::Postgres, T, sqlx::postgres::PgArguments>,
+        )
+            -> sqlx::query::QueryAs<'_, sqlx::Postgres, T, sqlx::postgres::PgArguments>,
+    {
         // Apply RLS context if available
         if let Some(context) = &self.rls_context {
             self.pool.apply_rls_context(context).await?;
@@ -48,13 +61,13 @@ impl QueryExecutor {
 
         debug!("Executing query: {}", sql);
 
-        sqlx::query_as::<_, T>(sql)
-            .fetch_one(self.pool.pool())
-            .await
-            .map_err(|e| {
-                error!("Query failed: {}", e);
-                DatabaseError::QueryFailed(e.to_string())
-            })
+        let query = sqlx::query_as::<_, T>(sql);
+        let query = bind_fn(query);
+
+        query.fetch_one(self.pool.pool()).await.map_err(|e| {
+            error!("Query failed: {}", e);
+            DatabaseError::QueryFailed(e.to_string())
+        })
     }
 
     /// Execute a query and return all rows
@@ -62,26 +75,18 @@ impl QueryExecutor {
     where
         T: for<'r> FromRow<'r, sqlx::postgres::PgRow> + Send + Unpin,
     {
-        // Apply RLS context if available
-        if let Some(context) = &self.rls_context {
-            self.pool.apply_rls_context(context).await?;
-        }
-
-        debug!("Executing query: {}", sql);
-
-        sqlx::query_as::<_, T>(sql)
-            .fetch_all(self.pool.pool())
-            .await
-            .map_err(|e| {
-                error!("Query failed: {}", e);
-                DatabaseError::QueryFailed(e.to_string())
-            })
+        self.fetch_all_with(sql, |q| q).await
     }
 
-    /// Execute a query and return optional row
-    pub async fn fetch_optional<T>(&self, sql: &str) -> DatabaseResult<Option<T>>
+    /// Execute a parameterized query and return all rows
+    /// Uses a closure to bind parameters
+    pub async fn fetch_all_with<F, T>(&self, sql: &str, bind_fn: F) -> DatabaseResult<Vec<T>>
     where
         T: for<'r> FromRow<'r, sqlx::postgres::PgRow> + Send + Unpin,
+        F: FnOnce(
+            sqlx::query::QueryAs<'_, sqlx::Postgres, T, sqlx::postgres::PgArguments>,
+        )
+            -> sqlx::query::QueryAs<'_, sqlx::Postgres, T, sqlx::postgres::PgArguments>,
     {
         // Apply RLS context if available
         if let Some(context) = &self.rls_context {
@@ -90,17 +95,66 @@ impl QueryExecutor {
 
         debug!("Executing query: {}", sql);
 
-        sqlx::query_as::<_, T>(sql)
-            .fetch_optional(self.pool.pool())
-            .await
-            .map_err(|e| {
-                error!("Query failed: {}", e);
-                DatabaseError::QueryFailed(e.to_string())
-            })
+        let query = sqlx::query_as::<_, T>(sql);
+        let query = bind_fn(query);
+
+        query.fetch_all(self.pool.pool()).await.map_err(|e| {
+            error!("Query failed: {}", e);
+            DatabaseError::QueryFailed(e.to_string())
+        })
+    }
+
+    /// Execute a query and return optional row
+    pub async fn fetch_optional<T>(&self, sql: &str) -> DatabaseResult<Option<T>>
+    where
+        T: for<'r> FromRow<'r, sqlx::postgres::PgRow> + Send + Unpin,
+    {
+        self.fetch_optional_with(sql, |q| q).await
+    }
+
+    /// Execute a parameterized query and return optional row
+    /// Uses a closure to bind parameters
+    pub async fn fetch_optional_with<F, T>(
+        &self,
+        sql: &str,
+        bind_fn: F,
+    ) -> DatabaseResult<Option<T>>
+    where
+        T: for<'r> FromRow<'r, sqlx::postgres::PgRow> + Send + Unpin,
+        F: FnOnce(
+            sqlx::query::QueryAs<'_, sqlx::Postgres, T, sqlx::postgres::PgArguments>,
+        )
+            -> sqlx::query::QueryAs<'_, sqlx::Postgres, T, sqlx::postgres::PgArguments>,
+    {
+        // Apply RLS context if available
+        if let Some(context) = &self.rls_context {
+            self.pool.apply_rls_context(context).await?;
+        }
+
+        debug!("Executing query: {}", sql);
+
+        let query = sqlx::query_as::<_, T>(sql);
+        let query = bind_fn(query);
+
+        query.fetch_optional(self.pool.pool()).await.map_err(|e| {
+            error!("Query failed: {}", e);
+            DatabaseError::QueryFailed(e.to_string())
+        })
     }
 
     /// Execute a command (INSERT, UPDATE, DELETE)
     pub async fn execute(&self, sql: &str) -> DatabaseResult<u64> {
+        self.execute_with(sql, |q| q).await
+    }
+
+    /// Execute a parameterized command (INSERT, UPDATE, DELETE)
+    /// Uses a closure to bind parameters
+    pub async fn execute_with<F>(&self, sql: &str, bind_fn: F) -> DatabaseResult<u64>
+    where
+        F: FnOnce(
+            sqlx::query::Query<'_, sqlx::Postgres, sqlx::postgres::PgArguments>,
+        ) -> sqlx::query::Query<'_, sqlx::Postgres, sqlx::postgres::PgArguments>,
+    {
         // Apply RLS context if available
         if let Some(context) = &self.rls_context {
             self.pool.apply_rls_context(context).await?;
@@ -108,13 +162,13 @@ impl QueryExecutor {
 
         debug!("Executing command: {}", sql);
 
-        let result = sqlx::query(sql)
-            .execute(self.pool.pool())
-            .await
-            .map_err(|e| {
-                error!("Command failed: {}", e);
-                DatabaseError::QueryFailed(e.to_string())
-            })?;
+        let query = sqlx::query(sql);
+        let query = bind_fn(query);
+
+        let result = query.execute(self.pool.pool()).await.map_err(|e| {
+            error!("Command failed: {}", e);
+            DatabaseError::QueryFailed(e.to_string())
+        })?;
 
         Ok(result.rows_affected())
     }
@@ -122,7 +176,11 @@ impl QueryExecutor {
     /// Execute a command with ordered parameters where each param can optionally
     /// specify a `table.column` key to indicate the value should be encrypted
     /// before binding. `params` is a slice of (value, Option<table_column>).
-    pub async fn execute_with_params(&self, sql: &str, params: &[(&str, Option<&str>)]) -> DatabaseResult<u64> {
+    pub async fn execute_with_params(
+        &self,
+        sql: &str,
+        params: &[(&str, Option<&str>)],
+    ) -> DatabaseResult<u64> {
         if let Some(context) = &self.rls_context {
             self.pool.apply_rls_context(context).await?;
         }
@@ -151,19 +209,19 @@ impl QueryExecutor {
             query = query.bind(to_bind);
         }
 
-        let result = query
-            .execute(self.pool.pool())
-            .await
-            .map_err(|e| {
-                error!("Command failed: {}", e);
-                DatabaseError::QueryFailed(e.to_string())
-            })?;
+        let result = query.execute(self.pool.pool()).await.map_err(|e| {
+            error!("Command failed: {}", e);
+            DatabaseError::QueryFailed(e.to_string())
+        })?;
 
         Ok(result.rows_affected())
     }
 
     /// Fetch a single JSON row and attempt to decrypt any encrypted string fields
-    pub async fn fetch_one_json_with_decrypt(&self, sql: &str) -> DatabaseResult<serde_json::Value> {
+    pub async fn fetch_one_json_with_decrypt(
+        &self,
+        sql: &str,
+    ) -> DatabaseResult<serde_json::Value> {
         if let Some(context) = &self.rls_context {
             self.pool.apply_rls_context(context).await?;
         }
@@ -188,7 +246,10 @@ impl QueryExecutor {
     }
 
     /// Fetch multiple JSON rows and attempt to decrypt any encrypted string fields
-    pub async fn fetch_all_json_with_decrypt(&self, sql: &str) -> DatabaseResult<Vec<serde_json::Value>> {
+    pub async fn fetch_all_json_with_decrypt(
+        &self,
+        sql: &str,
+    ) -> DatabaseResult<Vec<serde_json::Value>> {
         if let Some(context) = &self.rls_context {
             self.pool.apply_rls_context(context).await?;
         }
@@ -221,7 +282,11 @@ impl QueryExecutor {
             return v;
         }
 
-        let enc = self.encryption.as_ref().unwrap().clone();
+        let enc = self
+            .encryption
+            .as_ref()
+            .expect("encryption must be Some (checked above)")
+            .clone();
 
         fn walk(value: &mut serde_json::Value, enc: &DatabaseEncryption) {
             match value {
@@ -250,6 +315,22 @@ impl QueryExecutor {
         walk(&mut v, enc.as_ref());
         v
     }
+}
+
+/// Macro to simplify parameterized queries with QueryExecutor
+///
+/// Example:
+/// ```rust
+/// executor.fetch_one_with!(sql, |q| q.bind(param1).bind(param2))
+/// ```
+#[macro_export]
+macro_rules! query_exec {
+    ($executor:expr, $method:ident, $sql:expr) => {
+        $executor.$method($sql).await
+    };
+    ($executor:expr, $method:ident, $sql:expr, |$q:ident| $bind:expr) => {
+        $executor.$method($sql, |$q| $bind).await
+    };
 }
 
 pub struct QueryBuilder;

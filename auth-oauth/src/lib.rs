@@ -31,7 +31,6 @@ pub mod models;
 pub mod error;
 pub mod handlers;
 
-pub use client::*;
 pub use provider::*;
 pub use models::*;
 pub use error::*;

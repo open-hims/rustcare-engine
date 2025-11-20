@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use uuid::Uuid;
-use crate::error::{DeviceError, Result};
+use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 

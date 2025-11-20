@@ -36,4 +36,4 @@ audit-engine = { path = "../audit-engine" }
 semver = "1.0"
 tar = "0.4"
 flate2 = "1.0"
-sha2 = "0.10"
+sha2 = { workspace = true }

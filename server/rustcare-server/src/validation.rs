@@ -67,7 +67,9 @@ macro_rules! validate_field {
 #[macro_export]
 macro_rules! validate_required {
     ($field:expr, $message:expr) => {
-        validate_field!($field, !$field.trim().is_empty(), $message);
+        // Works with String and &str types only
+        // For JsonValue, validate manually in the implementation
+        $crate::validate_field!($field, !$field.trim().is_empty(), $message);
     };
 }
 
@@ -82,7 +84,7 @@ macro_rules! validate_required {
 #[macro_export]
 macro_rules! validate_uuid {
     ($field:expr, $message:expr) => {
-        validate_field!($field, !$field.is_nil(), $message);
+        $crate::validate_field!($field, !$field.is_nil(), $message);
     };
 }
 
@@ -97,7 +99,7 @@ macro_rules! validate_uuid {
 macro_rules! validate_length {
     ($field:expr, $min:expr, $max:expr, $message:expr) => {
         let len = $field.len();
-        validate_field!($field, len >= $min && len <= $max, $message);
+        $crate::validate_field!($field, len >= $min && len <= $max, $message);
     };
 }
 
@@ -111,7 +113,11 @@ macro_rules! validate_length {
 #[macro_export]
 macro_rules! validate_email {
     ($field:expr, $message:expr) => {
-        validate_field!($field, $field.contains('@') && $field.contains('.'), $message);
+        $crate::validate_field!(
+            $field,
+            $field.contains('@') && $field.contains('.'),
+            $message
+        );
     };
 }
 
@@ -125,7 +131,7 @@ macro_rules! validate_email {
 #[macro_export]
 macro_rules! validate_range {
     ($field:expr, $min:expr, $max:expr, $message:expr) => {
-        validate_field!($field, *$field >= $min && *$field <= $max, $message);
+        $crate::validate_field!($field, *$field >= $min && *$field <= $max, $message);
     };
 }
 
@@ -143,7 +149,12 @@ mod tests {
     impl RequestValidation for TestRequest {
         fn validate(&self) -> Result<(), ApiError> {
             validate_required!(self.name, "Name is required");
-            validate_length!(self.name, 2, 100, "Name must be between 2 and 100 characters");
+            validate_length!(
+                self.name,
+                2,
+                100,
+                "Name must be between 2 and 100 characters"
+            );
             validate_email!(self.email, "Invalid email format");
             validate_range!(self.age, 0, 150, "Age must be between 0 and 150");
             Ok(())
@@ -190,4 +201,3 @@ mod tests {
         assert!(request.validate().is_err());
     }
 }
-

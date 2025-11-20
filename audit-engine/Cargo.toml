@@ -28,5 +28,5 @@ events-bus = { path = "../external-services/events-bus" }
 crypto = { path = "../crypto" }
 
 # Audit specific dependencies
-sha2 = "0.10"
+sha2 = { workspace = true }
 rs_merkle = "1.4"

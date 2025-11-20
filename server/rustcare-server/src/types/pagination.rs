@@ -1,13 +1,13 @@
 //! Pagination types and utilities for consistent pagination across all endpoints
 
 use serde::Deserialize;
-use utoipa::IntoParams;
+use utoipa::{IntoParams, ToSchema};
 use crate::error::{ResponseMetadata, PaginationInfo};
 
 /// Standard pagination parameters for list endpoints
 ///
 /// All list endpoints should use this type for consistent pagination behavior.
-#[derive(Debug, Deserialize, IntoParams, Clone)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema, Clone)]
 pub struct PaginationParams {
     #[param(example = 1, minimum = 1)]
     pub page: Option<u32>,

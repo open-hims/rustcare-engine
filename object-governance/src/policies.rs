@@ -1,5 +1,5 @@
 use crate::classification::{ClassificationMetadata, DataClassification};
-use crate::error::{GovernanceError, GovernanceResult};
+use crate::error::GovernanceResult;
 use crate::lifecycle::{LifecycleRule, RetentionPolicy};
 use crate::storage::{ObjectMetadata, StorageBackend};
 use chrono::{DateTime, Utc};

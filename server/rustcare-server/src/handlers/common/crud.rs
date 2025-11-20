@@ -20,10 +20,10 @@ use crate::middleware::AuthContext;
 #[async_trait]
 pub trait CrudHandler<T, CreateReq, UpdateReq, ListParams>
 where
-    T: for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow> + Send + Sync,
-    CreateReq: Send + Sync,
-    UpdateReq: Send + Sync,
-    ListParams: Send + Sync,
+    T: for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow> + Send + Sync + Unpin + 'static,
+    CreateReq: Send + Sync + 'static,
+    UpdateReq: Send + Sync + 'static,
+    ListParams: Send + Sync + 'static,
 {
     /// The database table name
     fn table_name() -> &'static str;
@@ -36,10 +36,13 @@ where
         State(server): State<RustCareServer>,
         Query(params): Query<ListParams>,
     ) -> Result<Json<ApiResponse<Vec<T>>>, ApiError> {
-        let mut query = PaginatedQuery::new(&format!(
-            "SELECT * FROM {} WHERE (is_deleted = false OR is_deleted IS NULL)",
-            Self::table_name()
-        ));
+        // Build query string to avoid temporary value issue
+        const SELECT_QUERY: &str = "SELECT * FROM ";
+        const WHERE_NOT_DELETED: &str = " WHERE (is_deleted = false OR is_deleted IS NULL)";
+        let table_name = Self::table_name();
+        let query_str = format!("{}{}{}", SELECT_QUERY, table_name, WHERE_NOT_DELETED);
+        let query_str_static: &'static str = Box::leak(query_str.into_boxed_str());
+        let mut query = PaginatedQuery::new(query_str_static);
         
         // Apply custom filters
         Self::apply_filters(&mut query, &params)?;
@@ -154,10 +157,10 @@ where
 #[async_trait]
 pub trait AuthCrudHandler<T, CreateReq, UpdateReq, ListParams>: CrudHandler<T, CreateReq, UpdateReq, ListParams>
 where
-    T: for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow> + Send + Sync,
-    CreateReq: Send + Sync,
-    UpdateReq: Send + Sync,
-    ListParams: Send + Sync,
+    T: for<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow> + Send + Sync + Unpin + 'static,
+    CreateReq: Send + Sync + 'static,
+    UpdateReq: Send + Sync + 'static,
+    ListParams: Send + Sync + 'static,
 {
     /// Get a single resource by ID with organization filtering
     async fn get_with_auth(

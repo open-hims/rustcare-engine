@@ -15,7 +15,7 @@ categories = ["web-programming", "authentication"]
 tokio = { workspace = true, features = ["full"] }
 async-trait = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-serde_json = "1.0"
+serde_json = { workspace = true }
 uuid = { workspace = true, features = ["v4", "serde"] }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
@@ -30,7 +30,7 @@ database-layer = { path = "../database-layer" }
 
 # HTTP server
 axum = { workspace = true }
-utoipa = { version = "5.1", features = ["axum_extras"] }
+utoipa = { workspace = true }
 
 [dev-dependencies]
 tokio-test = "0.4"

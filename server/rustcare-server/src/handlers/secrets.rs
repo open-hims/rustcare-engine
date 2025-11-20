@@ -242,8 +242,8 @@ pub async fn get_secret(
 )]
 pub async fn create_secret(
     State(_server): State<RustCareServer>,
-    Json(request): Json<CreateSecretRequest>,
     _auth: AuthContext,
+    Json(request): Json<CreateSecretRequest>,
 ) -> Result<Json<ApiResponse<SecretResponse>>> {
     // TODO: Implement with SecretsManager
     // let secrets_manager = server.secrets_manager();
@@ -295,9 +295,9 @@ pub async fn create_secret(
 )]
 pub async fn update_secret(
     State(_server): State<RustCareServer>,
+    _auth: AuthContext,
     Path(key): Path<String>,
     Json(request): Json<UpdateSecretRequest>,
-    _auth: AuthContext,
 ) -> Result<Json<ApiResponse<SecretResponse>>> {
     // TODO: Implement with SecretsManager
     

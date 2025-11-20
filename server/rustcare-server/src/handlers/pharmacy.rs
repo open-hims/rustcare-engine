@@ -1,22 +1,23 @@
+use crate::error::{api_success, api_success_with_meta, ApiError, ApiResponse};
+use crate::handlers::common::crud::{AuthCrudHandler, CrudHandler};
+use crate::middleware::AuthContext;
+use crate::server::RustCareServer;
+use crate::services::AuditService;
+use crate::types::pagination::PaginationParams;
+use crate::utils::query_builder::PaginatedQuery;
+use crate::validation::RequestValidation;
+use crate::{validate_email, validate_field, validate_length, validate_required};
+use async_trait::async_trait;
 use axum::{
-    extract::{Query, State, Path},
+    extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use utoipa::{ToSchema, IntoParams};
-use crate::server::RustCareServer;
-use crate::error::{ApiError, ApiResponse, api_success, api_success_with_meta};
-use crate::utils::query_builder::PaginatedQuery;
-use crate::types::pagination::PaginationParams;
-use crate::middleware::AuthContext;
-use crate::handlers::common::crud::{CrudHandler, AuthCrudHandler};
-use crate::validation::RequestValidation;
-use crate::services::AuditService;
 use sqlx::FromRow;
 use std::collections::HashMap;
-use async_trait::async_trait;
+use utoipa::{IntoParams, ToSchema};
+use uuid::Uuid;
 
 #[cfg(feature = "mcp")]
 use mcp_macros::mcp_tool;
@@ -83,15 +84,20 @@ impl RequestValidation for CreatePharmacyRequest {
         validate_required!(self.state, "State is required");
         validate_required!(self.postal_code, "Postal code is required");
         validate_required!(self.country, "Country is required");
-        
-        validate_length!(self.name, 1, 200, "Name must be between 1 and 200 characters");
+
+        validate_length!(
+            self.name,
+            1,
+            200,
+            "Name must be between 1 and 200 characters"
+        );
         validate_length!(self.code, 1, 50, "Code must be between 1 and 50 characters");
-        
+
         // Validate email format if provided
         if let Some(ref email) = self.email {
             validate_email!(email, "Invalid email format");
         }
-        
+
         Ok(())
     }
 }
@@ -124,17 +130,17 @@ impl RequestValidation for UpdatePharmacyRequest {
         if let Some(ref name) = self.name {
             validate_length!(name, 1, 200, "Name must be between 1 and 200 characters");
         }
-        
+
         // Validate code length if provided
         if let Some(ref code) = self.code {
             validate_length!(code, 1, 50, "Code must be between 1 and 50 characters");
         }
-        
+
         // Validate email format if provided
         if let Some(ref email) = self.email {
             validate_email!(email, "Invalid email format");
         }
-        
+
         Ok(())
     }
 }
@@ -260,45 +266,56 @@ pub struct ListPrescriptionsParams {
 struct PharmacyHandler;
 
 #[async_trait]
-impl CrudHandler<Pharmacy, CreatePharmacyRequest, UpdatePharmacyRequest, ListPharmaciesParams> for PharmacyHandler {
+impl CrudHandler<Pharmacy, CreatePharmacyRequest, UpdatePharmacyRequest, ListPharmaciesParams>
+    for PharmacyHandler
+{
     fn table_name() -> &'static str {
         "pharmacies"
     }
-    
-    fn apply_filters(query: &mut PaginatedQuery, params: &ListPharmaciesParams) -> Result<(), ApiError> {
+
+    fn apply_filters(
+        query: &mut PaginatedQuery,
+        params: &ListPharmaciesParams,
+    ) -> Result<(), ApiError> {
         query
             .filter_eq("is_active", params.is_active)
             .filter_eq("is_internal", params.is_internal)
-            .filter_eq("city", params.city.as_ref().map(|s| s.as_str()))
-            .filter_eq("state", params.state.as_ref().map(|s| s.as_str()));
+            .filter_eq("city", params.city.as_deref().map(str::to_owned))
+            .filter_eq("state", params.state.as_deref().map(str::to_owned));
         Ok(())
     }
-    
+
     fn extract_page(params: &ListPharmaciesParams) -> Option<u32> {
-        Some(params.pagination.page)
+        Some(params.pagination.page())
     }
-    
+
     fn extract_page_size(params: &ListPharmaciesParams) -> Option<u32> {
-        Some(params.pagination.page_size)
+        Some(params.pagination.page_size())
     }
 }
 
-impl AuthCrudHandler<Pharmacy, CreatePharmacyRequest, UpdatePharmacyRequest, ListPharmaciesParams> for PharmacyHandler {}
+impl AuthCrudHandler<Pharmacy, CreatePharmacyRequest, UpdatePharmacyRequest, ListPharmaciesParams>
+    for PharmacyHandler
+{
+}
 
 // ============================================================================
 // API HANDLERS (Refactored to use new utilities)
 // ============================================================================
 
 /// List all pharmacies
-#[cfg_attr(feature = "mcp", mcp_macros::mcp_tool(
-    name = "list_pharmacies",
-    description = "List all pharmacies for the organization with optional filtering by city, state, and status",
-    category = "pharmacy",
-    requires_permission = "pharmacy:read",
-    sensitive = false,
-    response_type = "Vec<Pharmacy>",
-    render_type = "table"
-))]
+#[cfg_attr(
+    feature = "mcp",
+    mcp_macros::mcp_tool(
+        name = "list_pharmacies",
+        description = "List all pharmacies for the organization with optional filtering by city, state, and status",
+        category = "pharmacy",
+        requires_permission = "pharmacy:read",
+        sensitive = false,
+        response_type = "Vec<Pharmacy>",
+        render_type = "table"
+    )
+)]
 #[utoipa::path(
     get,
     path = crate::routes::paths::api_v1::PHARMACY_PHARMACIES,
@@ -317,41 +334,45 @@ pub async fn list_pharmacies(
     auth: AuthContext, // Using new AuthContext extractor
 ) -> Result<Json<ApiResponse<Vec<Pharmacy>>>, ApiError> {
     // Use PaginatedQuery utility instead of manual query building
-    let mut query_builder = PaginatedQuery::new(
-        "SELECT * FROM pharmacies WHERE is_deleted = false"
-    );
-    
+    let mut query_builder =
+        PaginatedQuery::new("SELECT * FROM pharmacies WHERE is_deleted = false");
+
     query_builder
         .filter_organization(Some(auth.organization_id)) // Use actual auth context
         .filter_eq("is_active", params.is_active)
         .filter_eq("is_internal", params.is_internal)
-        .filter_eq("city", params.city.as_ref().map(|s| s.as_str()))
-        .filter_eq("state", params.state.as_ref().map(|s| s.as_str()))
+        .filter_eq("city", params.city.as_deref().map(str::to_owned))
+        .filter_eq("state", params.state.as_deref().map(str::to_owned))
         .order_by_created_desc()
-        .paginate(
-            params.pagination.page,
-            params.pagination.page_size
-        );
-    
-    let pharmacies: Vec<Pharmacy> = query_builder.build_query_as().fetch_all(&server.db_pool).await?;
-    
+        .paginate(params.pagination.page, params.pagination.page_size);
+
+    let pharmacies: Vec<Pharmacy> = query_builder
+        .build_query_as()
+        .fetch_all(&server.db_pool)
+        .await?;
+
     // Use pagination metadata helper
     let total_count = get_pharmacies_count(&server, &auth, &params).await?;
     let metadata = params.pagination.to_metadata(total_count);
-    
-    Ok(Json(crate::error::api_success_with_meta(pharmacies, metadata)))
+
+    Ok(Json(crate::error::api_success_with_meta(
+        pharmacies, metadata,
+    )))
 }
 
 /// Get a specific pharmacy by ID
-#[cfg_attr(feature = "mcp", mcp_macros::mcp_tool(
-    name = "get_pharmacy",
-    description = "Retrieve detailed information about a specific pharmacy by ID",
-    category = "pharmacy",
-    requires_permission = "pharmacy:read",
-    sensitive = false,
-    response_type = "Pharmacy",
-    render_type = "markdown"
-))]
+#[cfg_attr(
+    feature = "mcp",
+    mcp_macros::mcp_tool(
+        name = "get_pharmacy",
+        description = "Retrieve detailed information about a specific pharmacy by ID",
+        category = "pharmacy",
+        requires_permission = "pharmacy:read",
+        sensitive = false,
+        response_type = "Pharmacy",
+        render_type = "markdown"
+    )
+)]
 #[utoipa::path(
     get,
     path = crate::routes::paths::api_v1::PHARMACY_PHARMACY_BY_ID,
@@ -397,9 +418,9 @@ pub async fn create_pharmacy(
 ) -> Result<(StatusCode, Json<ApiResponse<Pharmacy>>), ApiError> {
     // Validate request
     req.validate()?;
-    
+
     let pharmacy_id = Uuid::new_v4();
-    
+
     let pharmacy = sqlx::query_as::<_, Pharmacy>(
         r#"
         INSERT INTO pharmacies (
@@ -434,21 +455,23 @@ pub async fn create_pharmacy(
     .bind(req.settings.unwrap_or_else(|| serde_json::json!({})))
     .fetch_one(&server.db_pool)
     .await?;
-    
+
     // Log the creation using AuditService (automatically includes request context)
     let audit_service = AuditService::new(server.db_pool.clone());
-    let _ = audit_service.log_general_action(
-        &auth,
-        "pharmacy",
-        pharmacy.id,
-        "created",
-        Some(serde_json::json!({
-            "name": req.name,
-            "code": req.code,
-            "request_id": auth.request_id()
-        })),
-    ).await;
-    
+    let _ = audit_service
+        .log_general_action(
+            &auth,
+            "pharmacy",
+            pharmacy.id,
+            "created",
+            Some(serde_json::json!({
+                "name": req.name,
+                "code": req.code,
+                "request_id": auth.request_id()
+            })),
+        )
+        .await;
+
     Ok((StatusCode::CREATED, Json(api_success(pharmacy))))
 }
 
@@ -477,7 +500,7 @@ pub async fn update_pharmacy(
 ) -> Result<Json<ApiResponse<Pharmacy>>, ApiError> {
     // Validate request
     req.validate()?;
-    
+
     // Check if pharmacy exists and belongs to organization
     let exists = sqlx::query_scalar::<_, bool>(
         r#"
@@ -487,17 +510,17 @@ pub async fn update_pharmacy(
               AND organization_id = $2 
               AND (is_deleted = false OR is_deleted IS NULL)
         )
-        "#
+        "#,
     )
     .bind(pharmacy_id)
     .bind(auth.organization_id)
     .fetch_one(&server.db_pool)
     .await?;
-    
+
     if !exists {
         return Err(ApiError::not_found("pharmacy"));
     }
-    
+
     // Build update query dynamically based on provided fields
     let pharmacy = sqlx::query_as::<_, Pharmacy>(
         r#"
@@ -523,7 +546,7 @@ pub async fn update_pharmacy(
             updated_at = NOW()
         WHERE id = $18 AND organization_id = $19
         RETURNING *
-        "#
+        "#,
     )
     .bind(&req.name)
     .bind(&req.code)
@@ -546,27 +569,32 @@ pub async fn update_pharmacy(
     .bind(auth.organization_id)
     .fetch_optional(&server.db_pool)
     .await?;
-    
+
     if let Some(ref pharmacy) = pharmacy {
         // Check permission using Zanzibar (if available)
-        if let Err(e) = auth.require_permission("pharmacy", Some(pharmacy_id), "update").await {
+        if let Err(e) = auth
+            .require_permission("pharmacy", Some(pharmacy_id), "update")
+            .await
+        {
             tracing::warn!("Permission check failed (falling back to org check): {}", e);
             // Fallback: organization check already done above
         }
-        
+
         // Log the update using AuditService (automatically includes request context)
         let audit_service = AuditService::new(server.db_pool.clone());
-        let _ = audit_service.log_general_action(
-            &auth,
-            "pharmacy",
-            pharmacy_id,
-            "updated",
-            Some(serde_json::json!({
-                "request_id": auth.request_id()
-            })),
-        ).await;
+        let _ = audit_service
+            .log_general_action(
+                &auth,
+                "pharmacy",
+                pharmacy_id,
+                "updated",
+                Some(serde_json::json!({
+                    "request_id": auth.request_id()
+                })),
+            )
+            .await;
     }
-    
+
     match pharmacy {
         Some(pharm) => Ok(Json(api_success(pharm))),
         None => Err(ApiError::not_found("pharmacy")),
@@ -619,26 +647,24 @@ pub async fn list_inventory(
     // Use PaginatedQuery utility with JOIN query
     let mut query = PaginatedQuery::new(
         "SELECT pi.* FROM pharmacy_inventory pi
-         JOIN pharmacies p ON pi.pharmacy_id = p.id"
+         JOIN pharmacies p ON pi.pharmacy_id = p.id",
     );
-    
+
     query
         .add_base_filter("p.organization_id", auth.organization_id)
         .query_builder()
         .push(" AND (p.is_deleted = false OR p.is_deleted IS NULL)");
-    
+
     query
         .filter_eq("pi.pharmacy_id", params.pharmacy_id)
         .filter_eq("pi.medication_id", params.medication_id)
-        .filter_eq("pi.status", params.status.as_ref())
+        .filter_eq("pi.status", params.status.clone())
         .order_by("pi.created_at", "DESC")
-        .paginate(
-            params.pagination.page,
-            params.pagination.page_size
-        );
-    
-    let inventory: Vec<PharmacyInventory> = query.build_query_as().fetch_all(&server.db_pool).await?;
-    
+        .paginate(params.pagination.page, params.pagination.page_size);
+
+    let inventory: Vec<PharmacyInventory> =
+        query.build_query_as().fetch_all(&server.db_pool).await?;
+
     // Get total count for pagination metadata
     let total_count = sqlx::query_scalar::<_, i64>(
         r#"
@@ -650,7 +676,7 @@ pub async fn list_inventory(
           AND ($2::uuid IS NULL OR pi.pharmacy_id = $2)
           AND ($3::uuid IS NULL OR pi.medication_id = $3)
           AND ($4::text IS NULL OR pi.status = $4)
-        "#
+        "#,
     )
     .bind(auth.organization_id)
     .bind(params.pharmacy_id)
@@ -658,7 +684,7 @@ pub async fn list_inventory(
     .bind(params.status.as_deref())
     .fetch_one(&server.db_pool)
     .await?;
-    
+
     let metadata = params.pagination.to_metadata(total_count);
     Ok(Json(api_success_with_meta(inventory, metadata)))
 }
@@ -683,25 +709,23 @@ pub async fn list_prescriptions(
 ) -> Result<Json<ApiResponse<Vec<Prescription>>>, ApiError> {
     // Use PaginatedQuery utility
     let mut query = PaginatedQuery::new("SELECT * FROM prescriptions");
-    
+
     query
         .add_base_filter("organization_id", auth.organization_id)
         .query_builder()
         .push(" AND (is_deleted = false OR is_deleted IS NULL)");
-    
+
     query
         .filter_eq("patient_id", params.patient_id)
         .filter_eq("provider_id", params.provider_id)
         .filter_eq("pharmacy_id", params.pharmacy_id)
-        .filter_eq("status", params.status.as_ref())
+        .filter_eq("status", params.status.clone())
         .order_by("prescribed_date", "DESC")
-        .paginate(
-            params.pagination.page,
-            params.pagination.page_size
-        );
-    
-    let prescriptions: Vec<Prescription> = query.build_query_as().fetch_all(&server.db_pool).await?;
-    
+        .paginate(params.pagination.page, params.pagination.page_size);
+
+    let prescriptions: Vec<Prescription> =
+        query.build_query_as().fetch_all(&server.db_pool).await?;
+
     // Get total count for pagination metadata
     let total_count = sqlx::query_scalar::<_, i64>(
         r#"
@@ -712,7 +736,7 @@ pub async fn list_prescriptions(
           AND ($3::uuid IS NULL OR provider_id = $3)
           AND ($4::uuid IS NULL OR pharmacy_id = $4)
           AND ($5::text IS NULL OR status = $5)
-        "#
+        "#,
     )
     .bind(auth.organization_id)
     .bind(params.patient_id)
@@ -721,7 +745,7 @@ pub async fn list_prescriptions(
     .bind(params.status.as_deref())
     .fetch_one(&server.db_pool)
     .await?;
-    
+
     let metadata = params.pagination.to_metadata(total_count);
     Ok(Json(api_success_with_meta(prescriptions, metadata)))
 }
@@ -745,7 +769,7 @@ async fn get_pharmacies_count(
           AND ($3::bool IS NULL OR is_internal = $3)
           AND ($4::text IS NULL OR city = $4)
           AND ($5::text IS NULL OR state = $5)
-        "#
+        "#,
     )
     .bind(auth.organization_id)
     .bind(params.is_active)
@@ -754,6 +778,6 @@ async fn get_pharmacies_count(
     .bind(params.state.as_deref())
     .fetch_one(&server.db_pool)
     .await?;
-    
+
     Ok(count)
 }

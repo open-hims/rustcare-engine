@@ -1,3 +1,12 @@
+use crate::middleware::AuthContext;
+use crate::services::AuditService;
+use crate::types::pagination::PaginationParams;
+use crate::validation::RequestValidation;
+use crate::{
+    error::{api_success, ApiError, ApiResponse},
+    server::RustCareServer,
+};
+use crate::{validate_field, validate_length, validate_required, validate_uuid};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -6,16 +15,8 @@ use axum::{
 use chrono::{DateTime, Utc};
 use database_layer::models::{ComplianceFramework, ComplianceRule};
 use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
-use utoipa::{ToSchema, IntoParams};
-use crate::{
-    error::{ApiError, ApiResponse, api_success},
-    server::RustCareServer,
-};
-use crate::middleware::AuthContext;
-use crate::types::pagination::PaginationParams;
-use crate::validation::RequestValidation;
-use crate::services::AuditService;
 
 /// Entity compliance status
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -55,10 +56,15 @@ impl RequestValidation for CreateComplianceFrameworkRequest {
         validate_required!(self.code, "Framework code is required");
         validate_required!(self.version, "Version is required");
         validate_required!(self.effective_date, "Effective date is required");
-        
-        validate_length!(self.name, 1, 200, "Name must be between 1 and 200 characters");
+
+        validate_length!(
+            self.name,
+            1,
+            200,
+            "Name must be between 1 and 200 characters"
+        );
         validate_length!(self.code, 1, 50, "Code must be between 1 and 50 characters");
-        
+
         Ok(())
     }
 }
@@ -120,10 +126,20 @@ impl RequestValidation for CreateComplianceRuleRequest {
         validate_required!(self.severity, "Severity is required");
         validate_required!(self.rule_type, "Rule type is required");
         validate_required!(self.effective_date, "Effective date is required");
-        
-        validate_length!(self.title, 1, 200, "Title must be between 1 and 200 characters");
-        validate_length!(self.rule_code, 1, 50, "Rule code must be between 1 and 50 characters");
-        
+
+        validate_length!(
+            self.title,
+            1,
+            200,
+            "Title must be between 1 and 200 characters"
+        );
+        validate_length!(
+            self.rule_code,
+            1,
+            50,
+            "Rule code must be between 1 and 50 characters"
+        );
+
         // Validate severity
         let valid_severities = ["low", "medium", "high", "critical"];
         validate_field!(
@@ -131,7 +147,7 @@ impl RequestValidation for CreateComplianceRuleRequest {
             valid_severities.contains(&self.severity.as_str()),
             format!("Severity must be one of: {}", valid_severities.join(", "))
         );
-        
+
         // Validate check_frequency_days if provided
         if let Some(frequency) = self.check_frequency_days {
             validate_field!(
@@ -140,7 +156,7 @@ impl RequestValidation for CreateComplianceRuleRequest {
                 "Check frequency must be between 1 and 365 days"
             );
         }
-        
+
         Ok(())
     }
 }
@@ -177,7 +193,12 @@ impl RequestValidation for UpdateComplianceRuleRequest {
             validate_length!(title, 1, 200, "Title must be between 1 and 200 characters");
         }
         if let Some(ref rule_code) = self.rule_code {
-            validate_length!(rule_code, 1, 50, "Rule code must be between 1 and 50 characters");
+            validate_length!(
+                rule_code,
+                1,
+                50,
+                "Rule code must be between 1 and 50 characters"
+            );
         }
         if let Some(ref severity) = self.severity {
             let valid_severities = ["low", "medium", "high", "critical"];
@@ -249,13 +270,9 @@ pub async fn list_compliance_frameworks(
     State(server): State<RustCareServer>,
     auth: AuthContext,
 ) -> Result<Json<crate::error::ApiResponse<Vec<ComplianceFramework>>>, ApiError> {
-    let frameworks = server.compliance_repo
-        .list_frameworks(
-            Some(auth.organization_id),
-            Some("active"),
-            Some(100),
-            None,
-        )
+    let frameworks = server
+        .compliance_repo
+        .list_frameworks(Some(auth.organization_id), Some("active"), Some(100), None)
         .await
         .map_err(ApiError::from)?;
 
@@ -287,24 +304,31 @@ pub async fn create_compliance_framework(
 ) -> Result<Json<crate::error::ApiResponse<ComplianceFramework>>, ApiError> {
     // Validate request
     request.validate()?;
-    
+
     let organization_id = auth.organization_id;
-    
+
     // Parse effective date to NaiveDate for database compatibility
     let effective_date = chrono::DateTime::parse_from_rfc3339(&request.effective_date)
-        .map_err(|_| ApiError::validation("Invalid effective_date format. Expected RFC3339 format."))?
+        .map_err(|_| {
+            ApiError::validation("Invalid effective_date format. Expected RFC3339 format.")
+        })?
         .date_naive();
 
     // Parse review date if provided, convert to NaiveDate
     let review_date = if let Some(ref review_str) = request.review_date {
-        Some(chrono::DateTime::parse_from_rfc3339(review_str)
-            .map_err(|_| ApiError::validation("Invalid review_date format. Expected RFC3339 format."))?
-            .date_naive())
+        Some(
+            chrono::DateTime::parse_from_rfc3339(review_str)
+                .map_err(|_| {
+                    ApiError::validation("Invalid review_date format. Expected RFC3339 format.")
+                })?
+                .date_naive(),
+        )
     } else {
         None
     };
 
-    let framework = server.compliance_repo
+    let framework = server
+        .compliance_repo
         .create_framework(
             organization_id,
             &request.name,
@@ -322,18 +346,24 @@ pub async fn create_compliance_framework(
         .await
         .map_err(ApiError::from)?;
 
-    tracing::info!("Compliance framework created: {} - {}", framework.code, framework.name);
-    
+    tracing::info!(
+        "Compliance framework created: {} - {}",
+        framework.code,
+        framework.name
+    );
+
     // Log the creation using AuditService
     let audit_service = AuditService::new(server.db_pool.clone());
-    let _ = audit_service.log_general_action(
-        &auth,
-        "compliance_framework",
-        framework.id,
-        "created",
-        Some(serde_json::json!({"name": request.name, "code": request.code})),
-    ).await;
-    
+    let _ = audit_service
+        .log_general_action(
+            &auth,
+            "compliance_framework",
+            framework.id,
+            "created",
+            Some(serde_json::json!({"name": request.name, "code": request.code})),
+        )
+        .await;
+
     Ok(Json(api_success(framework)))
 }
 
@@ -369,8 +399,16 @@ pub async fn list_compliance_rules(
     Query(params): Query<ListComplianceRulesParams>,
     auth: AuthContext,
 ) -> Result<Json<ApiResponse<Vec<ComplianceRule>>>, ApiError> {
-    let rules = server.compliance_repo
-        .list_rules(Some(framework_id), Some(auth.organization_id), None, None, None, None)
+    let rules = server
+        .compliance_repo
+        .list_rules(
+            Some(framework_id),
+            Some(auth.organization_id),
+            None,
+            None,
+            None,
+            None,
+        )
         .await
         .map_err(|e| ApiError::internal(format!("Failed to list compliance rules: {}", e)))?;
 
@@ -378,14 +416,13 @@ pub async fn list_compliance_rules(
     let total_count = rules.len() as i64;
     let offset = params.pagination.offset() as usize;
     let limit = params.pagination.limit() as usize;
-    let paginated_rules: Vec<ComplianceRule> = rules
-        .into_iter()
-        .skip(offset)
-        .take(limit)
-        .collect();
-    
+    let paginated_rules: Vec<ComplianceRule> = rules.into_iter().skip(offset).take(limit).collect();
+
     let metadata = params.pagination.to_metadata(total_count);
-    Ok(Json(crate::error::api_success_with_meta(paginated_rules, metadata)))
+    Ok(Json(crate::error::api_success_with_meta(
+        paginated_rules,
+        metadata,
+    )))
 }
 
 /// Create compliance rule
@@ -411,13 +448,16 @@ pub async fn create_compliance_rule(
 ) -> Result<Json<crate::error::ApiResponse<ComplianceRule>>, ApiError> {
     let organization_id = auth.organization_id;
     let created_by = auth.user_id;
-    
+
     // Parse effective_date from string to NaiveDate for database compatibility
     let effective_date = chrono::DateTime::parse_from_rfc3339(&request.effective_date)
-        .map_err(|_| ApiError::validation("Invalid effective_date format. Expected RFC3339 format."))?
+        .map_err(|_| {
+            ApiError::validation("Invalid effective_date format. Expected RFC3339 format.")
+        })?
         .date_naive();
-    
-    let rule = server.compliance_repo
+
+    let rule = server
+        .compliance_repo
         .create_rule(
             organization_id,
             request.framework_id,
@@ -427,12 +467,20 @@ pub async fn create_compliance_rule(
             request.category.as_deref(),
             &request.severity,
             &request.rule_type,
-            Some(serde_json::to_value(&request.applies_to_entity_types)
-                .map_err(|e| ApiError::internal(format!("Failed to serialize entity types: {}", e)))?),
-            Some(serde_json::to_value(&request.applies_to_roles)
-                .map_err(|e| ApiError::internal(format!("Failed to serialize roles: {}", e)))?),
-            Some(serde_json::to_value(&request.applies_to_regions)
-                .map_err(|e| ApiError::internal(format!("Failed to serialize regions: {}", e)))?),
+            Some(
+                serde_json::to_value(&request.applies_to_entity_types).map_err(|e| {
+                    ApiError::internal(format!("Failed to serialize entity types: {}", e))
+                })?,
+            ),
+            Some(
+                serde_json::to_value(&request.applies_to_roles)
+                    .map_err(|e| ApiError::internal(format!("Failed to serialize roles: {}", e)))?,
+            ),
+            Some(
+                serde_json::to_value(&request.applies_to_regions).map_err(|e| {
+                    ApiError::internal(format!("Failed to serialize regions: {}", e))
+                })?,
+            ),
             request.validation_logic,
             request.remediation_steps.as_deref(),
             request.is_automated,
@@ -446,13 +494,15 @@ pub async fn create_compliance_rule(
 
     // Log the creation using AuditService
     let audit_service = AuditService::new(server.db_pool.clone());
-    let _ = audit_service.log_general_action(
-        &auth,
-        "compliance_rule",
-        rule.id,
-        "created",
-        Some(serde_json::json!({"title": request.title, "rule_code": request.rule_code})),
-    ).await;
+    let _ = audit_service
+        .log_general_action(
+            &auth,
+            "compliance_rule",
+            rule.id,
+            "created",
+            Some(serde_json::json!({"title": request.title, "rule_code": request.rule_code})),
+        )
+        .await;
 
     Ok(Json(api_success(rule)))
 }
@@ -482,7 +532,7 @@ pub async fn auto_assign_compliance(
     let mut assigned_rules = Vec::new();
     let mut geographic_matches = Vec::new();
     let mut regulatory_authorities = Vec::new();
-    
+
     // Sample auto-assignment logic
     if let Some(postal_code) = &request.postal_code {
         // US postal codes get HIPAA
@@ -493,7 +543,7 @@ pub async fn auto_assign_compliance(
             regulatory_authorities.push("HHS - Office for Civil Rights".to_string());
         }
     }
-    
+
     let response = ComplianceAssignmentResponse {
         assigned_frameworks,
         assigned_rules,
@@ -589,27 +639,31 @@ pub async fn list_frameworks(
 ) -> Result<Json<ApiResponse<Vec<ComplianceFramework>>>, ApiError> {
     // Filter out soft-deleted frameworks by excluding status='deprecated'
     let status_filter = params.status.as_deref().unwrap_or("active");
-    let mut frameworks = server.compliance_repo
+    let mut frameworks = server
+        .compliance_repo
         .list_frameworks(None, Some(status_filter), None, None)
         .await
         .map_err(|e| ApiError::internal(format!("Failed to list compliance frameworks: {}", e)))?;
-    
+
     // Additional filtering to exclude any deprecated frameworks that might slip through
     frameworks.retain(|f| f.status.as_str() != "deprecated");
-    
+
     // Apply pagination (repository doesn't support pagination, so we do it in-memory)
     let total_count = frameworks.len() as i64;
     let offset = params.pagination.offset() as usize;
     let limit = params.pagination.limit() as usize;
-    let paginated_frameworks: Vec<ComplianceFramework> = frameworks
-        .into_iter()
-        .skip(offset)
-        .take(limit)
-        .collect();
-    
-    tracing::info!("Successfully retrieved {} active compliance frameworks", paginated_frameworks.len());
+    let paginated_frameworks: Vec<ComplianceFramework> =
+        frameworks.into_iter().skip(offset).take(limit).collect();
+
+    tracing::info!(
+        "Successfully retrieved {} active compliance frameworks",
+        paginated_frameworks.len()
+    );
     let metadata = params.pagination.to_metadata(total_count);
-    Ok(Json(crate::error::api_success_with_meta(paginated_frameworks, metadata)))
+    Ok(Json(crate::error::api_success_with_meta(
+        paginated_frameworks,
+        metadata,
+    )))
 }
 
 /// Create compliance framework
@@ -625,41 +679,53 @@ pub async fn list_frameworks(
 )]
 pub async fn create_framework(
     State(server): State<RustCareServer>,
-    Json(request): Json<CreateComplianceFrameworkRequest>,
     auth: AuthContext,
+    Json(request): Json<CreateComplianceFrameworkRequest>,
 ) -> Result<Json<crate::error::ApiResponse<ComplianceFramework>>, ApiError> {
     // Parse dates as DateTime first, then convert to NaiveDate for database compatibility
     let effective_date = DateTime::parse_from_rfc3339(&request.effective_date)
-        .map_err(|_| ApiError::validation("Invalid effective_date format. Expected RFC3339 format."))?
+        .map_err(|_| {
+            ApiError::validation("Invalid effective_date format. Expected RFC3339 format.")
+        })?
         .date_naive();
-    
-    let review_date = request.review_date.as_ref()
+
+    let review_date = request
+        .review_date
+        .as_ref()
         .map(|date_str| {
             DateTime::parse_from_rfc3339(date_str)
-                .map_err(|_| ApiError::validation("Invalid review_date format. Expected RFC3339 format."))
+                .map_err(|_| {
+                    ApiError::validation("Invalid review_date format. Expected RFC3339 format.")
+                })
                 .map(|dt| dt.date_naive())
         })
         .transpose()?;
-    
+
     let org_id = auth.organization_id;
-    
-    let framework = server.compliance_repo.create_framework(
-        org_id,
-        &request.name,
-        &request.code,
-        &request.version,
-        request.description.as_deref(),
-        request.authority.as_deref(),
-        request.jurisdiction.as_deref(),
-        effective_date,
-        review_date,
-        request.parent_framework_id,
-        request.metadata,
-        Some(auth.user_id),
-    ).await
+
+    let framework = server
+        .compliance_repo
+        .create_framework(
+            org_id,
+            &request.name,
+            &request.code,
+            &request.version,
+            request.description.as_deref(),
+            request.authority.as_deref(),
+            request.jurisdiction.as_deref(),
+            effective_date,
+            review_date,
+            request.parent_framework_id,
+            request.metadata,
+            Some(auth.user_id),
+        )
+        .await
         .map_err(ApiError::from)?;
 
-    tracing::info!("Successfully created compliance framework with ID: {}", framework.id);
+    tracing::info!(
+        "Successfully created compliance framework with ID: {}",
+        framework.id
+    );
     Ok(Json(api_success(framework)))
 }
 
@@ -685,14 +751,18 @@ pub async fn get_framework(
     auth: AuthContext,
 ) -> Result<Json<ApiResponse<ComplianceFramework>>, ApiError> {
     // Query framework with organization filtering
-    let framework = server.compliance_repo
-        .list_frameworks(Some(id), None, Some(auth.organization_id), None)
+    let framework = server
+        .compliance_repo
+        .get_framework(id)
         .await
         .map_err(|e| ApiError::internal(format!("Failed to get compliance framework: {}", e)))?
-        .into_iter()
-        .next()
         .ok_or_else(|| ApiError::not_found("compliance_framework"))?;
-    
+
+    // Check organization access
+    if framework.organization_id != auth.organization_id {
+        return Err(ApiError::not_found("compliance_framework"));
+    }
+
     Ok(Json(api_success(framework)))
 }
 
@@ -738,20 +808,15 @@ pub async fn delete_framework(
     Path(id): Path<Uuid>,
 ) -> Result<Json<crate::error::ApiResponse<()>>, ApiError> {
     // Check if framework exists and get its current status
-    let existing_framework = sqlx::query!(
+    let framework = sqlx::query!(
         "SELECT id, status FROM compliance_frameworks WHERE id = $1",
         id
     )
     .fetch_optional(&server.db_pool)
     .await
-    .map_err(|e| ApiError::internal(format!("Failed to check existing framework: {}", e)))?;
+    .map_err(|e| ApiError::internal(format!("Failed to check existing framework: {}", e)))?
+    .ok_or_else(|| ApiError::not_found("compliance_framework"))?;
 
-    if existing_framework.is_none() {
-        return Err(ApiError::not_found("compliance_framework"));
-    }
-
-    let framework = existing_framework.unwrap();
-    
     // Check if already soft deleted (deprecated)
     if framework.status.as_str() == "deprecated" {
         return Err(ApiError::conflict("Framework is already deprecated"));
@@ -768,7 +833,7 @@ pub async fn delete_framework(
 
     if active_rule_count.count.unwrap_or(0) > 0 {
         return Err(ApiError::conflict(
-            "Cannot delete framework with active rules. Delete associated rules first."
+            "Cannot delete framework with active rules. Delete associated rules first.",
         ));
     }
 
@@ -827,23 +892,30 @@ pub async fn list_framework_rules(
     auth: AuthContext,
 ) -> Result<Json<ApiResponse<Vec<ComplianceRule>>>, ApiError> {
     // Query rules for the framework with organization filtering
-    let rules = server.compliance_repo
-        .list_rules(Some(framework_id), Some(auth.organization_id), None, None, None, None)
+    let rules = server
+        .compliance_repo
+        .list_rules(
+            Some(framework_id),
+            Some(auth.organization_id),
+            None,
+            None,
+            None,
+            None,
+        )
         .await
         .map_err(|e| ApiError::internal(format!("Failed to list framework rules: {}", e)))?;
-    
+
     // Apply pagination (repository doesn't support pagination, so we do it in-memory)
     let total_count = rules.len() as i64;
     let offset = params.pagination.offset() as usize;
     let limit = params.pagination.limit() as usize;
-    let paginated_rules: Vec<ComplianceRule> = rules
-        .into_iter()
-        .skip(offset)
-        .take(limit)
-        .collect();
-    
+    let paginated_rules: Vec<ComplianceRule> = rules.into_iter().skip(offset).take(limit).collect();
+
     let metadata = params.pagination.to_metadata(total_count);
-    Ok(Json(crate::error::api_success_with_meta(paginated_rules, metadata)))
+    Ok(Json(crate::error::api_success_with_meta(
+        paginated_rules,
+        metadata,
+    )))
 }
 
 /// Query parameters for listing all compliance rules
@@ -874,23 +946,30 @@ pub async fn list_rules(
     auth: AuthContext,
 ) -> Result<Json<ApiResponse<Vec<ComplianceRule>>>, ApiError> {
     // Query rules with organization filtering
-    let rules = server.compliance_repo
-        .list_rules(params.framework_id, Some(auth.organization_id), None, None, None, None)
+    let rules = server
+        .compliance_repo
+        .list_rules(
+            params.framework_id,
+            Some(auth.organization_id),
+            None,
+            None,
+            None,
+            None,
+        )
         .await
         .map_err(|e| ApiError::internal(format!("Failed to list compliance rules: {}", e)))?;
-    
+
     // Apply pagination (repository doesn't support pagination, so we do it in-memory)
     let total_count = rules.len() as i64;
     let offset = params.pagination.offset() as usize;
     let limit = params.pagination.limit() as usize;
-    let paginated_rules: Vec<ComplianceRule> = rules
-        .into_iter()
-        .skip(offset)
-        .take(limit)
-        .collect();
-    
+    let paginated_rules: Vec<ComplianceRule> = rules.into_iter().skip(offset).take(limit).collect();
+
     let metadata = params.pagination.to_metadata(total_count);
-    Ok(Json(crate::error::api_success_with_meta(paginated_rules, metadata)))
+    Ok(Json(crate::error::api_success_with_meta(
+        paginated_rules,
+        metadata,
+    )))
 }
 
 /// Create compliance rule
@@ -983,13 +1062,15 @@ pub async fn update_rule(
 
     // Validate date formats if provided
     if let Some(ref effective_date) = request.effective_date {
-        chrono::DateTime::parse_from_rfc3339(effective_date)
-            .map_err(|_| ApiError::validation("Invalid effective_date format. Expected RFC3339 format."))?;
+        chrono::DateTime::parse_from_rfc3339(effective_date).map_err(|_| {
+            ApiError::validation("Invalid effective_date format. Expected RFC3339 format.")
+        })?;
     }
 
     if let Some(ref expiry_date) = request.expiry_date {
-        chrono::DateTime::parse_from_rfc3339(expiry_date)
-            .map_err(|_| ApiError::validation("Invalid expiry_date format. Expected RFC3339 format."))?;
+        chrono::DateTime::parse_from_rfc3339(expiry_date).map_err(|_| {
+            ApiError::validation("Invalid expiry_date format. Expected RFC3339 format.")
+        })?;
     }
 
     // Update rule with provided fields - for now just return success
@@ -1062,20 +1143,12 @@ pub async fn delete_rule(
     Path(id): Path<Uuid>,
 ) -> Result<Json<crate::error::ApiResponse<()>>, ApiError> {
     // Check if rule exists
-    let existing_rule = sqlx::query!(
-        "SELECT id, status FROM compliance_rules WHERE id = $1",
-        id
-    )
-    .fetch_optional(&server.db_pool)
-    .await
-    .map_err(|e| ApiError::internal(format!("Failed to check existing rule: {}", e)))?;
+    let rule = sqlx::query!("SELECT id, status FROM compliance_rules WHERE id = $1", id)
+        .fetch_optional(&server.db_pool)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to check existing rule: {}", e)))?
+        .ok_or_else(|| ApiError::not_found("compliance_rule"))?;
 
-    if existing_rule.is_none() {
-        return Err(ApiError::not_found("compliance_rule"));
-    }
-
-    let rule = existing_rule.unwrap();
-    
     // Check if already soft deleted (deprecated)
     if rule.status.as_str() == "deprecated" {
         return Err(ApiError::conflict("Rule is already deprecated"));

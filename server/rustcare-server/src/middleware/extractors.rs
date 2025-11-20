@@ -3,8 +3,8 @@
 //! These extractors make it easy to use security features in handlers
 //! without manually combining AuthContext and RequestContext.
 
-use axum::extract::{FromRequestParts, RequestParts};
-use axum::http::{Method, HeaderMap};
+use axum::extract::FromRequestParts;
+use axum::http::{Method, HeaderMap, request::Parts};
 use async_trait::async_trait;
 use crate::error::ApiError;
 use crate::middleware::{AuthContext, RequestContext, SecurityContext, SecurityMiddlewareState};
@@ -30,7 +30,7 @@ where
     type Rejection = ApiError;
     
     async fn from_request_parts(
-        parts: &mut RequestParts<'_, S>,
+        parts: &mut Parts,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
         // Extract AuthContext and RequestContext
@@ -43,17 +43,14 @@ where
             .ok_or_else(|| ApiError::internal("Security middleware state not configured"))?;
         
         // Get method and headers
-        let method = parts.method
-            .ok_or_else(|| ApiError::internal("Method not available"))?;
-        let headers = parts.headers
-            .as_ref()
-            .ok_or_else(|| ApiError::internal("Headers not available"))?;
+        let method = &parts.method;
+        let headers = &parts.headers;
         
         // Create security context with all checks
         let security = SecurityContext::from_contexts_with_checks(
             auth,
             request,
-            &method,
+            method,
             headers,
             security_state,
         ).await?;
@@ -87,7 +84,7 @@ where
     type Rejection = ApiError;
     
     async fn from_request_parts(
-        parts: &mut RequestParts<'_, S>,
+        parts: &mut Parts,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
         let req_ctx = RequestContext::from_request_parts(parts, _state).await?;

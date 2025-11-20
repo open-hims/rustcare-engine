@@ -698,11 +698,12 @@ impl DatabaseEncryption {
         
         // Generate random 96-bit nonce (12 bytes for GCM)
         let nonce_bytes: [u8; 12] = rand::random();
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        // Create Nonce from array using From trait
+        let nonce = Nonce::from(nonce_bytes);
         
         // Encrypt
         let ciphertext = self.cipher
-            .encrypt(nonce, plaintext.as_bytes())
+            .encrypt(&nonce, plaintext.as_bytes())
             .map_err(|_| EncryptionError::EncryptionFailed)?;
         
         // Format: v{version}:{nonce_b64}:{ciphertext_b64}
@@ -745,11 +746,15 @@ impl DatabaseEncryption {
             return Err(EncryptionError::InvalidNonce);
         }
         
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        // Convert Vec<u8> to [u8; 12] for Nonce creation
+        let mut nonce_array = [0u8; 12];
+        nonce_array.copy_from_slice(&nonce_bytes);
+        // Create Nonce from array using From trait
+        let nonce = Nonce::from(nonce_array);
         
         // Decrypt
         let plaintext = self.cipher
-            .decrypt(nonce, ciphertext.as_ref())
+            .decrypt(&nonce, ciphertext.as_ref())
             .map_err(|_| EncryptionError::DecryptionFailed)?;
         
         String::from_utf8(plaintext)

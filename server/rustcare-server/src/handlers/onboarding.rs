@@ -64,8 +64,8 @@ pub struct CreateUserResponse {
     )
 )]
 pub async fn create_organization_user(
-    Path(org_id): Path<Uuid>,
     State(app_state): State<RustCareServer>,
+    Path(org_id): Path<Uuid>,
     Json(req): Json<CreateUserRequest>,
 ) -> Result<Json<ApiResponse<CreateUserResponse>>, ApiError> {
     // Validate email
@@ -73,17 +73,57 @@ pub async fn create_organization_user(
         return Err(ApiError::validation("Valid email address is required"));
     }
     
-    // Check if user already exists
+    // Verify organization exists and is active
+    let org = sqlx::query!(
+        "SELECT id, name, max_users, is_active FROM organizations WHERE id = $1 AND deleted_at IS NULL",
+        org_id
+    )
+    .fetch_optional(&app_state.db_pool)
+    .await
+    .map_err(|e| ApiError::internal(format!("Failed to verify organization: {}", e)))?;
+    
+    let org = match org {
+        Some(o) => o,
+        None => return Err(ApiError::not_found("Organization not found")),
+    };
+    
+    if !org.is_active {
+        return Err(ApiError::validation("Organization is not active"));
+    }
+    
+    // Check user limit
+    let user_count = sqlx::query!(
+        "SELECT COUNT(*) as count FROM users WHERE organization_id = $1 AND deleted_at IS NULL",
+        org_id
+    )
+    .fetch_one(&app_state.db_pool)
+    .await
+    .map_err(|e| ApiError::internal(format!("Failed to check user count: {}", e)))?;
+    
+    if let Some(count) = user_count.count {
+        if count >= org.max_users as i64 {
+            return Err(ApiError::validation(format!(
+                "Organization has reached its user limit of {} users",
+                org.max_users
+            )));
+        }
+    }
+    
+    // Check if user already exists (globally or in this organization)
     let existing_user = sqlx::query!(
-        "SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL",
+        "SELECT id, organization_id FROM users WHERE email = $1 AND deleted_at IS NULL",
         req.email
     )
     .fetch_optional(&app_state.db_pool)
     .await
     .map_err(|e| ApiError::internal(format!("Failed to check existing user: {}", e)))?;
     
-    if existing_user.is_some() {
-        return Err(ApiError::conflict("A user with this email already exists"));
+    if let Some(existing) = existing_user {
+        if existing.organization_id == org_id {
+            return Err(ApiError::conflict("A user with this email already exists in this organization"));
+        } else {
+            return Err(ApiError::conflict("A user with this email already exists in another organization"));
+        }
     }
     
     // Verify email mailbox exists (without sending)
@@ -109,13 +149,13 @@ pub async fn create_organization_user(
     // Hash password with argon2id
     let password_hash = hash_password(&temporary_password)?;
     
-    // Create user
+    // Create user with organization_id
     let user_id = Uuid::new_v4();
     let result = sqlx::query_as::<_, User>(
         r#"
         INSERT INTO users (
-            id, email, full_name, display_name, status
-        ) VALUES ($1, LOWER($2), $3, $4, 'active')
+            id, email, full_name, display_name, status, organization_id
+        ) VALUES ($1, LOWER($2), $3, $4, 'active', $5)
         RETURNING id, email, email_verified, full_name, display_name, status, created_at, updated_at
         "#
     )
@@ -123,6 +163,7 @@ pub async fn create_organization_user(
     .bind(&req.email)
     .bind(&req.full_name)
     .bind(&req.full_name) // Use full_name as display_name initially
+    .bind(org_id)
     .fetch_one(&app_state.db_pool)
     .await;
     
@@ -131,16 +172,17 @@ pub async fn create_organization_user(
         Err(e) => return Err(ApiError::internal(format!("Failed to create user: {}", e))),
     };
     
-    // Create credentials
+    // Create credentials with organization_id
     sqlx::query(
         r#"
         INSERT INTO user_credentials (
-            user_id, password_hash, password_algorithm
-        ) VALUES ($1, $2, 'argon2id')
+            user_id, password_hash, password_algorithm, organization_id
+        ) VALUES ($1, $2, 'argon2id', $3)
         "#
     )
     .bind(user_id)
     .bind(password_hash)
+    .bind(org_id)
     .execute(&app_state.db_pool)
     .await
     .map_err(|e| ApiError::internal(format!("Failed to create credentials: {}", e)))?;
@@ -189,15 +231,29 @@ pub async fn list_organization_users(
     Path(org_id): Path<Uuid>,
     State(app_state): State<RustCareServer>,
 ) -> Result<Json<ApiResponse<Vec<User>>>, ApiError> {
-    // TODO: Join with organization employees table
+    // Verify organization exists
+    let org_exists = sqlx::query!(
+        "SELECT id FROM organizations WHERE id = $1 AND deleted_at IS NULL",
+        org_id
+    )
+    .fetch_optional(&app_state.db_pool)
+    .await
+    .map_err(|e| ApiError::internal(format!("Failed to verify organization: {}", e)))?;
+    
+    if org_exists.is_none() {
+        return Err(ApiError::not_found("Organization not found"));
+    }
+    
+    // List users for this organization
     let result = sqlx::query_as::<_, User>(
         r#"
         SELECT id, email, email_verified, full_name, display_name, status, created_at, updated_at
         FROM users
-        WHERE deleted_at IS NULL
+        WHERE organization_id = $1 AND deleted_at IS NULL
         ORDER BY created_at DESC
         "#
     )
+    .bind(org_id)
     .fetch_all(&app_state.db_pool)
     .await;
     

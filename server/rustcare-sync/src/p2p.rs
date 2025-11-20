@@ -16,7 +16,7 @@
 
 use crate::error::{SyncError, SyncResult};
 use crate::local_db::LocalDatabase;
-use crate::sync_protocol::{SyncOperation, SyncStats};
+use crate::sync_protocol::SyncStats;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;

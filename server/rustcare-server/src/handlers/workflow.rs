@@ -36,7 +36,7 @@ pub struct WorkflowDefinition {
 }
 
 /// Workflow step
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct WorkflowStep {
     pub id: String,
     pub name: String,
@@ -49,7 +49,7 @@ pub struct WorkflowStep {
 }
 
 /// Workflow trigger
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct WorkflowTrigger {
     pub id: String,
     pub trigger_type: String,
@@ -59,7 +59,7 @@ pub struct WorkflowTrigger {
 }
 
 /// Retry configuration
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct RetryConfig {
     pub max_attempts: u32,
     pub delay_seconds: u64,
@@ -132,7 +132,7 @@ pub struct ExecutionStatusResponse {
 }
 
 /// Workflow execution response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct WorkflowExecutionResponse {
     pub execution_id: String,
     pub workflow_id: String,
@@ -143,7 +143,7 @@ pub struct WorkflowExecutionResponse {
 }
 
 /// Workflow execution status
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct WorkflowExecutionStatus {
     pub execution_id: String,
     pub workflow_id: String,
@@ -299,8 +299,8 @@ pub async fn get_workflow(
 )]
 pub async fn execute_workflow(
     State(server): State<RustCareServer>,
-    Json(execution_request): Json<WorkflowExecutionRequest>,
     auth: AuthContext,
+    Json(execution_request): Json<WorkflowExecutionRequest>,
 ) -> Result<Json<ApiResponse<WorkflowExecutionResponse>>, ApiError> {
     // TODO: Integrate with workflow-engine module
     // This is a placeholder implementation

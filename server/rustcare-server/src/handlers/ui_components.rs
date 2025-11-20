@@ -2,19 +2,20 @@
 //!
 //! Handlers for registering and managing UI components discovered from decorators
 
+use crate::error::{api_success, api_success_with_meta, ApiError, ApiResponse};
+use crate::middleware::AuthContext;
+use crate::server::RustCareServer;
+use crate::types::pagination::PaginationParams;
+use crate::validation::RequestValidation;
+use crate::{validate_field, validate_length, validate_required};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
-use utoipa::{ToSchema, IntoParams};
-use crate::server::RustCareServer;
-use crate::error::{ApiError, ApiResponse, api_success, api_success_with_meta};
-use crate::middleware::AuthContext;
-use crate::validation::RequestValidation;
-use crate::types::pagination::PaginationParams;
 
 /// Register UI component request
 #[derive(Debug, Deserialize, ToSchema)]
@@ -41,17 +42,30 @@ impl RequestValidation for RegisterComponentRequest {
         validate_required!(self.component_path, "Component path is required");
         validate_required!(self.component_type, "Component type is required");
         validate_required!(self.category, "Category is required");
-        
-        validate_length!(self.component_name, 1, 255, "Component name must be between 1 and 255 characters");
-        
+
+        validate_length!(
+            self.component_name,
+            1,
+            255,
+            "Component name must be between 1 and 255 characters"
+        );
+
         // Validate component_type
-        let valid_types = ["page", "component", "button", "form", "modal", "widget", "action"];
+        let valid_types = [
+            "page",
+            "component",
+            "button",
+            "form",
+            "modal",
+            "widget",
+            "action",
+        ];
         validate_field!(
             self.component_type,
             valid_types.contains(&self.component_type.as_str()),
             format!("Component type must be one of: {}", valid_types.join(", "))
         );
-        
+
         Ok(())
     }
 }
@@ -80,7 +94,7 @@ impl RequestValidation for RegisterActionRequest {
         validate_required!(self.action_name, "Action name is required");
         validate_required!(self.action_type, "Action type is required");
         validate_required!(self.display_label, "Display label is required");
-        
+
         Ok(())
     }
 }
@@ -115,9 +129,10 @@ pub async fn register_component(
 ) -> Result<(StatusCode, Json<ApiResponse<serde_json::Value>>), ApiError> {
     // Validate request
     request.validate()?;
-    
+
     // Get or find parent component ID if specified
-    let parent_component_id: Option<Uuid> = if let Some(ref parent_name) = request.parent_component {
+    let parent_component_id: Option<Uuid> = if let Some(ref parent_name) = request.parent_component
+    {
         sqlx::query_scalar::<_, Option<Uuid>>(
             r#"
             SELECT id FROM ui_components
@@ -125,7 +140,7 @@ pub async fn register_component(
               AND component_name = $2
               AND is_deleted = false
             LIMIT 1
-            "#
+            "#,
         )
         .bind(auth.organization_id)
         .bind(parent_name)
@@ -135,7 +150,7 @@ pub async fn register_component(
     } else {
         None
     };
-    
+
     // Register component in database
     let component_id = sqlx::query_scalar::<_, Uuid>(
         r#"
@@ -185,13 +200,13 @@ pub async fn register_component(
     .fetch_one(&server.db_pool)
     .await
     .map_err(|e| ApiError::internal(format!("Failed to register component: {}", e)))?;
-    
+
     Ok((
         StatusCode::CREATED,
         Json(api_success(serde_json::json!({
             "component_id": component_id,
             "message": "Component registered successfully"
-        })))
+        }))),
     ))
 }
 
@@ -215,23 +230,23 @@ pub async fn register_component_action(
 ) -> Result<(StatusCode, Json<ApiResponse<serde_json::Value>>), ApiError> {
     // Validate request
     request.validate()?;
-    
+
     // Find component by path
-    let component_id: Uuid = sqlx::query_scalar::<_, Option<Uuid>>(
+    let component_id: Uuid = sqlx::query_scalar::<_, Uuid>(
         r#"
         SELECT id FROM ui_components
         WHERE organization_id = $1
           AND component_path = $2
           AND is_deleted = false
         LIMIT 1
-        "#
+        "#,
     )
     .bind(auth.organization_id)
     .bind(&request.component_path)
     .fetch_optional(&server.db_pool)
     .await?
     .ok_or_else(|| ApiError::not_found("component"))?;
-    
+
     // Register action
     let action_id = sqlx::query_scalar::<_, Uuid>(
         r#"
@@ -258,7 +273,7 @@ pub async fn register_component_action(
             display_order = EXCLUDED.display_order,
             updated_at = NOW()
         RETURNING id
-        "#
+        "#,
     )
     .bind(component_id)
     .bind(&request.action_name)
@@ -276,13 +291,13 @@ pub async fn register_component_action(
     .fetch_one(&server.db_pool)
     .await
     .map_err(|e| ApiError::internal(format!("Failed to register action: {}", e)))?;
-    
+
     Ok((
         StatusCode::CREATED,
         Json(api_success(serde_json::json!({
             "action_id": action_id,
             "message": "Action registered successfully"
-        })))
+        }))),
     ))
 }
 
@@ -331,23 +346,26 @@ pub async fn list_components(
     .fetch_all(&server.db_pool)
     .await
     .map_err(|e| ApiError::internal(format!("Failed to list components: {}", e)))?;
-    
-    let result: Vec<serde_json::Value> = components.into_iter().map(|row| {
-        serde_json::json!({
-            "id": row.id,
-            "component_name": row.component_name,
-            "component_path": row.component_path,
-            "component_type": row.component_type,
-            "display_name": row.display_name,
-            "description": row.description,
-            "route_path": row.route_path,
-            "category": row.category,
-            "requires_permission": row.requires_permission,
-            "icon": row.icon,
-            "tags": row.tags,
+
+    let result: Vec<serde_json::Value> = components
+        .into_iter()
+        .map(|row| {
+            serde_json::json!({
+                "id": row.id,
+                "component_name": row.component_name,
+                "component_path": row.component_path,
+                "component_type": row.component_type,
+                "display_name": row.display_name,
+                "description": row.description,
+                "route_path": row.route_path,
+                "category": row.category,
+                "requires_permission": row.requires_permission,
+                "icon": row.icon,
+                "tags": row.tags,
+            })
         })
-    }).collect();
-    
+        .collect();
+
     // Get total count for pagination metadata
     let total_count = sqlx::query_scalar::<_, i64>(
         r#"
@@ -358,7 +376,7 @@ pub async fn list_components(
           AND ($2::text IS NULL OR component_type = $2)
           AND ($3::text IS NULL OR category = $3)
           AND ($4::uuid IS NULL OR parent_component_id = $4)
-        "#
+        "#,
     )
     .bind(auth.organization_id)
     .bind(params.component_type.as_deref())
@@ -367,8 +385,7 @@ pub async fn list_components(
     .fetch_one(&server.db_pool)
     .await
     .map_err(|e| ApiError::internal(format!("Failed to count components: {}", e)))?;
-    
+
     let metadata = params.pagination.to_metadata(total_count);
     Ok(Json(api_success_with_meta(result, metadata)))
 }
-

@@ -355,7 +355,7 @@ impl S3StorageService {
         for chunk in files.chunks(1000) {
             let objects: Vec<ObjectIdentifier> = chunk
                 .iter()
-                .map(|key| ObjectIdentifier::builder().key(key).build().unwrap())
+                .filter_map(|key| ObjectIdentifier::builder().key(key).build().ok())
                 .collect();
 
             let delete = Delete::builder().set_objects(Some(objects)).build()?;

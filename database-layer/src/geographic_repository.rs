@@ -1,11 +1,10 @@
-use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use serde_json::Value;
-use sqlx::{Pool, Postgres, Row};
+use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 use crate::error::DatabaseError;
-use crate::models::{GeographicRegion, PostalCodeRegionMapping, ComplianceFramework, ComplianceRegionMapping};
+use crate::models::{GeographicRegion, PostalCodeRegionMapping, ComplianceFramework};
 use crate::rls::RlsContext;
 
 pub type DbResult<T> = Result<T, DatabaseError>;

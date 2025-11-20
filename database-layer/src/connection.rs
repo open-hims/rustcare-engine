@@ -39,6 +39,16 @@ impl DatabasePool {
         })
     }
 
+    /// Create DatabasePool from an existing PgPool
+    pub fn from_pool(pool: PgPool) -> Self {
+        Self {
+            pool: Arc::new(pool),
+            rls_enabled: false,
+            audit_enabled: false,
+            encryption_enabled: false,
+        }
+    }
+
     /// Enable Row-Level Security
     pub fn with_rls(mut self, enabled: bool) -> Self {
         self.rls_enabled = enabled;

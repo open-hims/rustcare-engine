@@ -13,6 +13,7 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::server::RustCareServer;
@@ -20,7 +21,7 @@ use crate::middleware::AuthContext;
 use crate::error::{ApiError, ApiResponse, api_success};
 
 /// Sync operation type
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum OperationType {
     Create,
@@ -29,7 +30,7 @@ pub enum OperationType {
 }
 
 /// Sync operation from client
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SyncOperation {
     pub id: String,
     pub entity_type: String,
@@ -42,7 +43,7 @@ pub struct SyncOperation {
 }
 
 /// Pull request from client
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct PullRequest {
     pub node_id: Uuid,
     pub since_timestamp: Option<String>,
@@ -50,21 +51,21 @@ pub struct PullRequest {
 }
 
 /// Pull response to client
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct PullResponse {
     pub operations: Vec<SyncOperation>,
     pub latest_timestamp: String,
 }
 
 /// Push request from client
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct PushRequest {
     pub node_id: Uuid,
     pub operations: Vec<SyncOperation>,
 }
 
 /// Push response to client
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct PushResponse {
     pub accepted: Vec<String>,      // Operation IDs accepted
     pub rejected: Vec<String>,       // Operation IDs rejected
@@ -72,7 +73,7 @@ pub struct PushResponse {
 }
 
 /// Conflict information
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ConflictInfo {
     pub operation_id: String,
     pub conflict_type: String,
@@ -100,8 +101,8 @@ pub struct ConflictInfo {
 )]
 pub async fn pull(
     State(_server): State<RustCareServer>,
-    Json(request): Json<PullRequest>,
     auth: AuthContext,
+    Json(request): Json<PullRequest>,
 ) -> Result<Json<ApiResponse<PullResponse>>, ApiError> {
     tracing::info!(
         node_id = %request.node_id,
@@ -145,8 +146,8 @@ pub async fn pull(
 )]
 pub async fn push(
     State(_server): State<RustCareServer>,
-    Json(request): Json<PushRequest>,
     auth: AuthContext,
+    Json(request): Json<PushRequest>,
 ) -> Result<Json<ApiResponse<PushResponse>>, ApiError> {
     tracing::info!(
         node_id = %request.node_id,

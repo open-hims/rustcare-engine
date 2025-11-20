@@ -283,7 +283,9 @@ macro_rules! impl_auditable {
     };
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+use utoipa::ToSchema;
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct ComplianceFramework {
     pub id: Uuid,
     pub organization_id: Uuid,
@@ -307,7 +309,7 @@ pub struct ComplianceFramework {
 // Apply the Auditable trait to ComplianceFramework
 impl_auditable!(ComplianceFramework);
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct ComplianceRule {
     pub id: Uuid,
     pub organization_id: Uuid,

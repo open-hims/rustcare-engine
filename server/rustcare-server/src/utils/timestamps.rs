@@ -3,9 +3,9 @@
 //! This module provides utilities to standardize timestamp formats and eliminate
 //! inconsistencies between DateTime<Utc>, String, and RFC3339 formats.
 
-use chrono::{DateTime, Utc, NaiveDate};
-use serde::{Serialize, Serializer};
 use crate::error::ApiError;
+use chrono::{DateTime, NaiveDate, Utc};
+use serde::{Serialize, Serializer};
 
 /// Wrapper type for consistent timestamp serialization
 ///
@@ -19,24 +19,28 @@ impl ApiTimestamp {
     pub fn now() -> Self {
         Self(Utc::now())
     }
-    
+
     /// Create from a DateTime<Utc>
     pub fn from_datetime(dt: DateTime<Utc>) -> Self {
         Self(dt)
     }
-    
+
     /// Parse from RFC3339 string
     pub fn from_rfc3339(s: &str) -> Result<Self, ApiError> {
         DateTime::parse_from_rfc3339(s)
             .map(|dt| Self(dt.with_timezone(&Utc)))
-            .map_err(|_| ApiError::validation("Invalid RFC3339 timestamp format. Expected format: YYYY-MM-DDTHH:MM:SSZ"))
+            .map_err(|_| {
+                ApiError::validation(
+                    "Invalid RFC3339 timestamp format. Expected format: YYYY-MM-DDTHH:MM:SSZ",
+                )
+            })
     }
-    
+
     /// Get the inner DateTime<Utc>
     pub fn to_datetime(self) -> DateTime<Utc> {
         self.0
     }
-    
+
     /// Convert to RFC3339 string
     pub fn to_rfc3339(self) -> String {
         self.0.to_rfc3339()
@@ -81,13 +85,18 @@ pub fn now_rfc3339() -> String {
 pub fn parse_rfc3339_to_naive_date(s: &str) -> Result<NaiveDate, ApiError> {
     DateTime::parse_from_rfc3339(s)
         .map(|dt| dt.date_naive())
-        .map_err(|_| ApiError::validation("Invalid RFC3339 date format. Expected format: YYYY-MM-DDTHH:MM:SSZ"))
+        .map_err(|_| {
+            ApiError::validation(
+                "Invalid RFC3339 date format. Expected format: YYYY-MM-DDTHH:MM:SSZ",
+            )
+        })
 }
 
 /// Convert NaiveDate to RFC3339 string (with time set to 00:00:00 UTC)
 pub fn naive_date_to_rfc3339(naive: NaiveDate) -> String {
-    naive.and_hms_opt(0, 0, 0)
-        .unwrap()
+    naive
+        .and_hms_opt(0, 0, 0)
+        .expect("Invalid time components (0,0,0) - this should never fail")
         .and_utc()
         .to_rfc3339()
 }
@@ -101,7 +110,11 @@ pub fn date_to_rfc3339(date: DateTime<Utc>) -> String {
 pub fn parse_rfc3339(s: &str) -> Result<DateTime<Utc>, ApiError> {
     DateTime::parse_from_rfc3339(s)
         .map(|dt| dt.with_timezone(&Utc))
-        .map_err(|_| ApiError::validation("Invalid RFC3339 timestamp format. Expected format: YYYY-MM-DDTHH:MM:SSZ"))
+        .map_err(|_| {
+            ApiError::validation(
+                "Invalid RFC3339 timestamp format. Expected format: YYYY-MM-DDTHH:MM:SSZ",
+            )
+        })
 }
 
 #[cfg(test)]
@@ -186,7 +199,10 @@ mod tests {
         let result = parse_rfc3339(s);
         assert!(result.is_ok());
         let dt = result.unwrap();
-        assert_eq!(dt.format("%Y-%m-%d %H:%M:%S").to_string(), "2024-01-15 10:30:00");
+        assert_eq!(
+            dt.format("%Y-%m-%d %H:%M:%S").to_string(),
+            "2024-01-15 10:30:00"
+        );
     }
 
     #[test]
@@ -249,4 +265,3 @@ mod tests {
         assert_eq!(ts1, ts2);
     }
 }
-

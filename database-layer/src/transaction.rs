@@ -3,7 +3,7 @@ use crate::connection::DatabasePool;
 use crate::rls::RlsContext;
 use crate::error::{DatabaseError, DatabaseResult};
 use sqlx::{Transaction, Postgres};
-use tracing::{debug, info, error};
+use tracing::debug;
 
 /// Transaction manager with automatic RLS context application
 pub struct TransactionManager {

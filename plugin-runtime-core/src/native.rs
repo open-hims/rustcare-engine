@@ -300,7 +300,9 @@ impl NativeRuntime {
         _symbol: &NativeSymbol,
     ) -> Result<NativeValue, crate::error::PluginRuntimeError> {
         // Get library handle
-        let library = self.libraries.get(&context.library_id).unwrap();
+        let library = self.libraries.get(&context.library_id)
+            .ok_or_else(|| crate::error::PluginRuntimeError::PluginNotFound(context.library_id))?;
+        
         let handle = library.handle.as_ref()
             .ok_or_else(|| crate::error::PluginRuntimeError::InvalidState(
                 "Library not loaded".to_string()

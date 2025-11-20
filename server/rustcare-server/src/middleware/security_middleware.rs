@@ -35,7 +35,7 @@ pub async fn security_middleware(
     // This middleware sets up the security state in extensions
     
     // Add security middleware state to extensions if not already present
-    if !request.extensions().contains::<SecurityMiddlewareState>() {
+    if request.extensions().get::<SecurityMiddlewareState>().is_none() {
         request.extensions_mut().insert(security_state.clone());
     }
     
@@ -48,27 +48,12 @@ pub async fn security_middleware(
     Ok(response)
 }
 
-/// Helper function to create SecurityContext in handlers
-/// 
-/// Usage:
-/// ```rust
-/// pub async fn handler(
-///     auth: AuthContext,
-///     req_ctx: RequestContext,
-///     method: Method,
-///     headers: HeaderMap,
-///     State(server): State<RustCareServer>,
-/// ) -> Result<...> {
-///     let security = SecurityContext::from_contexts_with_checks(
-///         auth,
-///         req_ctx,
-///         &method,
-///         &headers,
-///         &server.security_state, // Would need to add this to RustCareServer
-///     ).await?;
-///     
-///     // Use security context
-///     security.require_permission("patient", Some(patient_id), "view").await?;
-/// }
-/// ```
+// TODO: Implement SecurityContext helper function
+// Example usage:
+// pub async fn handler(auth: AuthContext, req_ctx: RequestContext) -> Result<...> {
+//     let security = SecurityContext::from_contexts_with_checks(...).await?;
+//     security.require_permission("patient", Some(patient_id), "view").await?;
+// }
 
+// Placeholder for SecurityContext creation
+// This function would create a SecurityContext from various context types

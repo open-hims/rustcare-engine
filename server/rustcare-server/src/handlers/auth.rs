@@ -1,12 +1,9 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    Json,
-};
-use serde::{Deserialize, Serialize};
+use crate::error::{api_success, ApiError, ApiResponse};
 use crate::server::RustCareServer;
-use crate::error::{ApiError, ApiResponse, api_success};
 use crate::validation::RequestValidation;
+use crate::{validate_email, validate_field, validate_length, validate_required};
+use axum::{extract::State, http::StatusCode, Json};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 /// Authentication request
@@ -32,10 +29,20 @@ impl RequestValidation for AuthRequest {
     fn validate(&self) -> Result<(), ApiError> {
         validate_required!(self.username, "Username is required");
         validate_required!(self.password, "Password is required");
-        
-        validate_length!(self.username, 1, 200, "Username must be between 1 and 200 characters");
-        validate_length!(self.password, 8, 128, "Password must be between 8 and 128 characters");
-        
+
+        validate_length!(
+            self.username,
+            1,
+            200,
+            "Username must be between 1 and 200 characters"
+        );
+        validate_length!(
+            self.password,
+            8,
+            128,
+            "Password must be between 8 and 128 characters"
+        );
+
         Ok(())
     }
 }
@@ -58,7 +65,9 @@ pub struct AuthResponse {
     /// Authentication success status
     pub success: bool,
     /// JWT access token if successful
-    #[schema(example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMzQ1NiIsInJvbGUiOiJkb2N0b3IiLCJleHAiOjE3MDMxODQwMDB9.xyz123abc")]
+    #[schema(
+        example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMzQ1NiIsInJvbGUiOiJkb2N0b3IiLCJleHAiOjE3MDMxODQwMDB9.xyz123abc"
+    )]
     pub token: Option<String>,
     /// Token expiration time in seconds
     #[schema(example = 3600)]
@@ -181,17 +190,17 @@ pub struct TokenValidationResponse {
 )]
 pub async fn login(
     State(_server): State<RustCareServer>,
-    Json(auth_request): Json<AuthRequest>
+    Json(auth_request): Json<AuthRequest>,
 ) -> Result<Json<ApiResponse<AuthResponse>>, ApiError> {
     // Validate request
     auth_request.validate()?;
-    
+
     // TODO: Integrate with auth-identity and auth-oauth modules
     // This is a placeholder implementation
-    
+
     // Simulate authentication logic
     let success = true; // Already validated above
-    
+
     let response = if success {
         AuthResponse {
             success: true,
@@ -223,11 +232,11 @@ pub async fn login(
 /// OAuth authorization handler
 pub async fn oauth_authorize(
     State(server): State<RustCareServer>,
-    Json(oauth_request): Json<OAuthRequest>
+    Json(oauth_request): Json<OAuthRequest>,
 ) -> Result<Json<ApiResponse<OAuthResponse>>, ApiError> {
     // TODO: Integrate with auth-oauth module
     // This is a placeholder implementation
-    
+
     let state = uuid::Uuid::new_v4().to_string();
     let authorization_url = format!(
         "https://oauth.provider.com/authorize?client_id=rustcare&redirect_uri={}&scope={}&state={}",
@@ -248,11 +257,11 @@ pub async fn oauth_authorize(
 /// Token validation handler
 pub async fn validate_token(
     State(server): State<RustCareServer>,
-    Json(validation_request): Json<TokenValidationRequest>
+    Json(validation_request): Json<TokenValidationRequest>,
 ) -> Result<Json<ApiResponse<TokenValidationResponse>>, ApiError> {
     // TODO: Integrate with auth-gateway and auth-zanzibar modules
     // This is a placeholder implementation
-    
+
     if validation_request.token.is_empty() {
         return Ok(Json(api_success(TokenValidationResponse {
             valid: false,
@@ -265,7 +274,7 @@ pub async fn validate_token(
 
     // Simulate token validation
     let valid = validation_request.token == "jwt_token_placeholder";
-    
+
     let response = if valid {
         TokenValidationResponse {
             valid: true,
@@ -293,11 +302,11 @@ pub async fn validate_token(
 /// User logout handler
 pub async fn logout(
     State(server): State<RustCareServer>,
-    Json(token_request): Json<TokenValidationRequest>
+    Json(token_request): Json<TokenValidationRequest>,
 ) -> Result<StatusCode, ApiError> {
     // TODO: Implement token invalidation logic
     // This is a placeholder implementation
-    
+
     if token_request.token.is_empty() {
         return Err(ApiError::validation("Token is required"));
     }

@@ -1,17 +1,18 @@
+use crate::error::{api_success, ApiError, ApiResponse};
+use crate::middleware::AuthContext;
+use crate::server::RustCareServer;
+use crate::services::AuditService;
+use crate::types::pagination::PaginationParams;
+use crate::validation::RequestValidation;
+use crate::{validate_field, validate_length, validate_required};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
-use utoipa::{ToSchema, IntoParams};
-use crate::server::RustCareServer;
-use crate::middleware::AuthContext;
-use crate::error::{ApiError, ApiResponse, api_success};
-use crate::types::pagination::PaginationParams;
-use crate::validation::RequestValidation;
-use crate::services::AuditService;
 
 /// Geographic region with hierarchical structure
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -50,7 +51,7 @@ pub struct CreateGeographicRegionRequest {
 /// Alias for create request (used in routes)
 pub type CreateRegionRequest = CreateGeographicRegionRequest;
 
-/// Alias for update request (used in routes) 
+/// Alias for update request (used in routes)
 pub type UpdateRegionRequest = CreateGeographicRegionRequest;
 
 impl RequestValidation for CreateGeographicRegionRequest {
@@ -58,10 +59,15 @@ impl RequestValidation for CreateGeographicRegionRequest {
         validate_required!(self.name, "Region name is required");
         validate_required!(self.code, "Region code is required");
         validate_required!(self.region_type, "Region type is required");
-        
-        validate_length!(self.name, 1, 200, "Name must be between 1 and 200 characters");
+
+        validate_length!(
+            self.name,
+            1,
+            200,
+            "Name must be between 1 and 200 characters"
+        );
         validate_length!(self.code, 1, 50, "Code must be between 1 and 50 characters");
-        
+
         // Validate region_type
         let valid_types = ["country", "state", "city", "district", "postal_code"];
         validate_field!(
@@ -69,7 +75,7 @@ impl RequestValidation for CreateGeographicRegionRequest {
             valid_types.contains(&self.region_type.as_str()),
             format!("Region type must be one of: {}", valid_types.join(", "))
         );
-        
+
         Ok(())
     }
 }
@@ -119,7 +125,8 @@ pub async fn list_geographic_regions(
 ) -> Result<Json<ApiResponse<Vec<GeographicRegion>>>, ApiError> {
     // Use the database repository to fetch regions
     // Note: Repository doesn't support pagination natively, so we fetch all and paginate in-memory
-    let db_regions = server.geographic_repo
+    let db_regions = server
+        .geographic_repo
         .list_regions(
             None, // parent_id
             query.region_type.as_deref(),
@@ -162,14 +169,14 @@ pub async fn list_geographic_regions(
     let total_count = regions.len() as i64;
     let offset = query.pagination.offset() as usize;
     let limit = query.pagination.limit() as usize;
-    let paginated_regions: Vec<GeographicRegion> = regions
-        .into_iter()
-        .skip(offset)
-        .take(limit)
-        .collect();
+    let paginated_regions: Vec<GeographicRegion> =
+        regions.into_iter().skip(offset).take(limit).collect();
 
     let metadata = query.pagination.to_metadata(total_count);
-    Ok(Json(crate::error::api_success_with_meta(paginated_regions, metadata)))
+    Ok(Json(crate::error::api_success_with_meta(
+        paginated_regions,
+        metadata,
+    )))
 }
 
 /// Create a new geographic region
@@ -191,13 +198,14 @@ pub async fn list_geographic_regions(
 )]
 pub async fn create_geographic_region(
     State(server): State<RustCareServer>,
-    Json(payload): Json<CreateGeographicRegionRequest>,
     auth: AuthContext,
+    Json(payload): Json<CreateGeographicRegionRequest>,
 ) -> Result<(StatusCode, Json<ApiResponse<GeographicRegion>>), ApiError> {
     // Validate request
     payload.validate()?;
-    
-    let db_region = server.geographic_repo
+
+    let db_region = server
+        .geographic_repo
         .create_region(
             &payload.name,
             &payload.code,
@@ -213,14 +221,18 @@ pub async fn create_geographic_region(
         .await
         .map_err(|e| ApiError::internal(format!("Failed to create geographic region: {}", e)))?;
 
-    tracing::info!("Geographic region created: {} - {}", db_region.code, db_region.name);
-    
+    tracing::info!(
+        "Geographic region created: {} - {}",
+        db_region.code,
+        db_region.name
+    );
+
     let level = db_region
         .path
         .as_ref()
         .map(|p| p.matches('.').count() as i32)
         .unwrap_or(0);
-    
+
     let region = GeographicRegion {
         id: db_region.id,
         code: db_region.code,
@@ -240,13 +252,15 @@ pub async fn create_geographic_region(
 
     // Log the creation using AuditService
     let audit_service = AuditService::new(server.db_pool.clone());
-    let _ = audit_service.log_general_action(
-        &auth,
-        "geographic_region",
-        db_region.id,
-        "created",
-        Some(serde_json::json!({"name": payload.name, "code": payload.code})),
-    ).await;
+    let _ = audit_service
+        .log_general_action(
+            &auth,
+            "geographic_region",
+            db_region.id,
+            "created",
+            Some(serde_json::json!({"name": payload.name, "code": payload.code})),
+        )
+        .await;
 
     Ok((StatusCode::CREATED, Json(api_success(region))))
 }
@@ -317,9 +331,9 @@ pub async fn get_geographic_region(
 )]
 pub async fn update_geographic_region(
     State(_server): State<RustCareServer>,
+    auth: AuthContext,
     Path(id): Path<Uuid>,
     Json(request): Json<CreateGeographicRegionRequest>,
-    auth: AuthContext,
 ) -> Result<Json<ApiResponse<GeographicRegion>>, ApiError> {
     // TODO: Implement database update with RLS
     let region = GeographicRegion {
@@ -329,7 +343,7 @@ pub async fn update_geographic_region(
         region_type: request.region_type,
         parent_region_id: request.parent_region_id,
         path: None, // TODO: Recalculate from parent
-        level: 0, // TODO: Recalculate from parent
+        level: 0,   // TODO: Recalculate from parent
         iso_country_code: request.iso_country_code,
         iso_subdivision_code: request.iso_subdivision_code,
         timezone: request.timezone,

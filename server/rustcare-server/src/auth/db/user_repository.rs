@@ -178,7 +178,7 @@ impl UserRepository {
                             &user_id.to_string(),
                             fields_accessed.clone(),
                             fields_masked,
-                            database_layer::encryption::SensitivityLevel::Internal,
+                            database_layer::SensitivityLevel::Internal,
                         ).await;
                     }
                 }

@@ -169,7 +169,7 @@ pub async fn list_vendor_types(
     );
     
     query_builder
-        .filter_eq("category", params.category.as_ref().map(|s| s.as_str()))
+        .filter_eq("category", params.category.as_deref().map(str::to_owned))
         .order_by("name", "ASC")
         .paginate(
             params.pagination.page,
@@ -222,8 +222,8 @@ pub async fn list_vendors(
         .filter_eq("vendor_type_id", params.vendor_type_id)
         .filter_eq("is_preferred_vendor", params.is_preferred_vendor)
         .filter_eq("is_active", params.is_active)
-        .filter_eq("city", params.city.as_ref().map(|s| s.as_str()))
-        .filter_eq("state", params.state.as_ref().map(|s| s.as_str()))
+        .filter_eq("city", params.city.as_deref().map(str::to_owned))
+        .filter_eq("state", params.state.as_deref().map(str::to_owned))
         .order_by_created_desc()
         .paginate(
             params.pagination.page,
@@ -303,8 +303,8 @@ pub async fn get_vendor_inventory(
     }
     
     // Parse query parameters
-    let is_active = params.get("is_active").and_then(|v| v.parse().ok());
-    let in_stock = params.get("in_stock").and_then(|v| v.parse().ok());
+    let is_active: Option<bool> = params.get("is_active").and_then(|v| v.parse().ok());
+    let in_stock: Option<bool> = params.get("in_stock").and_then(|v| v.parse().ok());
     
     // Use PaginatedQuery utility
     let mut query_builder = PaginatedQuery::new(
@@ -381,8 +381,8 @@ pub async fn get_vendor_services(
     }
     
     // Parse query parameters
-    let is_available = params.get("is_available").and_then(|v| v.parse().ok());
-    let is_active = params.get("is_active").and_then(|v| v.parse().ok());
+    let is_available: Option<bool> = params.get("is_available").and_then(|v| v.parse().ok());
+    let is_active: Option<bool> = params.get("is_active").and_then(|v| v.parse().ok());
     
     // Query vendor services
     let services = sqlx::query_as::<_, VendorService>(

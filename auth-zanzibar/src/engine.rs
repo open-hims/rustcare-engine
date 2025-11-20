@@ -1,15 +1,14 @@
 use crate::{
     models::*,
     repository::TupleRepository,
-    schema::{Schema, PermissionDefinition},
+    schema::Schema,
     check::PermissionChecker,
     expand::SubjectExpander,
     error::ZanzibarError,
 };
-use async_trait::async_trait;
 use dashmap::DashMap;
 use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use uuid::Uuid;
 
 /// Core Zanzibar authorization engine

@@ -4,11 +4,9 @@ use crate::{
     repository::TupleRepository,
     schema::Schema,
 };
-use std::collections::{HashSet, HashMap};
+use std::collections::HashSet;
 use std::sync::Arc;
 use tracing::debug;
-use petgraph::{Graph, Directed, Direction};
-use petgraph::graph::NodeIndex;
 
 /// Permission checker performs authorization checks with support for:
 /// - Direct permissions

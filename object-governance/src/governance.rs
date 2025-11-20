@@ -429,6 +429,7 @@ impl GovernanceEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::classification::DataClassification;
     use crate::storage::InMemoryStorageBackend;
 
     #[tokio::test]

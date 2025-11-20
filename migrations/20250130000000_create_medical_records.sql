@@ -102,8 +102,8 @@ CREATE INDEX idx_audit_time ON medical_record_audit_log(access_time DESC);
 CREATE INDEX idx_audit_type ON medical_record_audit_log(access_type);
 
 -- Retention policy: Keep audit logs for 7 years
-CREATE INDEX idx_audit_retention ON medical_record_audit_log(access_time) 
-WHERE access_time < NOW() - INTERVAL '7 years';
+-- Note: Indexing for retention cleanup should be handled differently as NOW() is not immutable
+-- CREATE INDEX idx_audit_retention ON medical_record_audit_log(access_time);
 
 -- ============================================================================
 -- PROVIDERS (Doctors, Nurses, etc.)
@@ -141,47 +141,7 @@ CREATE INDEX idx_providers_org ON healthcare_providers(organization_id);
 CREATE INDEX idx_providers_active ON healthcare_providers(is_active) WHERE is_active = true;
 CREATE UNIQUE INDEX idx_providers_license ON healthcare_providers(license_number, license_state);
 
--- ============================================================================
--- APPOINTMENTS
--- ============================================================================
-
--- Table: appointments
-CREATE TABLE IF NOT EXISTS appointments (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    patient_id UUID NOT NULL, -- Will reference patients table
-    provider_id UUID NOT NULL REFERENCES healthcare_providers(id) ON DELETE CASCADE,
-    
-    -- Appointment Details
-    scheduled_time TIMESTAMPTZ NOT NULL,
-    duration_minutes INTEGER NOT NULL DEFAULT 30,
-    appointment_type VARCHAR(50) NOT NULL CHECK (appointment_type IN (
-        'consultation', 'follow_up', 'urgent_care', 'annual_physical', 
-        'specialist_referral', 'telemedicine', 'emergency'
-    )),
-    
-    -- Status
-    status VARCHAR(50) NOT NULL DEFAULT 'scheduled' CHECK (status IN (
-        'scheduled', 'confirmed', 'in_progress', 'completed', 'cancelled', 
-        'no_show', 'rescheduled'
-    )),
-    
-    -- Additional Info
-    notes TEXT,
-    cancellation_reason TEXT,
-    reminder_sent BOOLEAN DEFAULT false,
-    
-    -- Audit
-    created_by UUID NOT NULL REFERENCES users(id),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_appointments_patient ON appointments(patient_id);
-CREATE INDEX idx_appointments_provider ON appointments(provider_id);
-CREATE INDEX idx_appointments_scheduled ON appointments(scheduled_time);
-CREATE INDEX idx_appointments_status ON appointments(status);
-CREATE INDEX idx_appointments_org ON appointments(organization_id);
+-- Appointments moved to 20250131000000_create_appointments_visits.sql
 
 -- ============================================================================
 -- VITAL SIGNS
@@ -226,7 +186,7 @@ CREATE INDEX idx_vitals_provider ON vital_signs(provider_id);
 ALTER TABLE medical_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE medical_record_audit_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE healthcare_providers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vital_signs ENABLE ROW LEVEL SECURITY;
 
 -- Medical Records RLS Policies
@@ -301,10 +261,10 @@ CREATE TRIGGER update_providers_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_appointments_updated_at
-    BEFORE UPDATE ON appointments
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
+-- CREATE TRIGGER update_appointments_updated_at
+--     BEFORE UPDATE ON appointments
+--     FOR EACH ROW
+--     EXECUTE FUNCTION update_updated_at_column();
 
 -- Automatic audit logging
 CREATE OR REPLACE FUNCTION log_medical_record_changes()
@@ -353,6 +313,6 @@ CREATE TRIGGER medical_record_audit_trigger
 COMMENT ON TABLE medical_records IS 'Electronic Medical Records with HIPAA-compliant security';
 COMMENT ON TABLE medical_record_audit_log IS 'Complete audit trail for all medical record access';
 COMMENT ON TABLE healthcare_providers IS 'Healthcare providers (doctors, nurses, etc.)';
-COMMENT ON TABLE appointments IS 'Patient appointment scheduling';
+-- COMMENT ON TABLE appointments IS 'Patient appointment scheduling';
 COMMENT ON TABLE vital_signs IS 'Patient vital signs measurements';
 

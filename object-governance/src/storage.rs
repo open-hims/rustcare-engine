@@ -1,6 +1,6 @@
-use crate::classification::{ClassificationMetadata, DataClassification};
+use crate::classification::ClassificationMetadata;
 use crate::error::{GovernanceError, GovernanceResult};
-use crate::lifecycle::{LifecycleRule, RetentionPolicy, StorageTier};
+use crate::lifecycle::StorageTier;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

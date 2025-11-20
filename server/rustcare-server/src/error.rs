@@ -2,6 +2,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use database_layer::DatabaseError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -87,7 +88,7 @@ pub enum ApiError {
     RateLimit { message: String },
 
     #[error("Database error: {0}")]
-    Database(#[from] database_layer::DatabaseError),
+    Database(#[from] DatabaseError),
 
     #[error("Internal server error: {message}")]
     Internal { message: String },
@@ -176,6 +177,13 @@ impl ApiError {
         }
     }
 
+    /// Create a service unavailable error
+    pub fn service_unavailable(message: impl Into<String>) -> Self {
+        Self::ServiceUnavailable {
+            message: message.into(),
+        }
+    }
+
     /// Get the HTTP status code for this error
     pub fn status_code(&self) -> StatusCode {
         match self {
@@ -186,9 +194,9 @@ impl ApiError {
             ApiError::Conflict { .. } => StatusCode::CONFLICT,
             ApiError::RateLimit { .. } => StatusCode::TOO_MANY_REQUESTS,
             ApiError::Database(db_err) => match db_err {
-                database_layer::DatabaseError::RlsPolicyViolation => StatusCode::FORBIDDEN,
-                database_layer::DatabaseError::QueryFailed(_) => StatusCode::BAD_REQUEST,
-                database_layer::DatabaseError::ConnectionFailed(_) => StatusCode::SERVICE_UNAVAILABLE,
+                DatabaseError::RlsPolicyViolation => StatusCode::FORBIDDEN,
+                DatabaseError::QueryFailed(_) => StatusCode::BAD_REQUEST,
+                DatabaseError::ConnectionFailed(_) => StatusCode::SERVICE_UNAVAILABLE,
                 _ => StatusCode::INTERNAL_SERVER_ERROR,
             },
             ApiError::Internal { .. } => StatusCode::INTERNAL_SERVER_ERROR,
@@ -243,11 +251,11 @@ impl ApiError {
                 "Ensure you have access to view this resource".to_string(),
             ]),
             ApiError::Database(db_err) => match db_err {
-                database_layer::DatabaseError::RlsPolicyViolation => Some(vec![
+                DatabaseError::RlsPolicyViolation => Some(vec![
                     "Check your organization access permissions".to_string(),
                     "Verify you're accessing resources within your scope".to_string(),
                 ]),
-                database_layer::DatabaseError::ConnectionFailed(_) => Some(vec![
+                DatabaseError::ConnectionFailed(_) => Some(vec![
                     "Try again in a few moments".to_string(),
                     "Contact support if the issue persists".to_string(),
                 ]),
@@ -266,12 +274,12 @@ impl ApiError {
     }
 
     /// Pretty format database errors for better user experience
-    pub fn format_database_error(db_error: &database_layer::DatabaseError) -> String {
+    pub fn format_database_error(db_error: &DatabaseError) -> String {
         match db_error {
-            database_layer::DatabaseError::ConnectionFailed(msg) => {
+            DatabaseError::ConnectionFailed(msg) => {
                 format!("Unable to connect to the database. {}", msg)
             }
-            database_layer::DatabaseError::QueryFailed(msg) => {
+            DatabaseError::QueryFailed(msg) => {
                 if msg.contains("duplicate key") {
                     "A record with these details already exists.".to_string()
                 } else if msg.contains("foreign key") {
@@ -284,16 +292,16 @@ impl ApiError {
                     format!("Database operation failed: {}", msg)
                 }
             }
-            database_layer::DatabaseError::RlsPolicyViolation => {
+            DatabaseError::RlsPolicyViolation => {
                 "Access denied: You don't have permission to perform this operation.".to_string()
             }
-            database_layer::DatabaseError::EncryptionError(msg) => {
+            DatabaseError::EncryptionError(msg) => {
                 format!("Data encryption error: {}", msg)
             }
-            database_layer::DatabaseError::ConfigurationError(msg) => {
+            DatabaseError::ConfigurationError(msg) => {
                 format!("Database configuration error: {}", msg)
             }
-            database_layer::DatabaseError::SqlxError(sqlx_err) => {
+            DatabaseError::SqlxError(sqlx_err) => {
                 match sqlx_err {
                     sqlx::Error::RowNotFound => "Requested record not found.".to_string(),
                     sqlx::Error::ColumnNotFound(col) => {
@@ -435,7 +443,7 @@ pub fn api_paginated<T>(
 /// Convert SQLx errors to API errors
 impl From<sqlx::Error> for ApiError {
     fn from(sqlx_error: sqlx::Error) -> Self {
-        let db_error = database_layer::DatabaseError::SqlxError(sqlx_error);
+        let db_error = DatabaseError::SqlxError(sqlx_error);
         ApiError::Database(db_error)
     }
 }

@@ -11,9 +11,8 @@
 
 use crate::error::{SyncError, SyncResult};
 use crate::encryption::DatabaseKey;
-use async_trait::async_trait;
 use chrono::Utc;
-use crypto::kms::{KeyManagementService, KmsResult};
+use crypto::kms::KeyManagementService;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -302,6 +301,8 @@ impl LocalDbKeyManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
+    use crypto::kms::{KeyManagementService, KmsResult};
     use crypto::kms::traits::{KeyMetadata as KmsKeyMetadata, KeyRotationPolicy, KeyState, KeyUsage, KeyOrigin, AuditLogEntry, OperationStatus};
     use std::collections::HashMap;
     use tempfile::TempDir;

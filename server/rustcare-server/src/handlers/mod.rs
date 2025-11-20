@@ -14,6 +14,9 @@ pub mod pharmacy;
 pub mod vendors;
 pub mod notifications;
 pub mod onboarding;
+pub mod plugins;
+pub mod forms;
+pub mod ui_components;
 pub mod common;
 // pub mod websocket; // Temporarily disabled
 
