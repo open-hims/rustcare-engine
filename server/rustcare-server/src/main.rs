@@ -50,6 +50,9 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Load environment variables from .env file
+    dotenvy::dotenv().ok();
+    
     let args = Args::parse();
 
     // Initialize tracing with our redacted logger
