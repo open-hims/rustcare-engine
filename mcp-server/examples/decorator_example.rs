@@ -1,66 +1,39 @@
-//! Example showing how to use the #[mcp_tool] decorator pattern
+//! Example showing how to use the MCP tool pattern
 //!
-//! This demonstrates how handler functions can be automatically exposed
-//! as MCP tools using attribute macros similar to utoipa.
+//! This demonstrates how handler functions can be exposed as MCP tools.
+//! 
+//! NOTE: The #[mcp_tool] macro is conceptual and would be implemented
+//! via the mcp-macros crate. This example shows the intended usage pattern.
 
-use mcp_server::tools::{McpTool, ToolInput, ToolResult, AuthContext};
-use mcp_server::error::McpResult;
-use uuid::Uuid;
-use serde_json::Value;
-
-// Example handler function with MCP tool decorator
-#[mcp_server::mcp_tool(
-    name = "list_pharmacies",
-    description = "List all pharmacies for the organization",
-    category = "pharmacy",
-    requires_permission = "pharmacy:read",
-    sensitive = false
-)]
-pub async fn list_pharmacies_handler(
-    _params: Value,
-    _auth: &AuthContext,
-) -> McpResult<ToolResult> {
-    // Handler implementation
-    Ok(ToolResult {
-        status: mcp_server::protocol::ToolStatus::Success,
-        data: Some(serde_json::json!({
-            "pharmacies": []
-        })),
-        error: None,
-    })
-}
-
-// Example of a sensitive endpoint that should be excluded
-#[mcp_server::mcp_tool(
-    name = "rotate_secret",
-    description = "Rotate a secret key",
-    category = "secrets",
-    requires_permission = "secrets:rotate",
-    sensitive = true  // This will exclude it from public LLM access
-)]
-pub async fn rotate_secret_handler(
-    _params: Value,
-    _auth: &AuthContext,
-) -> McpResult<ToolResult> {
-    // This tool will be filtered out from public tool lists
-    Ok(ToolResult {
-        status: mcp_server::protocol::ToolStatus::Success,
-        data: None,
-        error: None,
-    })
-}
-
-// Example showing how tools are automatically registered
 fn main() {
-    use mcp_server::tools::ToolsRegistry;
+    println!("MCP Tool Decorator Pattern Example");
+    println!("===================================\n");
     
-    let mut registry = ToolsRegistry::new();
+    println!("This example demonstrates how MCP tools would be registered:");
+    println!("  1. Use #[mcp_tool] attribute on handler functions");
+    println!("  2. Specify metadata (name, description, category, permissions)");
+    println!("  3. Mark sensitive tools that should be excluded from LLM access");
+    println!("  4. Tools are auto-discovered and registered\n");
     
-    // Tools marked with #[mcp_tool] are automatically discovered
-    // and registered by build.rs scanning the codebase
+    println!("Example usage:");
+    println!(r#"
+    #[mcp_tool(
+        name = "list_pharmacies",
+        description = "List all pharmacies",
+        category = "pharmacy",
+        requires_permission = "pharmacy:read",
+        sensitive = false
+    )]
+    pub async fn list_pharmacies(
+        params: ToolInput,
+        auth: &AuthContext,
+    ) -> McpResult<ToolResult> {{
+        // Implementation
+    }}
+    "#);
     
-    // List available tools (sensitive ones excluded)
-    let tools = registry.list(false);
-    println!("Available tools: {:?}", tools);
+    println!("\nFor a complete implementation, see:");
+    println!("  - mcp-server/src/tools.rs");
+    println!("  - mcp-server/src/tool_wrapper.rs");
+    println!("  - mcp-macros/ (for procedural macros)");
 }
-
